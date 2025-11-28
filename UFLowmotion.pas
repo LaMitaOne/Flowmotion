@@ -80,9 +80,9 @@ const
   HOT_ZOOM_MAX_FACTOR = 1.3;
   HOT_ZOOM_IN_SPEED = 0.07;
   HOT_ZOOM_OUT_SPEED = 0.05;
-  MIN_CELL_SIZE = 30;
-  MIN_HOTTRACK_CELL_SIZE = 40;
-  HOT_ZOOM_REFERENCE_SIZE = 120;
+  MIN_CELL_SIZE = 120;
+  MIN_HOTTRACK_CELL_SIZE = 140;
+  HOT_ZOOM_REFERENCE_SIZE = 180;
   BREATHING_AMPLITUDE = 0.8;
   BREATHING_IN_SPEED = 0.0015;
   BREATHING_OUT_SPEED = 0.004;
@@ -1920,6 +1920,7 @@ begin
 
     // Sort only when Sorted = False (by size)
     if not FSorted then
+     //this sorts picturesizes
     begin
       SortList := TList.Create;
       try
@@ -1948,7 +1949,7 @@ begin
         Cols := Max(3, Ceil(Sqrt(VCount * 2.0)));
       end;
     end;
-    // Mindestgröße pro Zelle sorgt dafür, dass kleine Bilder nicht erdrückt werden
+    // mincellsize calc
     BaseCellWidth := Max(MIN_CELL_SIZE, (Width - FSpacing * (Cols + 1)) div Cols);
     BaseCellHeight := Max(MIN_CELL_SIZE, (Height - FSpacing * (Rows + 1)) div Rows);
 
@@ -3164,4 +3165,3 @@ begin
 end;
 
 end.
-
