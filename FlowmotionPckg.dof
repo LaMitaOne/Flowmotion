@@ -1,0 +1,182 @@
+[FileVersion]
+Version=7.0
+[Compiler]
+A=8
+B=0
+C=1
+D=1
+E=0
+F=0
+G=1
+H=1
+I=1
+J=0
+K=0
+L=1
+M=0
+N=1
+O=0
+P=1
+Q=1
+R=1
+S=0
+T=0
+U=0
+V=1
+W=1
+X=1
+Y=1
+Z=1
+ShowHints=1
+ShowWarnings=1
+UnitAliases=WinTypes=Windows;WinProcs=Windows;DbiTypes=BDE;DbiProcs=BDE;DbiErrs=BDE;
+NamespacePrefix=
+SymbolDeprecated=1
+SymbolLibrary=1
+SymbolPlatform=1
+UnitLibrary=1
+UnitPlatform=1
+UnitDeprecated=1
+HResultCompat=1
+HidingMember=1
+HiddenVirtual=1
+Garbage=1
+BoundsError=1
+ZeroNilCompat=1
+StringConstTruncated=1
+ForLoopVarVarPar=1
+TypedConstVarPar=1
+AsgToTypedConst=1
+CaseLabelRange=1
+ForVariable=1
+ConstructingAbstract=1
+ComparisonFalse=1
+ComparisonTrue=1
+ComparingSignedUnsigned=1
+CombiningSignedUnsigned=1
+UnsupportedConstruct=1
+FileOpen=1
+FileOpenUnitSrc=1
+BadGlobalSymbol=1
+DuplicateConstructorDestructor=1
+InvalidDirective=1
+PackageNoLink=1
+PackageThreadVar=1
+ImplicitImport=1
+HPPEMITIgnored=1
+NoRetVal=1
+UseBeforeDef=1
+ForLoopVarUndef=1
+UnitNameMismatch=1
+NoCFGFileFound=1
+MessageDirective=1
+ImplicitVariants=1
+UnicodeToLocale=1
+LocaleToUnicode=1
+ImagebaseMultiple=1
+SuspiciousTypecast=1
+PrivatePropAccessor=1
+UnsafeType=0
+UnsafeCode=0
+UnsafeCast=0
+[Linker]
+MapFile=0
+OutputObjs=0
+ConsoleApp=1
+DebugInfo=0
+RemoteSymbols=0
+MinStackSize=16384
+MaxStackSize=1048576
+ImageBase=4194304
+ExeDescription=
+[Directories]
+OutputDir=
+UnitOutputDir=
+PackageDLLOutputDir=
+PackageDCPOutputDir=
+SearchPath=C:\Komponenten\PNGImage
+Packages=vcl;rtl;vclx;dbrtl;dsnap;dsnapcon;vcldb;inetdb;inet;bdertl;vcldbx;vclie;adortl;ibxpress;teeui;teedb;tee;dss;visualclx;visualdbclx;vclactnband;WatchPckg;PwrsvPKG;PathLabels;KeepAspect;GLibD6;DCDSPComponents_D7;DirectX9_D7;CoolTrayIcon_D6plus;NxGridRun_d7;NxCommonRun_d7;NxGridDsgn_d7;NxCommonDsgn_d7;NxCollectionRun_d7;NxCollectionDsgn_d7;xmlrtl;NxAddonsRun_d7;soaprtl;NxThirdpartyRun_d7;DSPackDCDSPFilter_D7;DSPFilter;IMTrackbar;imagenewpckg;Jcl;JclVcl;JvDotNetCtrlsD7R;JvEDID7R;JvGlobusD7R;JvHMID7R;JvInterpreterD7R;JvJansD7R;JvMMD7R;JvNetD7R;JvPageCompsD7R;JvPluginD7R;JvPrintPreviewD7R;JvTimeFrameworkD7R;JvUIBD7R;JvValidatorsD7R;JvXPCtrlsD7R;TsiLang_D7r;TVidGrab;DCPluginRenderer_D7;VclSmp;TMSVCLUIPackPkgD7;TMSVCLUIPackPkgExD7;TMSVCLUIPackPkgWizD7;TMSVCLUIPackPkgXlsD7
+Conditionals=DEBUG
+DebugSourceDirs=
+UsePackages=0
+[Parameters]
+RunParams=
+HostApplication=
+Launcher=
+UseLauncher=0
+DebugCWD=
+[Language]
+ActiveLang=
+ProjectLang=
+RootDir=C:\Program Files (x86)\Borland\Delphi7\Bin\
+[Version Info]
+IncludeVerInfo=1
+AutoIncBuild=0
+MajorVer=1
+MinorVer=0
+Release=0
+Build=0
+Debug=0
+PreRelease=0
+Special=0
+Private=0
+DLL=0
+Locale=1033
+CodePage=1252
+[Version Info Keys]
+CompanyName=
+FileDescription=FlowmotionPckg
+FileVersion=1.0.0.0
+InternalName=
+LegalCopyright=
+LegalTrademarks=
+OriginalFilename=
+ProductName=FlowmotionPckg
+ProductVersion=1.0.0.0
+ProgramID=com.embarcadero.FlowmotionPckg
+[Excluded Packages]
+C:\ProgramData\ImageEn\Delphi7\DPKIEDB7.BPL=ImageEn DB Controls
+c:\program files (x86)\borland\delphi7\Projects\Bpl\DAV_DSP_D7.bpl=ASIO & VST Project - DSP Package
+c:\program files (x86)\borland\delphi7\Bin\dclsoap70.bpl=Borland SOAP Components
+c:\program files (x86)\borland\delphi7\Bin\dclwbm70.bpl=Borland InternetExpress Components
+c:\program files (x86)\borland\delphi7\Bin\dclwebsnap70.bpl=Borland WebSnap Components
+C:\Program Files (x86)\Borland\Delphi7\Projects\Bpl\JvDockingD7D.bpl=JVCL Docking Components Runtime Package
+C:\Program Files (x86)\Borland\Delphi7\\Projects\Bpl\DelphiX70.bpl=DelphiX - DirectX components for Delphi
+[HistoryLists\hlDebugSourcePath]
+Count=1
+Item0=C:\Users\Cylance\Documents\Software\_CyLence\MEDIA Revolution\MEDIA Revolution
+[HistoryLists\hlConditionals]
+Count=2
+Item0=DEBUG
+Item1=madExcept
+[HistoryLists\hlUnitAliases]
+Count=1
+Item0=WinTypes=Windows;WinProcs=Windows;DbiTypes=BDE;DbiProcs=BDE;DbiErrs=BDE;
+[HistoryLists\hlSearchPath]
+Count=7
+Item0=C:\Komponenten\PNGImage
+Item1=C:\Komponenten\CooltrayIcon;C:\Komponenten\DS Pack\src\DirectX9;C:\Komponenten\FadinOut;C:\Komponenten\HETreeview;C:\Komponenten\HyperKnop;C:\Komponenten\Imagenew;C:\Komponenten\keepaspect;C:\Komponenten\kmNetUpdate\D7;C:\Komponenten\LMD70SE\source;C:\Komponenten\oneinstance;C:\Komponenten\Ordner überwachen Thread COMPO;C:\Komponenten\Pathlabel;C:\Komponenten\PicShow;C:\Komponenten\piechart;C:\Komponenten\PNGImage;C:\Komponenten\Powersv;C:\Komponenten\Scanfiles;C:\Komponenten\SmartImagelist;C:\Komponenten\Watch110;C:\Komponenten\LMD70SE\LIB\D7;C:\Komponenten\TipdialogAM;C:\Komponenten\AppComands;C:\Komponenten\TMS Component Pack\Delphi7;C:\Komponenten\Berg\Next Grid last 5\Sources\Next Grid;C:\Komponenten\Berg\Next Grid last 5\Sources\Next Addons;C:\Komponenten\Berg\Next Grid last 5\Sources;C:\Komponenten\TSubtitle;C:\Komponenten\PasLibVlc\source;C:\Komponenten\PasLibVlc\source.vcl;C:\Komponenten\PasLibVlc\Delphi7;C:\Komponenten\MiTeC-System-Information-Component-Suite-10.9.2-D5-XE3-Full-Source_ShareAppsCrack.com\MiTeC System Information Component Suite 10.9.2 D5-XE3 Full Source\Sources;C:\Komponenten\VirtualTreeViewV5.5.3\Source;C:\Komponenten\SmartEffects_3.12_Retail\Almediadev SmartEffects 3.12 Retail;C:\Komponenten\CEF4Delphi-master\CEF4Delphi-master\source;C:\Komponenten\graphics32-1-9-1-fixes-r2148\Graphics32;C:\Komponenten\TMS Component Pack;C:\Komponenten\icsv869\Source;C:\Komponenten\MagneticControls\Source;C:\Komponenten\RVMedia_6.1_Downloadly.ir\RVMedia 6.1\Source;C:\Komponenten\waveaudio;C:\Komponenten\cnpack\cnvcl\Source;C:\Komponenten\cnpack\cnvcl\Source\Common;C:\Komponenten\cnpack\cnvcl\Source\Graphics;C:\Komponenten\cnpack\cnvcl\Source\NonVisual;C:\Komponenten\cnpack\cnvcl\Source\Skin;C:\Komponenten\cnpack\cnvcl\Source\ThirdParty;C:\Komponenten\cnpack\cnvcl\Source\Crypto;C:\Komponenten\ImageEN v10.2.0 build 38258 Full Source\Source;C:\Komponenten\ImageEN v10.2.0 build 38258 Full Source\Source\Delphi7;C:\Komponenten\windows taskbar components
+Item2=C:\Komponenten\CooltrayIcon;C:\Komponenten\DS Pack\src\DirectX9;C:\Komponenten\FadinOut;C:\Komponenten\HETreeview;C:\Komponenten\HyperKnop;C:\Komponenten\Imagenew;C:\Komponenten\keepaspect;C:\Komponenten\kmNetUpdate\D7;C:\Komponenten\LMD70SE\source;C:\Komponenten\oneinstance;C:\Komponenten\Ordner überwachen Thread COMPO;C:\Komponenten\Pathlabel;C:\Komponenten\PicShow;C:\Komponenten\piechart;C:\Komponenten\PNGImage;C:\Komponenten\Powersv;C:\Komponenten\Scanfiles;C:\Komponenten\SmartImagelist;C:\Komponenten\Watch110;C:\Komponenten\LMD70SE\LIB\D7;C:\Komponenten\TipdialogAM;C:\Komponenten\AppComands;C:\Komponenten\TMS Component Pack\Delphi7;C:\Komponenten\Berg\Next Grid last 5\Sources\Next Grid;C:\Komponenten\Berg\Next Grid last 5\Sources\Next Addons;C:\Komponenten\Berg\Next Grid last 5\Sources;C:\Komponenten\TSubtitle;C:\Komponenten\PasLibVlc\source;C:\Komponenten\PasLibVlc\source.vcl;C:\Komponenten\PasLibVlc\Delphi7;C:\Komponenten\MiTeC-System-Information-Component-Suite-10.9.2-D5-XE3-Full-Source_ShareAppsCrack.com\MiTeC System Information Component Suite 10.9.2 D5-XE3 Full Source\Sources;C:\Komponenten\VirtualTreeViewV5.5.3\Source;C:\Komponenten\SmartEffects_3.12_Retail\Almediadev SmartEffects 3.12 Retail;C:\Komponenten\CEF4Delphi-master\CEF4Delphi-master\source;C:\Komponenten\graphics32-1-9-1-fixes-r2148\Graphics32;C:\Komponenten\TMS Component Pack;C:\Komponenten\icsv869\Source;C:\Komponenten\MagneticControls\Source;C:\Komponenten\RVMedia_6.1_Downloadly.ir\RVMedia 6.1\Source;C:\Komponenten\waveaudio;C:\Komponenten\cnpack\cnvcl\Source;C:\Komponenten\cnpack\cnvcl\Source\Common;C:\Komponenten\cnpack\cnvcl\Source\Graphics;C:\Komponenten\cnpack\cnvcl\Source\NonVisual;C:\Komponenten\cnpack\cnvcl\Source\Skin;C:\Komponenten\cnpack\cnvcl\Source\ThirdParty;C:\Komponenten\cnpack\cnvcl\Source\Crypto;C:\Komponenten\ImageEN v10.2.0 build 38258 Full Source\Source;C:\Komponenten\ImageEN v10.2.0 build 38258 Full Source\Source\Delphi7
+Item3=C:\Komponenten\CooltrayIcon;C:\Komponenten\DS Pack\src\DirectX9;C:\Komponenten\FadinOut;C:\Komponenten\HETreeview;C:\Komponenten\HyperKnop;C:\Komponenten\Imagenew;C:\Komponenten\keepaspect;C:\Komponenten\kmNetUpdate\D7;C:\Komponenten\LMD70SE\source;C:\Komponenten\oneinstance;C:\Komponenten\Ordner überwachen Thread COMPO;C:\Komponenten\Pathlabel;C:\Komponenten\PicShow;C:\Komponenten\piechart;C:\Komponenten\PNGImage;C:\Komponenten\Powersv;C:\Komponenten\Scanfiles;C:\Komponenten\SmartImagelist;C:\Komponenten\Watch110;C:\Komponenten\LMD70SE\LIB\D7;C:\Komponenten\TipdialogAM;C:\Komponenten\AppComands;C:\Komponenten\TMS Component Pack\Delphi7;C:\Komponenten\Berg\Next Grid last 5\Sources\Next Grid;C:\Komponenten\Berg\Next Grid last 5\Sources\Next Addons;C:\Komponenten\Berg\Next Grid last 5\Sources;C:\Komponenten\TSubtitle;C:\Komponenten\PasLibVlc\source;C:\Komponenten\PasLibVlc\source.vcl;C:\Komponenten\PasLibVlc\Delphi7;C:\Komponenten\MiTeC-System-Information-Component-Suite-10.9.2-D5-XE3-Full-Source_ShareAppsCrack.com\MiTeC System Information Component Suite 10.9.2 D5-XE3 Full Source\Sources;C:\Komponenten\VirtualTreeViewV5.5.3\Source;C:\Komponenten\SmartEffects_3.12_Retail\Almediadev SmartEffects 3.12 Retail;C:\Komponenten\TGeckoBrowser-15012010;C:\Komponenten\CEF4Delphi-master\CEF4Delphi-master\source;C:\Komponenten\graphics32-1-9-1-fixes-r2148\Graphics32;C:\Komponenten\TMS Component Pack;C:\Komponenten\icsv869\Source;C:\Komponenten\MagneticControls\Source;C:\Komponenten\RVMedia_6.1_Downloadly.ir\RVMedia 6.1\Source;C:\Komponenten\waveaudio;C:\Komponenten\cnpack\cnvcl\Source;C:\Komponenten\cnpack\cnvcl\Source\Common;C:\Komponenten\cnpack\cnvcl\Source\Graphics;C:\Komponenten\cnpack\cnvcl\Source\NonVisual;C:\Komponenten\cnpack\cnvcl\Source\Skin;C:\Komponenten\cnpack\cnvcl\Source\ThirdParty;C:\Komponenten\cnpack\cnvcl\Source\Crypto
+Item4=C:\Komponenten\CooltrayIcon;C:\Komponenten\DS Pack\src\DirectX9;C:\Komponenten\FadinOut;C:\Komponenten\HETreeview;C:\Komponenten\HyperKnop;C:\Komponenten\Imagenew;C:\Komponenten\keepaspect;C:\Komponenten\kmNetUpdate\D7;C:\Komponenten\LMD70SE\source;C:\Komponenten\oneinstance;C:\Komponenten\Ordner überwachen Thread COMPO;C:\Komponenten\Pathlabel;C:\Komponenten\PicShow;C:\Komponenten\piechart;C:\Komponenten\PNGImage;C:\Komponenten\Powersv;C:\Komponenten\Scanfiles;C:\Komponenten\SmartImagelist;C:\Komponenten\Watch110;C:\Komponenten\LMD70SE\LIB\D7;C:\Komponenten\TipdialogAM;C:\Komponenten\AppComands;C:\Komponenten\TMS Component Pack\Delphi7;C:\Komponenten\Berg\Next Grid last 5\Sources\Next Grid;C:\Komponenten\Berg\Next Grid last 5\Sources\Next Addons;C:\Komponenten\Berg\Next Grid last 5\Sources;C:\Komponenten\TSubtitle;C:\Komponenten\PasLibVlc\source;C:\Komponenten\PasLibVlc\source.vcl;C:\Komponenten\PasLibVlc\Delphi7;C:\Komponenten\MiTeC-System-Information-Component-Suite-10.9.2-D5-XE3-Full-Source_ShareAppsCrack.com\MiTeC System Information Component Suite 10.9.2 D5-XE3 Full Source\Sources;C:\Komponenten\VirtualTreeViewV5.5.3\Source;C:\Komponenten\SmartEffects_3.12_Retail\Almediadev SmartEffects 3.12 Retail;C:\Komponenten\TGeckoBrowser-15012010;C:\Komponenten\CEF4Delphi-master\CEF4Delphi-master\source;C:\Komponenten\graphics32-1-9-1-fixes-r2148\Graphics32;C:\Komponenten\TMS Component Pack;C:\Komponenten\icsv869\Source;C:\Komponenten\MagneticControls\Source;C:\Komponenten\RVMedia_6.1_Downloadly.ir\RVMedia 6.1\Source;C:\Komponenten\waveaudio;C:\Komponenten\cnpack\cnvcl\Source;C:\Komponenten\cnpack\cnvcl\Source\Common;C:\Komponenten\cnpack\cnvcl\Source\Graphics;C:\Komponenten\cnpack\cnvcl\Source\NonVisual;C:\Komponenten\cnpack\cnvcl\Source\Skin;C:\Komponenten\cnpack\cnvcl\Source\ThirdParty
+Item5=C:\Komponenten\cnpack\Source;C:\Komponenten\cnpack\Source\Graphics;C:\Komponenten\cnpack\Source\Common;C:\Komponenten\cnpack\Source\NonVisual;C:\Komponenten\CooltrayIcon;C:\Komponenten\DS Pack\src\DirectX9;C:\Komponenten\FadinOut;C:\Komponenten\HETreeview;C:\Komponenten\HyperKnop;C:\Komponenten\Imagenew;C:\Komponenten\keepaspect;C:\Komponenten\kmNetUpdate\D7;C:\Komponenten\LMD70SE\source;C:\Komponenten\oneinstance;C:\Komponenten\Ordner überwachen Thread COMPO;C:\Komponenten\Pathlabel;C:\Komponenten\PicShow;C:\Komponenten\piechart;C:\Komponenten\PNGImage;C:\Komponenten\Powersv;C:\Komponenten\Scanfiles;C:\Komponenten\SmartImagelist;C:\Komponenten\Watch110;C:\Komponenten\LMD70SE\LIB\D7;C:\Komponenten\TipdialogAM;C:\Komponenten\AppComands;C:\Komponenten\TMS Component Pack\Delphi7;C:\Komponenten\Berg\Next Grid last 5\Sources\Next Grid;C:\Komponenten\Berg\Next Grid last 5\Sources\Next Addons;C:\Komponenten\Berg\Next Grid last 5\Sources;C:\Komponenten\TSubtitle;C:\Komponenten\PasLibVlc\source;C:\Komponenten\PasLibVlc\source.vcl;C:\Komponenten\PasLibVlc\Delphi7;C:\Komponenten\MiTeC-System-Information-Component-Suite-10.9.2-D5-XE3-Full-Source_ShareAppsCrack.com\MiTeC System Information Component Suite 10.9.2 D5-XE3 Full Source\Sources;C:\Komponenten\VirtualTreeViewV5.5.3\Source;C:\Komponenten\SmartEffects_3.12_Retail\Almediadev SmartEffects 3.12 Retail;C:\Komponenten\TGeckoBrowser-15012010;C:\Komponenten\CEF4Delphi-master\CEF4Delphi-master\source;C:\Komponenten\graphics32-1-9-1-fixes-r2148\Graphics32;C:\Komponenten\TMS Component Pack;C:\Komponenten\icsv869\Source;C:\Komponenten\MagneticControls\Source;C:\Komponenten\RVMedia_6.1_Downloadly.ir\RVMedia 6.1\Source;C:\Komponenten\waveaudio;C:\Komponenten\cnpack\Source\FormMisc
+Item6=C:\Komponenten\cnpack\Source;C:\Komponenten\cnpack\Source\Graphics;C:\Komponenten\cnpack\Source\Common;C:\Komponenten\cnpack\Source\NonVisual;C:\Komponenten\CooltrayIcon;C:\Komponenten\DS Pack\src\DirectX9;C:\Komponenten\FadinOut;C:\Komponenten\HETreeview;C:\Komponenten\HyperKnop;C:\Komponenten\Imagenew;C:\Komponenten\keepaspect;C:\Komponenten\kmNetUpdate\D7;C:\Komponenten\LMD70SE\source;C:\Komponenten\oneinstance;C:\Komponenten\Ordner überwachen Thread COMPO;C:\Komponenten\Pathlabel;C:\Komponenten\PicShow;C:\Komponenten\piechart;C:\Komponenten\PNGImage;C:\Komponenten\Powersv;C:\Komponenten\Scanfiles;C:\Komponenten\SmartImagelist;C:\Komponenten\Watch110;C:\Komponenten\LMD70SE\LIB\D7;C:\Komponenten\TipdialogAM;C:\Komponenten\AppComands;C:\Komponenten\TMS Component Pack\Delphi7;C:\Komponenten\Berg\Next Grid last 5\Sources\Next Grid;C:\Komponenten\Berg\Next Grid last 5\Sources\Next Addons;C:\Komponenten\Berg\Next Grid last 5\Sources;C:\Komponenten\TSubtitle;C:\Komponenten\PasLibVlc\source;C:\Komponenten\PasLibVlc\source.vcl;C:\Komponenten\PasLibVlc\Delphi7;C:\Komponenten\MiTeC-System-Information-Component-Suite-10.9.2-D5-XE3-Full-Source_ShareAppsCrack.com\MiTeC System Information Component Suite 10.9.2 D5-XE3 Full Source\Sources;C:\Komponenten\VirtualTreeViewV5.5.3\Source;C:\Komponenten\SmartEffects_3.12_Retail\Almediadev SmartEffects 3.12 Retail;C:\Komponenten\TGeckoBrowser-15012010;C:\Komponenten\CEF4Delphi-master\CEF4Delphi-master\source;C:\Komponenten\graphics32-1-9-1-fixes-r2148\Graphics32;C:\Komponenten\TMS Component Pack;C:\Komponenten\icsv869\Source;C:\Komponenten\MagneticControls\Source;C:\Komponenten\RVMedia_6.1_Downloadly.ir\RVMedia 6.1\Source;C:\Komponenten\waveaudio
+[HistoryLists\hlUnitOutputDirectory]
+Count=1
+Item0=C:\Users\Cylance\Documents\Software\_CyLence\MEDIA Revolution\MEDIA Revolution\BPLs DCPs Units
+[HistoryLists\hlOutputDirectorry]
+Count=8
+Item0=C:\MEDIA Revolution X Compile
+Item1=C:\MEDIA Revolution X INSTALLED
+Item2=C:\LaMita INSTALLED
+Item3=C:\MEDIA Revolution X COMPLETE
+Item4=C:\LaMita Compile
+Item5=C:\LaMita Mini
+Item6=C:\Program Files (x86)\LaMita
+Item7=C:\LaMita INSTALLED - music
+[HistoryLists\hlBPLOutput]
+Count=1
+Item0=C:\Users\Cylance\Documents\Software\_CyLence\MEDIA Revolution\MEDIA Revolution\BPLs DCPs Units
+[HistoryLists\hlDCPOutput]
+Count=1
+Item0=C:\Users\Cylance\Documents\Software\_CyLence\MEDIA Revolution\MEDIA Revolution\BPLs DCPs Units
