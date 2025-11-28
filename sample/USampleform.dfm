@@ -21,10 +21,11 @@ object FSampleform: TFSampleform
     Top = 0
     Width = 532
     Height = 442
-    AnimationSpeed = 12
-    Spacing = 0
-    BackgroundColor = clBlack
+    LoadMode = lmLazy
+    FlowLayout = flSorted
+    ThreadPriority = tpHigher
     ZoomAnimationType = zatFade
+    PageSize = 100
     Color = clBlack
     ParentColor = False
     TabOrder = 0
