@@ -12,10 +12,14 @@ type
     Button1: TButton;
     Button2: TButton;
     Button3: TButton;
+    Button4: TButton;
+    Button5: TButton;
     procedure FormCreate(Sender: TObject);
     procedure Button1Click(Sender: TObject);
     procedure Button2Click(Sender: TObject);
     procedure Button3Click(Sender: TObject);
+    procedure Button4Click(Sender: TObject);
+    procedure Button5Click(Sender: TObject);
   private
     { Private-Deklarationen }
     procedure WMMouseWheel(var Msg: TWMMouseWheel); message WM_MOUSEWHEEL;
@@ -59,7 +63,8 @@ end;
 
 procedure TFSampleform.Button1Click(Sender: TObject);
 begin
-  if Flowmotion1.ImageCount = 0 then Flowmotion1.Clear(false);
+  Flowmotion1.ImageEntryStyle := iesRandom;
+  Flowmotion1.EntryPoint := TPoint.Create(0, 0);
   Flowmotion1.AddImageAsync(Extractfilepath(Application.ExeName) + inttostr(random(11)+1) + '.jpg');
 end;
 
@@ -79,7 +84,7 @@ begin
      Captionlist.add('Caption');
    end;
    Flowmotion1.MaxZoomSize := trunc(Clientwidth / 3);
-   Flowmotion1.AddImagesAsync(IMList,Captionlist,Pathlist);
+   Flowmotion1.AddImages(IMList,Captionlist,Pathlist);
   finally
    IMList.Free;
    Pathlist.Free;
@@ -88,8 +93,20 @@ begin
 end;
 
 procedure TFSampleform.Button3Click(Sender: TObject);
-begin
+begin          //only falling
   Flowmotion1.Clear(true);
+end;
+
+procedure TFSampleform.Button4Click(Sender: TObject);
+begin          //animated, ZoominSelected, target for selected, target for others, animationstyle
+  Flowmotion1.Clear(true, true, Button4.BoundsRect, Button3.BoundsRect, iesFromPoint);
+end;
+
+procedure TFSampleform.Button5Click(Sender: TObject);
+begin
+  Flowmotion1.ImageEntryStyle := iesFromPoint;
+  Flowmotion1.EntryPoint := TPoint.Create(Button4.Left, Button4.Top);
+  Flowmotion1.AddImageAsync(Extractfilepath(Application.ExeName) + inttostr(random(11)+1) + '.jpg');
 end;
 
 end.
