@@ -7,6 +7,7 @@ Homepage https://lamita.jimdosite.com/
 
 A fast, lightweight, Coverflow-style gallery component for Delphi — fully animated without any 3D engine.
 Low CPU usage, easy to integrate, and smooth visual effects even with large image sets.
+<img width="2560" height="1440" alt="Unbenannt" src="https://github.com/user-attachments/assets/203f653c-8d15-45b1-a48b-1bc4f8ba2433" />
 
 Features:
 
