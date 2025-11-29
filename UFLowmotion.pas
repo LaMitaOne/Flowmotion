@@ -17,6 +17,7 @@
       iesFromPoint  //move to target rect
       for falling normal pics and selected different target possible
     - Clear & remove got TImageEntryStyle and FallingTargetPos too
+    - sample updated with some of those functions shown
   v 0.97
     - hotzoom now faster zooms in, slower zooms out
     - selected image breathing effect while mouseover
@@ -70,7 +71,7 @@ const
   // Grid constants
   MIN_GRID_COLS = 3;
   MIN_GRID_ROWS = 3;
-  MAX_GRID_COLS = 12;
+  MAX_GRID_COLS = 24;
   GRID_MULTIPLIER = 2.0;
 
   // Timeouts
@@ -85,9 +86,9 @@ const
   HOT_ZOOM_MAX_FACTOR = 1.3;
   HOT_ZOOM_IN_SPEED = 0.07;
   HOT_ZOOM_OUT_SPEED = 0.05;
-  MIN_CELL_SIZE = 80;
-  MIN_HOTTRACK_CELL_SIZE = 100;
-  HOT_ZOOM_REFERENCE_SIZE = 120;
+  MIN_CELL_SIZE = 22;
+  MIN_HOTTRACK_CELL_SIZE = 80;
+  HOT_ZOOM_REFERENCE_SIZE = 100;
   BREATHING_AMPLITUDE = 0.8;
   BREATHING_IN_SPEED = 0.0015;
   BREATHING_OUT_SPEED = 0.004;
@@ -102,7 +103,7 @@ type
   TFlowmotionLoadMode = (lmLoadAll, lmLazy, lmLazyAndFree);
 
   // ===================================================================
-  // Flexible entry/fly-in styles for new images
+  // Flexible entry/fly-in styles for new images or fall out/remove
   // ===================================================================
   TImageEntryStyle = (iesRandom, // default = old behavior: random from 4 sides
     iesFromTop, // all drop from top
@@ -1555,7 +1556,11 @@ end;
 { Clears all images with optional animation and zoom effect }
 procedure TFlowmotion.Clear(animated: Boolean; ZoominSelected: Boolean = false);
 begin
-  Clear(animated, ZoominSelected, Rect(0, 0, 0, 0), Rect(0, 0, 0, 0));
+ try
+  Clear(animated, ZoominSelected, Rect(0, 0, 0, 0), Rect(0, 0, 0, 0), iesFromBottom);
+ except
+
+ end;
 end;
 
 { Clears all images with animation options and optional zoom to target position }
@@ -1572,6 +1577,7 @@ var
 begin
   FallingStyle := iesFromPoint;   //   iesFromCenter
   FallingTargetPos := SelectedTargetPos;
+  Speed := 4;
 
   if FImages.Count = 0 then
     Exit;
@@ -1617,7 +1623,7 @@ begin
       repeat
         AllOut := True;
 
-        Speed := Max(1, FAnimationSpeed * 2 - 8);
+        Speed := FAnimationSpeed +2;
 
         for i := 0 to FImages.Count - 1 do
         begin
@@ -1783,7 +1789,7 @@ begin
 
         Invalidate;
         Application.ProcessMessages;
-        Sleep(2);
+        Sleep(Trunc(FAnimationSpeed /2));
 
       until AllOut;
 
@@ -1871,7 +1877,7 @@ begin
           Invalidate;
           Application.ProcessMessages;
           if ((GetTickCount - StartTick) > THREAD_CLEANUP_TIMEOUT) then AllOut := True;
-          Sleep(1);
+          Sleep(Trunc(FAnimationSpeed /2));
         until AllOut;
       end;
     end;
