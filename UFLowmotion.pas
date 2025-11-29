@@ -1683,8 +1683,8 @@ begin
                 if not IsRectEmpty(FallingTargetPos) then
                 begin
 
-                  SelectedItem.FHotZoom := 1.0;
-                  SelectedItem.FHotZoomTarget := 1.0;
+                  ImageItem.FHotZoom := 1.0;
+                  ImageItem.FHotZoomTarget := 1.0;
                   TargetCX := (FallingTargetPos.Left + FallingTargetPos.Right) div 2;
                   TargetCY := (FallingTargetPos.Top + FallingTargetPos.Bottom) div 2;
 
