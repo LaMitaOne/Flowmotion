@@ -1,5 +1,5 @@
 # Flowmotion
-Delphi Gallery Component – Lightweight Animated Coverflow / Masonry Viewer
+Delphi Gallery Component – Lightweight Animated Coverflow / Masonry Viewer (BETA)
 
 Sample Video: ---- https://www.youtube.com/watch?v=38Dcwo1VNqQ ----- 
 
@@ -19,11 +19,22 @@ Smooth transitions, similar in spirit to TMS GUIMotions but much lighter
 Works on Delphi 7 and Delphi 11.3
 
 Not Finished completely yet, but already working inside MEDIA Revolution X (freeware): https://lamita.jimdosite.com/
+At first wanted to make only some little pic gallery for my player, but its getting a bit more :D 
+So i thought maybe some of you may like it too :)
+Still playing around at it and some things not work properly sure... but basically it works stable in my player already and looking nice :D
 
 Latest changes:
-v 0.97
-- hotzoom now faster zooms in, slower zooms out
-- selected image breathing effect while mouseover
-- ZoomSelectedtoCenter optional now, more grid style then
-- Images zoom down now on mousedown
-- some bugfixes
+  v 0.98
+    - new TImageEntryStyle -> Flexible entry/fly-in styles for new images:
+      iesFromTop and so on for moving to sides and new:
+      iesFromCenter, // pop-in from image center
+      iesFromPoint  //move to target rect
+      for falling normal pics and selected different target possible
+    - Clear & remove got TImageEntryStyle and FallingTargetPos too
+    - sample updated with some of those functions shown
+  v 0.97
+    - hotzoom now faster zooms in, slower zooms out
+    - selected image breathing effect while mouseover
+    - ZoomSelectedtoCenter optional now, more grid style then
+    - Images zoom down now on mousedown
+    - some bugfixes
