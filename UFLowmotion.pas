@@ -3214,7 +3214,7 @@ begin
     // Initialize background alpha for blending
     BackgroundAlpha := 255;
 
-    // Draw background
+    // Layer 0: Draw background
     if not FBackgroundpicture.Empty then
     begin
       if not FBackgroundCacheValid or (FBackgroundCache.Width <> Width) or (FBackgroundCache.Height <> Height) then
@@ -3308,12 +3308,7 @@ begin
             DrawZoomedItem(ImageItem, True);
       end;
 
-      // Layer 6: Previously selected image (zooming out)
-      if FZoomSelectedtoCenter then
-        if FWasSelectedItem <> nil then
-          DrawImage(FWasSelectedItem, False);
-
-      // Layer 7: Currently selected image (on top, if not hot)
+      // Layer 6: Currently selected image (on top, if not hot)
       if (FSelectedImage <> FHotItem) then
         if (FSelectedImage <> nil) then
           if FSelectedImage.FHotZoom <= 1.0 then
