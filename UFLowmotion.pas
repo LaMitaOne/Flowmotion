@@ -1569,7 +1569,7 @@ var
   i: Integer;
   StartTick: DWORD;
   ImageItem: TImageItem;
-  AllOut: Boolean;
+  AllOut, SelectedDone: Boolean;
   ShrinkFactor: Real;
   R: TRect;
   NewW, NewH, CurCX, CurCY, CurW, CurH, TargetCX, TargetCY, MoveX, MoveY, Speed: Integer;
@@ -1577,7 +1577,6 @@ var
 begin
   FallingStyle := iesFromPoint;   //   iesFromCenter
   FallingTargetPos := SelectedTargetPos;
-  Speed := 4;
 
   if FImages.Count = 0 then
     Exit;
@@ -1598,7 +1597,7 @@ begin
   FAnimationTimer.Enabled := False;
   FHotTrackTimer.Enabled := False;
   FInFallAnimation := True;
-
+  SelectedDone := False;
   SelectedItem := nil;
 
   if ZoominSelected then
@@ -1636,6 +1635,9 @@ begin
            ((not ImageItem.IsSelected) or (ImageItem.IsSelected and ((not ZoominSelected) and IsRectEmpty(SelectedTargetPos)))) then
           begin
             R := ImageItem.CurrentRect;
+
+            if not SelectedDone
+             then SelectedDone := ImageItem = SelectedItem;
 
             // direction like on addimage
             case FallingStyle of
@@ -1755,11 +1757,7 @@ begin
               // Flying to FallingTargetPos
               if not IsRectEmpty(FallingTargetPos) then
               begin
-                TargetCX := (FallingTargetPos.Left + FallingTargetPos.Right) div 2;
-                TargetCY := (FallingTargetPos.Top + FallingTargetPos.Bottom) div 2;
-                CurCX := (R.Left + R.Right) div 2;
-                CurCY := (R.Top + R.Bottom) div 2;
-                if ((Abs(MoveX) <= 120) and (Abs(MoveY) <= 120)) or ((R.Bottom - R.Top) < 50) then
+                if ((Abs(MoveX) <= 20) and (Abs(MoveY) <= 20)) or ((R.Bottom - R.Top) < 30) then
                 begin
                   ImageItem.Visible := False;
                 end
@@ -1783,7 +1781,7 @@ begin
           end;
 
           //to be safe if i calculate something wrong :P
-          if (GetTickCount - StartTick) > THREAD_CLEANUP_TIMEOUT then AllOut := True;
+          //if (GetTickCount - StartTick) > THREAD_CLEANUP_TIMEOUT then AllOut := True;
 
         end;
 
@@ -1794,91 +1792,93 @@ begin
       until AllOut;
 
       FAnimationTimer.Enabled := False;
-      FHotTrackTimer.Enabled := False;
+      FHotTrackTimer.Enabled := False; 
 
-      // Phase 2: Zoom in or move selected image to target position
-      StartTick := GetTickCount;
-      if ZoominSelected and (SelectedItem <> nil) then
-      begin
-        repeat
-          AllOut := True;
-          R := SelectedItem.CurrentRect;
-          // Move to target position if specified
-          if not IsRectEmpty(SelectedTargetPos) then
-          begin
-            SelectedItem.FHotZoom := 1.0;
-            SelectedItem.FHotZoomTarget := 1.0;
-            TargetCX := (SelectedTargetPos.Left + SelectedTargetPos.Right) div 2;
-            TargetCY := (SelectedTargetPos.Top + SelectedTargetPos.Bottom) div 2;
-
-            // Calculate movement steps
-            MoveX := (TargetCX - (R.Left + R.Right) div 2) div Max(1, Trunc(FAnimationSpeed * 0.7));
-            MoveY := (TargetCY - (R.Top + R.Bottom) div 2) div Max(1, Trunc(FAnimationSpeed * 0.7));
-
-            // Shrink image gradually
-            if (R.Right - R.Left > 20) and (R.Bottom - R.Top > 20) then
+      if not SelectedDone then begin
+        // Phase 2: Zoom in or move selected image to target position
+        if ZoominSelected and (SelectedItem <> nil) then
+        begin
+          StartTick := GetTickCount;
+          repeat
+            AllOut := True;
+            R := SelectedItem.CurrentRect;
+            // Move to target position if specified
+            if not IsRectEmpty(SelectedTargetPos) then
             begin
-              CurW := R.Right - R.Left;
-              CurH := R.Bottom - R.Top;
-              ShrinkFactor := 0.92 + (FAnimationSpeed * 0.0008);
-              NewW := Trunc(CurW * ShrinkFactor);
-              NewH := Trunc(CurH * ShrinkFactor);
+              SelectedItem.FHotZoom := 1.0;
+              SelectedItem.FHotZoomTarget := 1.0;
+              TargetCX := (SelectedTargetPos.Left + SelectedTargetPos.Right) div 2;
+              TargetCY := (SelectedTargetPos.Top + SelectedTargetPos.Bottom) div 2;
+
+              // Calculate movement steps
+              MoveX := (TargetCX - (R.Left + R.Right) div 2) div Max(1, Trunc(FAnimationSpeed * 0.7));
+              MoveY := (TargetCY - (R.Top + R.Bottom) div 2) div Max(1, Trunc(FAnimationSpeed * 0.7));
+
+              // Shrink image gradually
+              if (R.Right - R.Left > 20) and (R.Bottom - R.Top > 20) then
+              begin
+                CurW := R.Right - R.Left;
+                CurH := R.Bottom - R.Top;
+                ShrinkFactor := 0.92 + (FAnimationSpeed * 0.0008);
+                NewW := Trunc(CurW * ShrinkFactor);
+                NewH := Trunc(CurH * ShrinkFactor);
+                CurCX := (R.Left + R.Right) div 2;
+                CurCY := (R.Top + R.Bottom) div 2;
+                R.Left := CurCX - NewW div 2;
+                R.Top := CurCY - NewH div 2;
+                R.Right := CurCX + NewW div 2;
+                R.Bottom := CurCY + NewH div 2;
+              end;
+
+              // 3. Move to target position
+              OffsetRect(R, MoveX, MoveY);
+
+              // 4. Check if animation is finished
+              if ((Abs(MoveX) <= 20) and (Abs(MoveY) <= 20)) or ((R.Bottom - R.Top) < 30) then
+              begin
+                SelectedItem.Visible := False;
+              end
+              else
+              begin
+                SelectedItem.CurrentRect := R;
+                AllOut := False;
+              end;
+            end
+            else
+            begin
+              // Zoom in animation
               CurCX := (R.Left + R.Right) div 2;
               CurCY := (R.Top + R.Bottom) div 2;
+
+              CurW := R.Right - R.Left;
+              CurH := R.Bottom - R.Top;
+
+              ShrinkFactor := 1.01 + (FAnimationSpeed * 0.007);
+
+              NewW := Trunc(CurW * ShrinkFactor);
+              NewH := Trunc(CurH * ShrinkFactor);
+
               R.Left := CurCX - NewW div 2;
               R.Top := CurCY - NewH div 2;
               R.Right := CurCX + NewW div 2;
               R.Bottom := CurCY + NewH div 2;
-            end;
 
-            // 3. Move to target position
-            OffsetRect(R, MoveX, MoveY);
-
-            // 4. Check if animation is finished
-            if ((Abs(MoveX) <= 20) and (Abs(MoveY) <= 20)) or ((R.Bottom - R.Top) < 30) then
-            begin
-              SelectedItem.Visible := False;
-            end
-            else
-            begin
               SelectedItem.CurrentRect := R;
-              AllOut := False;
+
+              // Check if image has moved outside visible area
+              if (R.Left < 100) or (R.Right > Width - 100) or (R.Top < 100) or (R.Bottom > Height - 100) then
+              begin
+                SelectedItem.Visible := False;
+              end
+              else
+                AllOut := False;
             end;
-          end
-          else
-          begin
-            // Zoom in animation
-            CurCX := (R.Left + R.Right) div 2;
-            CurCY := (R.Top + R.Bottom) div 2;
-
-            CurW := R.Right - R.Left;
-            CurH := R.Bottom - R.Top;
-
-            ShrinkFactor := 1.01 + (FAnimationSpeed * 0.007);
-
-            NewW := Trunc(CurW * ShrinkFactor);
-            NewH := Trunc(CurH * ShrinkFactor);
-
-            R.Left := CurCX - NewW div 2;
-            R.Top := CurCY - NewH div 2;
-            R.Right := CurCX + NewW div 2;
-            R.Bottom := CurCY + NewH div 2;
-
-            SelectedItem.CurrentRect := R;
-
-            // Check if image has moved outside visible area
-            if (R.Left < 100) or (R.Right > Width - 100) or (R.Top < 100) or (R.Bottom > Height - 100) then
-            begin
-              SelectedItem.Visible := False;
-            end
-            else
-              AllOut := False;
-          end;
-          Invalidate;
-          Application.ProcessMessages;
-          if ((GetTickCount - StartTick) > THREAD_CLEANUP_TIMEOUT) then AllOut := True;
-          Sleep(Trunc(FAnimationSpeed /2));
-        until AllOut;
+            Invalidate;
+            Application.ProcessMessages;
+            //if ((GetTickCount - StartTick) > THREAD_CLEANUP_TIMEOUT) then AllOut := True;
+            Sleep(Trunc(FAnimationSpeed /2));
+          until AllOut;
+        end;
       end;
     end;
   finally
@@ -1922,14 +1922,14 @@ end;
 procedure TFlowmotion.RemoveImage(Index: Integer; Animated: Boolean; FallingTargetPos: TRect; FallingStyle: TImageEntryStyle);
 var
   StartTick: DWORD;
-  ShrinkFactor: Real;
-  NewW, NewH, CurCX, CurCY, CurW, CurH, TargetCX, TargetCY, MoveX, MoveY: Integer;
-  SelectedItem: TImageItem;
+  CurCX,  CurCY,
+  TargetCX, TargetCY,
+  MoveX, MoveY: Integer;
   PageStart, PageEnd: Integer;
   ImageItem: TImageItem;
   R: TRect;
   AllOut: Boolean;
-  StepY, Speed: Integer;
+  Speed: Integer;
 begin
   try
     PageStart := GetPageStartIndex;
@@ -3101,7 +3101,7 @@ var
   BlendFunction: TBlendFunction;
   StaticImages, AnimatingImages: TList;
   DrawRect: TRect;
-  CenterX, CenterY, MinSize, ShadowAlpha: Integer;
+  CenterX, CenterY, MinSize: Integer;
 
   { Draws an image with hot-track zoom effect applied }
 
