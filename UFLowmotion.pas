@@ -298,6 +298,7 @@ type
     function EaseInOutQuad(t: Double): Double;
     function GetEntryDirection: TImageEntryStyle;
     procedure WaitForAllAnimations;
+    procedure FreeAllImagesAndClearLists;
     procedure TimerAnimation(Sender: TObject);
     procedure HotTrackTimerTick(Sender: TObject);
     procedure AnimateImage(ImageItem: TImageItem; EntryStyle: TImageEntryStyle);
@@ -1563,7 +1564,18 @@ begin
  end;
 end;
 
-{ Clears all images with animation options and optional zoom to target position }
+
+/// <summary>
+///   Clears all images with optional animation.
+///   Non-selected images fly out according to FallingStyle.
+///   If ZoominSelected = True, the selected image flies and shrinks to SelectedTargetPos.
+///   Animation now uses a single loop (no duplicate code).
+/// </summary>
+/// <param name="animated">True = show fly-out animation</param>
+/// <param name="ZoominSelected">True = selected image gets special animation to SelectedTargetPos</param>
+/// <param name="SelectedTargetPos">Target rectangle for selected image</param>
+/// <param name="FallingTargetPos">Target point for iesFromPoint style</param>
+/// <param name="FallingStyle">Fly-out direction for normal images</param>
 procedure TFlowmotion.Clear(animated: Boolean; ZoominSelected: Boolean; SelectedTargetPos, FallingTargetPos: TRect; FallingStyle: TImageEntryStyle = iesFromBottom);
 var
   i: Integer;
@@ -1575,36 +1587,39 @@ var
   NewW, NewH, CurCX, CurCY, CurW, CurH, TargetCX, TargetCY, MoveX, MoveY, Speed: Integer;
   SelectedItem: TImageItem;
 begin
-  FallingStyle := iesFromPoint;   //   iesFromCenter
-  FallingTargetPos := SelectedTargetPos;
-
-  if FImages.Count = 0 then
+  if (FImages.Count = 0) or FClearing then
     Exit;
+
   WaitForAllLoads;
   WaitForAllAnimations;
 
+  // Stop all loading threads
   for i := 0 to FLoadingThreads.Count - 1 do
   begin
     try
       TImageLoadThread(FLoadingThreads[i]).Terminate;
     except
-
     end;
   end;
-
   FLoadingThreads.Clear;
   FLoadingCount := 0;
+
   FAnimationTimer.Enabled := False;
   FHotTrackTimer.Enabled := False;
   FInFallAnimation := True;
-  SelectedDone := False;
-  SelectedItem := nil;
 
+  // Find selected item
+  SelectedItem := nil;
+  SelectedDone := False;
   if ZoominSelected then
     for i := 0 to FImages.Count - 1 do
-      if TImageItem(FImages[i]).IsSelected
-      then SelectedItem := TImageItem(FImages[i]);
+      if TImageItem(FImages[i]).IsSelected then
+      begin
+        SelectedItem := TImageItem(FImages[i]);
+        Break;
+      end;
 
+  // Reset hot-zoom for all images
   for i := 0 to FImages.Count - 1 do
   begin
     TImageItem(FImages[i]).FHotZoom := 1.0;
@@ -1612,214 +1627,86 @@ begin
     TImageItem(FImages[i]).FAnimating := False;
   end;
 
-  try
+  if not animated then
+  begin
+    FreeAllImagesAndClearLists;
+    Exit;
+  end;
 
-    StartTick := GetTickCount;
-    if animated and (FImages.Count > 0) then
+  // ==============================================================
+  // SINGLE ANIMATION LOOP – handles normal images AND selected image
+  // ==============================================================
+  StartTick := GetTickCount;
+  repeat
+    AllOut := True;
+    Speed := FAnimationSpeed + 2;
+
+    for i := 0 to FImages.Count - 1 do
     begin
+      ImageItem := TImageItem(FImages[i]);
+      if not ImageItem.Visible then
+        Continue;
 
-      // Phase 1: Animate non-selected images flying out
-      repeat
-        AllOut := True;
+      R := ImageItem.CurrentRect;
 
-        Speed := FAnimationSpeed +2;
-
-        for i := 0 to FImages.Count - 1 do
-        begin
-          ImageItem := TImageItem(FImages[i]);
-
-          if
-           (ImageItem.IsSelected and (not ZoominSelected) and (SelectedTargetPos.Left = FallingTargetPos.Left)
-            and (SelectedTargetPos.Top = FallingTargetPos.Top) )
-            or
-           ((not ImageItem.IsSelected) or (ImageItem.IsSelected and ((not ZoominSelected) and IsRectEmpty(SelectedTargetPos)))) then
-          begin
-            R := ImageItem.CurrentRect;
-
-            if not SelectedDone
-             then SelectedDone := ImageItem = SelectedItem;
-
-            // direction like on addimage
-            case FallingStyle of
-              iesFromTop:
-                OffsetRect(R, 0, -Trunc(FAnimationSpeed * Speed));
-              iesFromBottom:
-                OffsetRect(R, 0, Trunc(FAnimationSpeed * Speed));
-              iesFromLeft:
-                OffsetRect(R, -Trunc(FAnimationSpeed * Speed), 0);
-              iesFromRight:
-                OffsetRect(R, Trunc(FAnimationSpeed * Speed), 0);
-              iesFromTopLeft:
-                OffsetRect(R, -Trunc(FAnimationSpeed * Speed), -Trunc(FAnimationSpeed * Speed));
-              iesFromTopRight:
-                OffsetRect(R, Trunc(FAnimationSpeed * Speed), -Trunc(FAnimationSpeed * Speed));
-              iesFromBottomLeft:
-                OffsetRect(R, -Trunc(FAnimationSpeed * Speed), Trunc(FAnimationSpeed * Speed));
-              iesFromBottomRight:
-                OffsetRect(R, Trunc(FAnimationSpeed * Speed), Trunc(FAnimationSpeed * Speed));
-
-              iesRandom:
-                case Random(8) of
-                  0:
-                    OffsetRect(R, 0, -Trunc(FAnimationSpeed * Speed));
-                  1:
-                    OffsetRect(R, 0, Trunc(FAnimationSpeed * Speed));
-                  2:
-                    OffsetRect(R, -Trunc(FAnimationSpeed * Speed), 0);
-                  3:
-                    OffsetRect(R, Trunc(FAnimationSpeed * Speed), 0);
-                  4:
-                    OffsetRect(R, -Trunc(FAnimationSpeed * Speed), -Trunc(FAnimationSpeed * Speed));
-                  5:
-                    OffsetRect(R, Trunc(FAnimationSpeed * Speed), -Trunc(FAnimationSpeed * Speed));
-                  6:
-                    OffsetRect(R, -Trunc(FAnimationSpeed * Speed), Trunc(FAnimationSpeed * Speed));
-                  7:
-                    OffsetRect(R, Trunc(FAnimationSpeed * Speed), Trunc(FAnimationSpeed * Speed));
-                end;
-
-              iesFromCenter:
-                begin
-                  CurCX := Width div 2;
-                  CurCY := Height div 2;
-                  MoveX := Trunc((CurCX - (R.Left + R.Right) div 2) * 0.18);
-                  MoveY := Trunc((CurCY - (R.Top + R.Bottom) div 2) * 0.18);
-                  OffsetRect(R, MoveX, MoveY);
-                end;
-
-              iesFromPoint:
-                if not IsRectEmpty(FallingTargetPos) then
-                begin
-
-                  ImageItem.FHotZoom := 1.0;
-                  ImageItem.FHotZoomTarget := 1.0;
-                  TargetCX := (FallingTargetPos.Left + FallingTargetPos.Right) div 2;
-                  TargetCY := (FallingTargetPos.Top + FallingTargetPos.Bottom) div 2;
-
-                  // Calculate movement steps
-                  MoveX := (TargetCX - (R.Left + R.Right) div 2) div Max(1, Trunc(FAnimationSpeed * 0.7));
-                  MoveY := (TargetCY - (R.Top + R.Bottom) div 2) div Max(1, Trunc(FAnimationSpeed * 0.7));
-                 if Abs(MoveX) < 3 then
-                    MoveX := Sign(MoveX) * Max(3, Speed);
-                  if Abs(MoveY) < 3 then
-                    MoveY := Sign(MoveY) * Max(3, Speed);
-
-
-                  // Shrink image gradually
-                  if (R.Right - R.Left > 20) and (R.Bottom - R.Top > 20) then
-                  begin
-                    CurW := R.Right - R.Left;
-                    CurH := R.Bottom - R.Top;
-                    ShrinkFactor := 0.92 + (FAnimationSpeed * 0.0015);
-                    NewW := Trunc(CurW * ShrinkFactor);
-                    NewH := Trunc(CurH * ShrinkFactor);
-                    CurCX := (R.Left + R.Right) div 2;
-                    CurCY := (R.Top + R.Bottom) div 2;
-                    R.Left := CurCX - NewW div 2;
-                    R.Top := CurCY - NewH div 2;
-                    R.Right := CurCX + NewW div 2;
-                    R.Bottom := CurCY + NewH div 2;
-                  end;
-
-                  OffsetRect(R, MoveX, MoveY);
-                end
-                else
-                begin
-                  //fallback if no targetrect for falling
-                  FallingStyle := iesFromBottom;
-                  OffsetRect(R, 0, Trunc(FAnimationSpeed * Speed));
-                end;
+      // --------------------------------------------------------------
+      // Normal images OR selected image without special target
+      // --------------------------------------------------------------
+      if (ImageItem <> SelectedItem) or (not ZoominSelected) or IsRectEmpty(SelectedTargetPos) then
+      begin
+        // Same movement code as in your original Phase 1
+        case FallingStyle of
+          iesFromTop:
+            OffsetRect(R, 0, -Trunc(FAnimationSpeed * Speed));
+          iesFromBottom:
+            OffsetRect(R, 0, Trunc(FAnimationSpeed * Speed));
+          iesFromLeft:
+            OffsetRect(R, -Trunc(FAnimationSpeed * Speed), 0);
+          iesFromRight:
+            OffsetRect(R, Trunc(FAnimationSpeed * Speed), 0);
+          iesFromTopLeft:
+            OffsetRect(R, -Trunc(FAnimationSpeed * Speed), -Trunc(FAnimationSpeed * Speed));
+          iesFromTopRight:
+            OffsetRect(R, Trunc(FAnimationSpeed * Speed), -Trunc(FAnimationSpeed * Speed));
+          iesFromBottomLeft:
+            OffsetRect(R, -Trunc(FAnimationSpeed * Speed), Trunc(FAnimationSpeed * Speed));
+          iesFromBottomRight:
+            OffsetRect(R, Trunc(FAnimationSpeed * Speed), Trunc(FAnimationSpeed * Speed));
+          iesRandom:
+            case Random(8) of
+              0: OffsetRect(R, 0, -Trunc(FAnimationSpeed * Speed));
+              1: OffsetRect(R, 0, Trunc(FAnimationSpeed * Speed));
+              2: OffsetRect(R, -Trunc(FAnimationSpeed * Speed), 0);
+              3: OffsetRect(R, Trunc(FAnimationSpeed * Speed), 0);
+              4: OffsetRect(R, -Trunc(FAnimationSpeed * Speed), -Trunc(FAnimationSpeed * Speed));
+              5: OffsetRect(R, Trunc(FAnimationSpeed * Speed), -Trunc(FAnimationSpeed * Speed));
+              6: OffsetRect(R, -Trunc(FAnimationSpeed * Speed), Trunc(FAnimationSpeed * Speed));
+              7: OffsetRect(R, Trunc(FAnimationSpeed * Speed), Trunc(FAnimationSpeed * Speed));
             end;
-
-            ImageItem.CurrentRect := R;
-
-            // Hide image when it's outside the window or has reached the target
-            if (FallingStyle in [iesFromTop, iesFromBottom, iesFromLeft, iesFromRight, iesFromTopLeft, iesFromTopRight, iesFromBottomLeft, iesFromBottomRight, iesRandom]) then
+          iesFromCenter:
             begin
-              // Normal flying out
-              if (R.Bottom < -100) or (R.Top > Height + 100) or (R.Right < -100) or (R.Left > Width + 100) then
-                ImageItem.Visible := False
-              else
-                AllOut := False;
-            end
-            else if FallingStyle = iesFromCenter then
-            begin
-              // Flying to center
-              CurCX := (R.Left + R.Right) div 2;
-              CurCY := (R.Top + R.Bottom) div 2;
-              if (Abs(CurCX - Width div 2) < 80) and (Abs(CurCY - Height div 2) < 80) then
-                ImageItem.Visible := False
-              else
-                AllOut := False;
-            end
-            else if FallingStyle = iesFromPoint then
-            begin
-              // Flying to FallingTargetPos
-              if not IsRectEmpty(FallingTargetPos) then
-              begin
-                if ((Abs(MoveX) <= 20) and (Abs(MoveY) <= 20)) or ((R.Bottom - R.Top) < 30) then
-                begin
-                  ImageItem.Visible := False;
-                end
-                else
-                begin
-                  ImageItem.CurrentRect := R;
-                  AllOut := False;
-                end;
-              end
-              else
-                // Fallback if no target
-                if (R.Bottom < -100) or (R.Top > Height + 100) or (R.Right < -100) or (R.Left > Width + 100) then
-              begin
-                ImageItem.Visible := False;
-              end
-              else
-              begin
-                AllOut := False;
-              end;
+              CurCX := Width div 2;
+              CurCY := Height div 2;
+              MoveX := Trunc((CurCX - (R.Left + R.Right) div 2) * 0.18);
+              MoveY := Trunc((CurCY - (R.Top + R.Bottom) div 2) * 0.18);
+              OffsetRect(R, MoveX, MoveY);
             end;
-          end;
-
-          //to be safe if i calculate something wrong :P
-          //if (GetTickCount - StartTick) > THREAD_CLEANUP_TIMEOUT then AllOut := True;
-
-        end;
-
-        Invalidate;
-        Application.ProcessMessages;
-        Sleep(Trunc(FAnimationSpeed /2));
-
-      until AllOut;
-
-      FAnimationTimer.Enabled := False;
-      FHotTrackTimer.Enabled := False; 
-
-      if not SelectedDone then begin
-        // Phase 2: Zoom in or move selected image to target position
-        if ZoominSelected and (SelectedItem <> nil) then
-        begin
-          StartTick := GetTickCount;
-          repeat
-            AllOut := True;
-            R := SelectedItem.CurrentRect;
-            // Move to target position if specified
-            if not IsRectEmpty(SelectedTargetPos) then
+          iesFromPoint:
+            if not IsRectEmpty(FallingTargetPos) then
             begin
-              SelectedItem.FHotZoom := 1.0;
-              SelectedItem.FHotZoomTarget := 1.0;
-              TargetCX := (SelectedTargetPos.Left + SelectedTargetPos.Right) div 2;
-              TargetCY := (SelectedTargetPos.Top + SelectedTargetPos.Bottom) div 2;
-
-              // Calculate movement steps
+              TargetCX := (FallingTargetPos.Left + FallingTargetPos.Right) div 2;
+              TargetCY := (FallingTargetPos.Top + FallingTargetPos.Bottom) div 2;
               MoveX := (TargetCX - (R.Left + R.Right) div 2) div Max(1, Trunc(FAnimationSpeed * 0.7));
               MoveY := (TargetCY - (R.Top + R.Bottom) div 2) div Max(1, Trunc(FAnimationSpeed * 0.7));
+              if Abs(MoveX) < 3 then MoveX := Sign(MoveX) * Max(3, Speed);
+              if Abs(MoveY) < 3 then MoveY := Sign(MoveY) * Max(3, Speed);
 
-              // Shrink image gradually
+              // Shrink exactly like original
               if (R.Right - R.Left > 20) and (R.Bottom - R.Top > 20) then
               begin
                 CurW := R.Right - R.Left;
                 CurH := R.Bottom - R.Top;
-                ShrinkFactor := 0.92 + (FAnimationSpeed * 0.0008);
+                ShrinkFactor := 0.92 + (FAnimationSpeed * 0.0015);
                 NewW := Trunc(CurW * ShrinkFactor);
                 NewH := Trunc(CurH * ShrinkFactor);
                 CurCX := (R.Left + R.Right) div 2;
@@ -1829,71 +1716,128 @@ begin
                 R.Right := CurCX + NewW div 2;
                 R.Bottom := CurCY + NewH div 2;
               end;
-
-              // 3. Move to target position
               OffsetRect(R, MoveX, MoveY);
-
-              // 4. Check if animation is finished
-              if ((Abs(MoveX) <= 20) and (Abs(MoveY) <= 20)) or ((R.Bottom - R.Top) < 30) then
-              begin
-                SelectedItem.Visible := False;
-              end
-              else
-              begin
-                SelectedItem.CurrentRect := R;
-                AllOut := False;
-              end;
             end
             else
             begin
-              // Zoom in animation
-              CurCX := (R.Left + R.Right) div 2;
-              CurCY := (R.Top + R.Bottom) div 2;
-
-              CurW := R.Right - R.Left;
-              CurH := R.Bottom - R.Top;
-
-              ShrinkFactor := 1.01 + (FAnimationSpeed * 0.007);
-
-              NewW := Trunc(CurW * ShrinkFactor);
-              NewH := Trunc(CurH * ShrinkFactor);
-
-              R.Left := CurCX - NewW div 2;
-              R.Top := CurCY - NewH div 2;
-              R.Right := CurCX + NewW div 2;
-              R.Bottom := CurCY + NewH div 2;
-
-              SelectedItem.CurrentRect := R;
-
-              // Check if image has moved outside visible area
-              if (R.Left < 100) or (R.Right > Width - 100) or (R.Top < 100) or (R.Bottom > Height - 100) then
-              begin
-                SelectedItem.Visible := False;
-              end
-              else
-                AllOut := False;
+              FallingStyle := iesFromBottom;
+              OffsetRect(R, 0, Trunc(FAnimationSpeed * Speed));
             end;
-            Invalidate;
-            Application.ProcessMessages;
-            //if ((GetTickCount - StartTick) > THREAD_CLEANUP_TIMEOUT) then AllOut := True;
-            Sleep(Trunc(FAnimationSpeed /2));
-          until AllOut;
         end;
+
+        // Hide conditions – exactly like original
+        if (FallingStyle in [iesFromTop, iesFromBottom, iesFromLeft, iesFromRight,
+                            iesFromTopLeft, iesFromTopRight, iesFromBottomLeft, iesFromBottomRight, iesRandom]) then
+        begin
+          if (R.Bottom < -100) or (R.Top > Height + 100) or
+             (R.Right < -100) or (R.Left > Width + 100) then
+            ImageItem.Visible := False
+          else
+            AllOut := False;
+        end
+        else if FallingStyle = iesFromCenter then
+        begin
+          CurCX := (R.Left + R.Right) div 2;
+          CurCY := (R.Top + R.Bottom) div 2;
+          if (Abs(CurCX - Width div 2) < 80) and (Abs(CurCY - Height div 2) < 80) then
+            ImageItem.Visible := False
+          else
+            AllOut := False;
+        end
+        else if FallingStyle = iesFromPoint then
+        begin
+          if not IsRectEmpty(FallingTargetPos) then
+          begin
+            if (Abs(MoveX) <= 20) and (Abs(MoveY) <= 20) or ((R.Bottom - R.Top) < 30) then
+              ImageItem.Visible := False
+            else
+              AllOut := False;
+          end
+          else
+          begin
+            if (R.Bottom < -100) or (R.Top > Height + 100) or
+               (R.Right < -100) or (R.Left > Width + 100) then
+              ImageItem.Visible := False
+            else
+              AllOut := False;
+          end;
+        end;
+      end
+      // --------------------------------------------------------------
+      // Selected image with ZoominSelected and valid SelectedTargetPos
+      // --------------------------------------------------------------
+      else
+      begin
+        if not SelectedDone then SelectedDone := True;
+
+        TargetCX := (SelectedTargetPos.Left + SelectedTargetPos.Right) div 2;
+        TargetCY := (SelectedTargetPos.Top + SelectedTargetPos.Bottom) div 2;
+        MoveX := (TargetCX - (R.Left + R.Right) div 2) div Max(1, Trunc(FAnimationSpeed * 0.7));
+        MoveY := (TargetCY - (R.Top + R.Bottom) div 2) div Max(1, Trunc(FAnimationSpeed * 0.7));
+
+        // Shrink exactly like your original Phase 2
+        if (R.Right - R.Left > 20) and (R.Bottom - R.Top > 20) then
+        begin
+          CurW := R.Right - R.Left;
+          CurH := R.Bottom - R.Top;
+          ShrinkFactor := 0.92 + (FAnimationSpeed * 0.0008);
+          NewW := Trunc(CurW * ShrinkFactor);
+          NewH := Trunc(CurH * ShrinkFactor);
+          CurCX := (R.Left + R.Right) div 2;
+          CurCY := (R.Top + R.Bottom) div 2;
+          R.Left := CurCX - NewW div 2;
+          R.Top := CurCY - NewH div 2;
+          R.Right := CurCX + NewW div 2;
+          R.Bottom := CurCY + NewH div 2;
+        end;
+
+        OffsetRect(R, MoveX, MoveY);
+
+        if (Abs(MoveX) <= 20) and (Abs(MoveY) <= 20) or ((R.Bottom - R.Top) < 30) then
+          ImageItem.Visible := False
+        else
+          AllOut := False;
+      end;
+
+      // Update rect if still visible
+      if ImageItem.Visible then
+      begin
+        ImageItem.CurrentRect := R;
+        AllOut := False;
       end;
     end;
-  finally
-    // Final
-    FClearing := True;
-    //-------------------------try to disable all...sometimes one free down there av -only when we send images to targetrect
-    //anyone finds why? tell me :D but its still working after atm and happens only once mostly....
-    //maybe done now, not had it again...still keeping eye on it
+
+    Invalidate;
+    Application.ProcessMessages;
+    Sleep(Trunc(FAnimationSpeed / 2));
+
+    if (GetTickCount - StartTick) > THREAD_CLEANUP_TIMEOUT then
+      AllOut := True;
+
+  until AllOut;
+
+  // ==============================================================
+  // Final cleanup – exactly your original finally block
+  // ==============================================================
+  FreeAllImagesAndClearLists;
+end;
+
+/// <summary>
+///   Frees all image items and clears all lists.
+///   Same code you already had in the finally block.
+/// </summary>
+procedure TFlowmotion.FreeAllImagesAndClearLists;
+var
+  i: Integer;
+begin
+  FClearing := True;
+  try
     for i := 0 to FImages.Count - 1 do
     begin
       try
         if Assigned(TImageItem(FImages[i])) then
           TImageItem(FImages[i]).Free;
       except
-
       end;
     end;
     FImages.Clear;
@@ -1904,12 +1848,16 @@ begin
     FWasSelectedItem := nil;
     FCurrentSelectedIndex := -1;
     FCurrentPage := 0;
+  finally
     FClearing := False;
     FInFallAnimation := False;
     FAnimationTimer.Enabled := False;
     Repaint;
   end;
 end;
+
+
+
 
 { Removes an image by index, optionally with fall animation }
 procedure TFlowmotion.RemoveImage(Index: Integer; Animated: Boolean = True);
@@ -2625,45 +2573,28 @@ var
   ImageItem: TImageItem;
   Index: Integer;
 begin
-  if FClearing then
-    Exit;
-  if AnimationsRunning then
-    Exit;
+
   FLastMouseButton := Button;
+
   inherited MouseDown(Button, Shift, X, Y);
+
   ImageItem := GetImageAtPoint(X, Y);
   Index := FImages.IndexOf(ImageItem);
 
-  if Button = mbLeft then
-  begin
-    // Start dragging if selected image is clicked and dragging is enabled
-    if (ImageItem = FSelectedImage) and FActive and FSelectedMovable then
-    begin
-      ImageItem.FHotZoom := ImageItem.FHotZoom - 0.1;
-      FDraggingSelected := True;
-      FDragStartPos := Point(X, Y);
-      FDragImageStartRect := FZoomedPosition;
-      MouseCapture := True;
-      Exit;
-    end;
-  end;
-
-  // Handle double click
   if (Button = mbLeft) and (ssDouble in Shift) then
   begin
     if ImageItem <> nil then
     begin
       if FSelectedImage <> ImageItem then
         SetSelectedImage(ImageItem, Index);
+
       if Assigned(FOnSelectedImageDblClick) then
         FOnSelectedImageDblClick(Self, ImageItem, Index);
-      inherited DblClick;
     end;
     Exit;
   end;
 
-  // Normal single click selection
-  if Button = mbLeft then
+  if Button = mbLeft then                                                       
   begin
     if Assigned(FOnSelectedItemMouseDown) and (ImageItem <> nil) then
       FOnSelectedItemMouseDown(Self, ImageItem, Index, X, Y, Button, Shift);
@@ -2671,13 +2602,12 @@ begin
     if (ImageItem <> nil) and (FSelectedImage <> ImageItem) then
     begin
       if ImageItem.FHotZoom >= 1.1 then
-        ImageItem.FHotZoom := ImageItem.FHotZoom - 0.1; //tactile reaction
+        ImageItem.FHotZoom := ImageItem.FHotZoom - 0.1; // taktile Reaction
       SetSelectedImage(ImageItem, Index);
     end;
 
     if (ImageItem <> nil) and (FSelectedImage = ImageItem) then
-      FBreathingPhase := FBreathingPhase - 0.4; //tactile reaction on selected
-
+      FBreathingPhase := FBreathingPhase - 0.4; // taktile Reaction on selected
   end;
 end;
 
@@ -2853,13 +2783,15 @@ procedure TFlowmotion.SetSelectedImage(ImageItem: TImageItem; Index: Integer);
 var
   OldSelected: TImageItem;
 begin
-  if (ImageItem = nil) and (FSelectedImage <> nil) and (FSelectedImage.ZoomProgress > 0.1) and (FSelectedImage.ZoomProgress < 0.99) then
+  if ImageItem = nil then
+    FHotItem := nil;
+
+  if (ImageItem = nil) and (FSelectedImage <> nil) and (FSelectedImage.ZoomProgress > 0.1) and (FSelectedImage.ZoomProgress < 1) then
     Exit;
 
   if FSelectedImage = ImageItem then
     Exit;
-  if ImageItem = nil then
-    FHotItem := nil;
+
 
   OldSelected := FSelectedImage;
 
