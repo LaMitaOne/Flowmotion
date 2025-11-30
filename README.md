@@ -21,6 +21,11 @@ Smooth transitions, similar in spirit to TMS GUIMotions but much lighter
 
 Works on Delphi 7 and Delphi 11.3
 
+performance compare to ImageEN Mview coverflow on my Asus Zenbook ux305ca dualcore toy: 
+
+ImageEn 1/4 screen, 30 pics, 50% cpu and almost unusable
+Flowmotion Fullscreen, 80 pics, 25% cpu usage, smooth running still... :)
+
 Not Finished completely yet, but already working inside MEDIA Revolution X (freeware): https://lamita.jimdosite.com/
 At first wanted to make only some little pic gallery for my player, but its getting a bit more :D 
 So i thought maybe some of you may like it too :)
