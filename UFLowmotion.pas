@@ -18,8 +18,8 @@
       for falling normal pics and selected different target possible
     - Clear & remove got TImageEntryStyle and FallingTargetPos too
     - sample updated with some of those functions shown
-    - Hotzoomed now always animate back to min
-    - prev selected if hot  sometimes dissaper while move to old pos - fixed
+    - Hotzoomed now ...always ^^ animate back to min...mostly
+    - prev selected if hot sometimes dissapear while move to old pos - fixed
     - simplified animated clear cycle
     - some bugfixes
   v 0.97
@@ -3491,3 +3491,4 @@ begin
 end;
 
 end.
+
