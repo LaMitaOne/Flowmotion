@@ -8,20 +8,20 @@ uses
 
 type
   TFSampleform = class(TForm)
-    Flowmotion1: TFlowmotion;
     Button1: TButton;
     Button2: TButton;
     Button3: TButton;
     Button4: TButton;
     Button5: TButton;
+    Flowmotion1: TFlowmotion;
     procedure FormCreate(Sender: TObject);
     procedure Button1Click(Sender: TObject);
     procedure Button2Click(Sender: TObject);
     procedure Button3Click(Sender: TObject);
     procedure Button4Click(Sender: TObject);
     procedure Button5Click(Sender: TObject);
+    procedure FormShow(Sender: TObject);
   private
-    { Private-Deklarationen }
     procedure WMMouseWheel(var Msg: TWMMouseWheel); message WM_MOUSEWHEEL;
   public
     { Public-Deklarationen }
@@ -65,7 +65,7 @@ procedure TFSampleform.Button1Click(Sender: TObject);
 begin
   Flowmotion1.ImageEntryStyle := iesRandom;
   Flowmotion1.EntryPoint := TPoint.Create(0, 0);
-  Flowmotion1.AddImageAsync(Extractfilepath(Application.ExeName) + inttostr(random(11)+1) + '.jpg');
+  Flowmotion1.AddImage(Extractfilepath(Application.ExeName) + inttostr(random(11)+1) + '.jpg');
 end;
 
 procedure TFSampleform.Button2Click(Sender: TObject);
@@ -77,7 +77,7 @@ begin
   Pathlist:= TStringList.create;
   Captionlist:= TStringList.create;
  try
-  Flowmotion1.Clear(false);
+  Flowmotion1.Clear(true);
    for i := 1 to 12 do begin
      IMList.add(Extractfilepath(Application.ExeName) + inttostr(i) + '.jpg');
      Pathlist.add('Folder or whatever');
@@ -105,8 +105,13 @@ end;
 procedure TFSampleform.Button5Click(Sender: TObject);
 begin
   Flowmotion1.ImageEntryStyle := iesFromPoint;
-  Flowmotion1.EntryPoint := TPoint.Create(Button4.Left, Button4.Top);
-  Flowmotion1.AddImageAsync(Extractfilepath(Application.ExeName) + inttostr(random(11)+1) + '.jpg');
+  Flowmotion1.EntryPoint := TPoint.Create(Button5.Left, Button5.Top);
+  Flowmotion1.AddImage(Extractfilepath(Application.ExeName) + inttostr(random(11)+1) + '.jpg');
+end;
+
+procedure TFSampleform.FormShow(Sender: TObject);
+begin
+   Button2Click(Self);
 end;
 
 end.
