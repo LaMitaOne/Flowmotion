@@ -2,7 +2,8 @@
 Delphi Gallery Component – Lightweight Animated Coverflow / Masonry Viewer (BETA)  
 
 Sample Video: ---- https://www.youtube.com/watch?v=38Dcwo1VNqQ -----  
-  
+![Flowmotion Demo Video](https://www.youtube.com/watch?v=38Dcwo1VNqQ)  
+
 ![screenshot](https://github.com/user-attachments/assets/6e44182f-b24e-4280-b871-e20cfe994212)  
   
 Homepage https://lamita.jimdosite.com/  
