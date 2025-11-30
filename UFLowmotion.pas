@@ -680,7 +680,7 @@ begin
   FZoomAnimationType := zatSlide;     // zatSlide, zatFade, zatZoom, zatBounce   not working atm
   FBackgroundCacheValid := False;
   FPageSize := 100;
-  FCurrentPage := -1;
+  FCurrentPage := 0;
   FCurrentSelectedIndex := -1;
   FLastPaintTick := 0;
   FActive := True;
@@ -1273,7 +1273,7 @@ var
 begin
   WasEmpty := (FAllFiles.Count = 0);
   // Add to master list if not already present
-  if FAllFiles.IndexOf(FileName) = -1 then
+ // if FAllFiles.IndexOf(FileName) = -1 then      //forbid duplicates
   begin
     FAllFiles.Add(FileName);
     FAllCaptions.Add(ACaption);
@@ -1466,7 +1466,7 @@ begin
   // Add all files to master list
   for i := 0 to FileNames.Count - 1 do
   begin
-    if FAllFiles.IndexOf(FileNames[i]) = -1 then
+    //if FAllFiles.IndexOf(FileNames[i]) = -1 then   //no duplicates with thi
     begin
       FAllFiles.Add(FileNames[i]);
       FAllCaptions.Add(Captions[i]);
@@ -1477,7 +1477,7 @@ begin
   FBlockImageEnterDuringLoad := False;
 
   if WasEmpty then
-    ShowPage(FCurrentPage);
+    ShowPage(FCurrentPage);  //else  to do
 end;
 
 { Adds multiple images asynchronously (does not wait) }
@@ -2571,7 +2571,7 @@ begin
     Exit;
   end;
 
-  if Button = mbLeft then                                                       
+  if Button = mbLeft then
   begin
     if Assigned(FOnSelectedItemMouseDown) and (ImageItem <> nil) then
       FOnSelectedItemMouseDown(Self, ImageItem, Index, X, Y, Button, Shift);
@@ -2705,7 +2705,7 @@ begin
   ImageItem.ZoomProgress := 0;
   ImageItem.Animating := True;
   ImageItem.StartRect := ImageItem.CurrentRect;
-  
+
   {                          // todo
   case FZoomAnimationType of
     zatSlide:
@@ -3422,7 +3422,7 @@ end;
 { Selects the previous image, or moves to previous page if at start }
 procedure TFlowmotion.SelectPreviousImage;
 begin
-  if FInFallAnimation then                                    
+  if FInFallAnimation then
     Exit;
   if FCurrentSelectedIndex > 0 then
     SetSelectedImage(TImageItem(FImages[FCurrentSelectedIndex - 1]), FCurrentSelectedIndex - 1)
