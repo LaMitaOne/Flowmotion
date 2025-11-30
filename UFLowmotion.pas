@@ -18,8 +18,8 @@
       for falling normal pics and selected different target possible
     - Clear & remove got TImageEntryStyle and FallingTargetPos too
     - sample updated with some of those functions shown
-    - Hotzoomed now ...always ^^ animate back to min...mostly
-    - prev selected if hot sometimes dissapear while move to old pos - fixed
+    - Hotzoomed now ...always ^^ animate back to min...mostly :D
+    - prev selected if hot sometimes dissapears while move to old pos - fixed
     - simplified animated clear cycle
     - some bugfixes
   v 0.97
@@ -89,7 +89,7 @@ const
   HOT_ZOOM_MIN_FACTOR = 1.2;
   HOT_ZOOM_MAX_FACTOR = 1.3;
   HOT_ZOOM_IN_SPEED = 0.07;
-  HOT_ZOOM_OUT_SPEED = 0.05;
+  HOT_ZOOM_OUT_SPEED = 0.09;
   MIN_CELL_SIZE = 22;
   MIN_HOTTRACK_CELL_SIZE = 80;
   HOT_ZOOM_REFERENCE_SIZE = 100;
@@ -239,6 +239,7 @@ type
     FLastPaintTick: Cardinal; // For FPS limiting
     FImageEntryStyle: TImageEntryStyle;
     FEntryPoint: TPoint; // only used with iesFromPoint
+    FLastHotTrackCalc: Cardinal;
 
     // Layout
     FFlowLayout: TFlowLayout;
@@ -646,6 +647,7 @@ begin
   FBackgroundpicture := TBitmap.Create;
   FBackgroundCache := TBitmap.Create;
   FTempBitmap := TBitmap.Create;
+  FLastHotTrackCalc := 0;
 
   FImageEntryStyle := iesRandom;
   FEntryPoint := Point(-1000, -1000);
@@ -722,12 +724,12 @@ begin
     StartTime := GetTickCount;
     while (FLoadingThreads.Count > 0) and ((GetTickCount - StartTime) < THREAD_CLEANUP_TIMEOUT) do
     begin
-      Application.ProcessMessages;
-      Sleep(10);
+      CheckSynchronize;
+      Sleep(5);
     end;
     // Force clear remaining threads
     FLoadingThreads.Clear;
-    Application.ProcessMessages;
+    CheckSynchronize;
     FLoadingThreads.Free;
     // Free all images
     for i := 0 to FImages.Count - 1 do
@@ -801,6 +803,15 @@ begin
     end;
     Exit; // HotTrack pause
   end;
+
+  // ------ Nur alle 2–3 Aufrufe wirklich rechnen (Performance + Responsiveness) ------
+  if GetTickCount - FLastHotTrackCalc < 30 then  // max ~16 FPS für HotTrack
+  begin
+    Invalidate;  // einfach nur neu zeichnen, falls was offen ist
+    Exit;
+  end;
+  FLastHotTrackCalc := GetTickCount;
+
 
   AvgCellSize := GetAverageCellSize;
 
@@ -882,12 +893,13 @@ begin
   for i := 0 to FImages.Count - 1 do
     if Abs(TImageItem(FImages[i]).FHotZoom - TImageItem(FImages[i]).FHotZoomTarget) > 0.006 then
     begin
+      Item.FHotZoom := Item.FHotZoom + (TargetZoom - Item.FHotZoom) * Speed;
       NeedRepaint := True;
-      Break;
+      if (i mod 30 = 29) then
+        Sleep(1);
     end;
 
-  if (FSelectedImage <> nil) and (FSelectedImage = FHotItem) then
-    NeedRepaint := True;
+  if (FSelectedImage <> nil) and (FSelectedImage = FHotItem) then NeedRepaint := True;
 
   if NeedRepaint then
     Invalidate
@@ -1510,15 +1522,6 @@ begin
     ShowPage(FCurrentPage);
 end;
 
-{ Waits until all image loading threads have finished }
-procedure TFlowmotion.WaitForAllLoads;
-begin
-  while (FLoadingCount > 0) do
-  begin
-    Application.ProcessMessages;
-    Sleep(5);
-  end;
-end;
 
 { Sets whether images should be sorted by size (False) or keep load order (True) }
 procedure TFlowmotion.SetSorted(Value: Boolean);
@@ -1806,8 +1809,15 @@ begin
     end;
 
     Invalidate;
-    Application.ProcessMessages;
-    Sleep(Trunc(FAnimationSpeed / 2));
+    if GetTickCount - StartTick > 30 then
+    begin
+      Application.ProcessMessages;
+      if FClearing and (csDestroying in ComponentState) then
+        Break;
+      if GetAsyncKeyState(VK_ESCAPE) < 0 then
+        Break;
+    end;
+    Sleep(FAnimationSpeed);
 
     if (GetTickCount - StartTick) > THREAD_CLEANUP_TIMEOUT then
       AllOut := True;
@@ -3445,7 +3455,7 @@ end;
 { Selects the previous image, or moves to previous page if at start }
 procedure TFlowmotion.SelectPreviousImage;
 begin
-  if FInFallAnimation then
+  if FInFallAnimation then                                    
     Exit;
   if FCurrentSelectedIndex > 0 then
     SetSelectedImage(TImageItem(FImages[FCurrentSelectedIndex - 1]), FCurrentSelectedIndex - 1)
@@ -3475,6 +3485,16 @@ begin
       end;
 end;
 
+{ Waits until all image loading threads have finished }
+procedure TFlowmotion.WaitForAllLoads;
+begin
+  while (FLoadingCount > 0) do
+  begin
+    Sleep(5);
+    CheckSynchronize;
+  end;
+end;
+
 { Waits until all animations have finished (with timeout) }
 procedure TFlowmotion.WaitForAllAnimations;
 var
@@ -3485,10 +3505,11 @@ begin
   begin
     if (GetTickCount - StartTick) >= THREAD_CLEANUP_TIMEOUT then
       Exit;
-    Application.ProcessMessages;
-    Sleep(10);
+    Sleep(5);
+    CheckSynchronize;
   end;
 end;
 
-end.
 
+
+end.
