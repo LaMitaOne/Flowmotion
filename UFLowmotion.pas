@@ -83,17 +83,15 @@ const
 
   // Spacing / Effects
   DEFAULT_GLOW_WIDTH = 2;
-  FALL_EXTRA_DISTANCE = 100;
-  FALL_STEP_BASE = 25;
   DEFAULT_MAX_ZOOM_SIZE = 400;
-  HOT_ZOOM_MIN_FACTOR = 1.2;
+  HOT_ZOOM_MIN_FACTOR = 1.1;
   HOT_ZOOM_MAX_FACTOR = 1.3;
   HOT_ZOOM_IN_SPEED = 0.07;
   HOT_ZOOM_OUT_SPEED = 0.09;
   MIN_CELL_SIZE = 22;
   MIN_HOTTRACK_CELL_SIZE = 80;
   HOT_ZOOM_REFERENCE_SIZE = 100;
-  BREATHING_AMPLITUDE = 0.8;
+  BREATHING_AMPLITUDE = 1.8;
   BREATHING_IN_SPEED = 0.0015;
   BREATHING_OUT_SPEED = 0.004;
 
@@ -268,14 +266,11 @@ type
     FSelectedImage: TImageItem;
     FWasSelectedItem: TImageItem; // Previous selection (for animation)
     FCurrentSelectedIndex: Integer; // Index in FImages (relative to page)
-    FZoomedPosition: TRect;
     FMaxZoomSize: Integer;
     FZoomAnimationType: TZoomAnimationType;
     FSelectedMovable: Boolean;
       // Allow dragging selected image (feature not fully implemented)
     FDraggingSelected: Boolean;
-    FDragStartPos: TPoint;
-    FDragImageStartRect: TRect;
     FHotItem: TImageItem;
 
     // Paging
@@ -659,7 +654,7 @@ begin
   FAnimationTimer.Enabled := False;
 
   FHotTrackTimer := TTimer.Create(Self);
-  FHotTrackTimer.Interval := DEFAULT_TIMER_INTERVAL - 10;
+  FHotTrackTimer.Interval := DEFAULT_TIMER_INTERVAL;
   FHotTrackTimer.OnTimer := HotTrackTimerTick;
   FHotTrackTimer.Enabled := False;
 
@@ -680,7 +675,6 @@ begin
   FLoadingCount := 0;
   FGlowColor := clAqua;
   FGlowWidth := DEFAULT_GLOW_WIDTH;
-  FMaxZoomSize := DEFAULT_MAX_ZOOM_SIZE;
   FSelectedImage := nil;
   FWasSelectedItem := nil;
   FZoomAnimationType := zatSlide;     // zatSlide, zatFade, zatZoom, zatBounce   not working atm
@@ -804,10 +798,9 @@ begin
     Exit; // HotTrack pause
   end;
 
-  // ------ Nur alle 2–3 Aufrufe wirklich rechnen (Performance + Responsiveness) ------
-  if GetTickCount - FLastHotTrackCalc < 30 then  // max ~16 FPS für HotTrack
+  if GetTickCount - FLastHotTrackCalc < 30 then
   begin
-    Invalidate;  // einfach nur neu zeichnen, falls was offen ist
+    Invalidate;
     Exit;
   end;
   FLastHotTrackCalc := GetTickCount;
@@ -857,11 +850,11 @@ begin
       else
         TargetZoom := BaseZoom * HOT_ZOOM_MIN_FACTOR;
 
-      // Speed: fast in, slow out
+      // Speed: fast out, slow in
       if Item.FHotZoom < TargetZoom then
-        Speed := HOT_ZOOM_IN_SPEED
+        Speed := HOT_ZOOM_OUT_SPEED
       else
-        Speed := HOT_ZOOM_OUT_SPEED;
+        Speed := HOT_ZOOM_IN_SPEED;
     end
 
       // 2. Selected but NOT hovered ? stay at 1.0
@@ -1464,7 +1457,6 @@ end;
 procedure TFlowmotion.AddImages(const FileNames, Captions, Paths: TStringList);
 var
   i: Integer;
-  Thread: TImageLoadThread;
   WasEmpty: Boolean;
 begin
   WasEmpty := (FAllFiles.Count = 0);
@@ -1581,7 +1573,7 @@ var
   i: Integer;
   StartTick: DWORD;
   ImageItem: TImageItem;
-  AllOut, SelectedDone: Boolean;
+  AllOut: Boolean;
   ShrinkFactor: Real;
   R: TRect;
   NewW, NewH, CurCX, CurCY, CurW, CurH, TargetCX, TargetCY, MoveX, MoveY: Integer;
@@ -1610,7 +1602,6 @@ begin
 
   // Find selected item
   SelectedItem := nil;
-  SelectedDone := False;
   if ZoominSelected then
     for i := 0 to FImages.Count - 1 do
       if TImageItem(FImages[i]).IsSelected then
@@ -1694,15 +1685,15 @@ begin
             begin
               TargetCX := (FallingTargetPos.Left + FallingTargetPos.Right) div 2;
               TargetCY := (FallingTargetPos.Top + FallingTargetPos.Bottom) div 2;
-              MoveX := (TargetCX - (R.Left + R.Right) div 2) div Max(1, Trunc(FAnimationSpeed * 0.5));
-              MoveY := (TargetCY - (R.Top + R.Bottom) div 2) div Max(1, Trunc(FAnimationSpeed * 0.5));
+              MoveX := (TargetCX - (R.Left + R.Right) div 2) div Max(1, Trunc(FAnimationSpeed * 0.6));
+              MoveY := (TargetCY - (R.Top + R.Bottom) div 2) div Max(1, Trunc(FAnimationSpeed * 0.6));
               if Abs(MoveX) < 3 then MoveX := Sign(MoveX) * Max(3, FAnimationSpeed);
               if Abs(MoveY) < 3 then MoveY := Sign(MoveY) * Max(3, FAnimationSpeed);
               if (R.Right - R.Left > 20) and (R.Bottom - R.Top > 20) then
               begin
                 CurW := R.Right - R.Left;
                 CurH := R.Bottom - R.Top;
-                ShrinkFactor := 0.92 + (FAnimationSpeed * 0.0015);
+                ShrinkFactor := 0.92 + (FAnimationSpeed * 0.001);
                 NewW := Trunc(CurW * ShrinkFactor);
                 NewH := Trunc(CurH * ShrinkFactor);
                 CurCX := (R.Left + R.Right) div 2;
@@ -1764,19 +1755,18 @@ begin
       // --------------------------------------------------------------
       else
       begin
-        if not SelectedDone then SelectedDone := True;
 
         TargetCX := (SelectedTargetPos.Left + SelectedTargetPos.Right) div 2;
         TargetCY := (SelectedTargetPos.Top + SelectedTargetPos.Bottom) div 2;
-        MoveX := (TargetCX - (R.Left + R.Right) div 2) div Max(1, Trunc(FAnimationSpeed * 0.5));
-        MoveY := (TargetCY - (R.Top + R.Bottom) div 2) div Max(1, Trunc(FAnimationSpeed * 0.5));
+        MoveX := (TargetCX - (R.Left + R.Right) div 2) div Max(1, Trunc(FAnimationSpeed * 0.6));
+        MoveY := (TargetCY - (R.Top + R.Bottom) div 2) div Max(1, Trunc(FAnimationSpeed * 0.6));
 
         // Shrink
         if (R.Right - R.Left > 20) and (R.Bottom - R.Top > 20) then
         begin
           CurW := R.Right - R.Left;
           CurH := R.Bottom - R.Top;
-          ShrinkFactor := 0.92 + (FAnimationSpeed * 0.0008);
+          ShrinkFactor := 0.93 + (FAnimationSpeed * 0.001);
           NewW := Trunc(CurW * ShrinkFactor);
           NewH := Trunc(CurH * ShrinkFactor);
           CurCX := (R.Left + R.Right) div 2;
@@ -1812,7 +1802,7 @@ begin
       if GetAsyncKeyState(VK_ESCAPE) < 0 then
         Break;
     end;
-    Sleep(trunc(FAnimationSpeed/2));
+    Sleep(trunc(FAnimationSpeed/3));
 
     if (GetTickCount - StartTick) > THREAD_CLEANUP_TIMEOUT then
       AllOut := True;
@@ -2529,24 +2519,20 @@ begin
 
   NewHot := GetImageAtPoint(X, Y);
 
-  // ==== NEU: Sofortiges MouseLeave erkennen ====
   if (NewHot = nil) and (FHotItem <> nil) then
   begin
-    // Maus hat das aktuelle Hot-Bild verlassen ? sofort resetten
     FHotItem.FHotZoomTarget := 1.0;
-    FHotItem := nil; // ? wichtig!
+    FHotItem := nil;
     FHotTrackTimer.Enabled := True;
     Invalidate;
   end
   else if (NewHot <> FHotItem) and (NewHot <> nil) then
   begin
-    // Maus ist auf ein NEUES Bild gekommen
     if FHotItem <> nil then
-      FHotItem.FHotZoomTarget := 1.0; // altes verliert Hot sofort
+      FHotItem.FHotZoomTarget := 1.0;
 
     FHotItem := NewHot;
     FHotItem.FHotZoomTarget := HOT_ZOOM_MAX_FACTOR;
-      // oder deine gewünschte Stärke
     FHotTrackTimer.Enabled := True;
     Invalidate;
   end;
@@ -2593,12 +2579,12 @@ begin
     if (ImageItem <> nil) and (FSelectedImage <> ImageItem) then
     begin
       if ImageItem.FHotZoom >= 1.1 then
-        ImageItem.FHotZoom := ImageItem.FHotZoom - 0.1; // taktile Reaction
+        ImageItem.FHotZoom := ImageItem.FHotZoom - 0.1; // tactile Reaction
       SetSelectedImage(ImageItem, Index);
     end;
 
     if (ImageItem <> nil) and (FSelectedImage = ImageItem) then
-      FBreathingPhase := FBreathingPhase - 0.4; // taktile Reaction on selected
+      FBreathingPhase := FBreathingPhase - 0.4; // tactile Reaction on selected
   end;
 end;
 
@@ -2870,8 +2856,6 @@ begin
   if (NowTick - FLastPaintTick) < MIN_FRAME_TIME then
     Exit;
   FLastPaintTick := NowTick;
-
-
 
 
   // Phase 0: Pre-check - determine if any animations are running
@@ -3496,4 +3480,3 @@ end;
 
 
 end.
-
