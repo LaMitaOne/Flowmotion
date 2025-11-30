@@ -18,6 +18,10 @@
       for falling normal pics and selected different target possible
     - Clear & remove got TImageEntryStyle and FallingTargetPos too
     - sample updated with some of those functions shown
+    - Hotzoomed now always animate back to min
+    - prev selected if hot  sometimes dissaper while move to old pos - fixed
+    - simplified animated clear cycle
+    - some bugfixes
   v 0.97
     - hotzoom now faster zooms in, slower zooms out
     - selected image breathing effect while mouseover
@@ -304,7 +308,6 @@ type
     procedure AnimateImage(ImageItem: TImageItem; EntryStyle: TImageEntryStyle);
     procedure StartZoomAnimation(ImageItem: TImageItem; ZoomIn: Boolean);
     procedure SetImageEntryStyle(Value: TImageEntryStyle);
-    procedure AnimatePageChange;
 
 
     // Internal methods - Layout
@@ -502,7 +505,7 @@ end;
 { Frees the bitmap and destroys the image item }
 destructor TImageItem.Destroy;
 begin
-  FBitmap.Free;
+  if assigned(FBitmap) then FBitmap.Free;
   inherited Destroy;
 end;
 
@@ -525,7 +528,7 @@ end;
 { Frees the bitmap and destroys the thread }
 destructor TImageLoadThread.Destroy;
 begin
-  FBitmap.Free;
+  if assigned(FBitmap) then FBitmap.Free;
   inherited Destroy;
 end;
 
@@ -678,10 +681,10 @@ begin
   FMaxZoomSize := DEFAULT_MAX_ZOOM_SIZE;
   FSelectedImage := nil;
   FWasSelectedItem := nil;
-  FZoomAnimationType := zatSlide;     // zatSlide, zatFade, zatZoom, zatBounce
+  FZoomAnimationType := zatSlide;     // zatSlide, zatFade, zatZoom, zatBounce   not working atm
   FBackgroundCacheValid := False;
   FPageSize := 100;
-  FCurrentPage := 0;
+  FCurrentPage := -1;
   FCurrentSelectedIndex := -1;
   FLastPaintTick := 0;
   FActive := True;
@@ -1185,6 +1188,7 @@ procedure TFlowmotion.SetBackgroundColor(const Value: TColor);
 begin
   if FBackgroundColor <> Value then
   begin
+    FBackgroundCacheValid := False;
     FBackgroundColor := Value;
     Color := Value;
     Invalidate;
@@ -1386,34 +1390,36 @@ end;
 { Scrolls to and selects an image by absolute index (switches page if needed) }
 procedure TFlowmotion.ScrollToIndex(Index: Integer; Animate: Boolean = True);
 var
-  PageStart, PageEnd: Integer;
-  ImageItem: TImageItem;
+  TargetPage, RelativeIndex: Integer;
+  Item: TImageItem;
 begin
-  PageStart := GetPageStartIndex;
-  PageEnd := GetPageEndIndex;
+  if (Index < 0) or (Index >= FAllFiles.Count) then Exit;
+
+  TargetPage := Index div FPageSize;
+  RelativeIndex := Index mod FPageSize;
   // If index is not on current page, switch to the correct page
-  if (Index < PageStart) or (Index > PageEnd) then
+  if TargetPage <> FCurrentPage then
   begin
-    if (Index >= 0) and (Index < FAllFiles.Count) then
+    ShowPage(TargetPage);
+    while FPageChangeInProgress do
     begin
-      FCurrentPage := Index div FPageSize;
-      if (FCurrentPage >= 0) and (FCurrentPage < PageCount) then
-        ShowPage(FCurrentPage);
-      ScrollToIndex(Index, Animate);
+      Application.ProcessMessages;
+      Sleep(4);
     end;
-    Exit;
   end;
   // Select the image on current page
-  if (Index >= 0) and (Index < FImages.Count) then
+  if (RelativeIndex < FImages.Count) then
   begin
-    FAnimationTimer.Enabled := True;
-    ImageItem := TImageItem(FImages[Index]);
+    Item := TImageItem(FImages[RelativeIndex]);
     if Animate then
-      SetSelectedImage(ImageItem, Index)
+      SetSelectedImage(Item, RelativeIndex)
     else
     begin
-      FCurrentSelectedIndex := Index;
-      SetSelectedImage(ImageItem, Index);
+      FCurrentSelectedIndex := RelativeIndex;
+      FSelectedImage := Item;
+      if Item <> nil then
+        Item.IsSelected := True;
+      Invalidate;
     end;
   end;
 end;
@@ -1463,15 +1469,7 @@ begin
       FAllPaths.Add(Paths[i]);
     end;
   end;
-  // Start loading threads
-  for i := 0 to FileNames.Count - 1 do
-  begin
-    Thread := TImageLoadThread.Create(FileNames[i], Captions[i], Paths[i], Self);
-    FLoadingThreads.Add(Thread);
-    Inc(FLoadingCount);
-  end;
 
-  WaitForAllLoads;
   FBlockImageEnterDuringLoad := False;
 
   if WasEmpty then
@@ -2880,6 +2878,9 @@ begin
     Exit;
   FLastPaintTick := NowTick;
 
+
+
+
   // Phase 0: Pre-check - determine if any animations are running
   AnyAnimating := FFallingOut;
   AllFinishedAtStart := not AnyAnimating;
@@ -2988,18 +2989,26 @@ begin
       Invalidate
     else
     begin
-      // All animations finished, draw final frame
+      // All main animations finished ? final frame
       Invalidate;
+
+      // ------------------------------------------------------------------
+      // 1. Stop Main Animation Timer
+      // ------------------------------------------------------------------
       FAnimationTimer.Enabled := False;
       if Assigned(FOnAllAnimationsFinished) then
         FOnAllAnimationsFinished(Self);
 
-      // --------------------------------------------------------------
-      // FINAL
-      // --------------------------------------------------------------
-      if (FSelectedImage <> nil) or (FHotItem <> nil) then
+      // ------------------------------------------------------------------
+      // 2. HotTrackTimer restart if something still hotzoomed
+      // ------------------------------------------------------------------
+      if FHotTrackTimer.Enabled then
       begin
-        // hotzoom somewhere still active?
+        // already active
+      end
+      else
+      begin
+        // off? then check if some still hotzoomed
         for i := 0 to FImages.Count - 1 do
         begin
           ImageItem := TImageItem(FImages[i]);
@@ -3010,11 +3019,10 @@ begin
           end;
         end;
 
-        // select hot
-        if (FSelectedImage <> nil) and (FSelectedImage = FHotItem) then
+        // breathing selected
+        if (FSelectedImage <> nil) and (FSelectedImage = FHotItem) and FBreathingEnabled then
           FHotTrackTimer.Enabled := True;
       end;
-      // --------------------------------------------------------------
     end;
 
   except
@@ -3163,8 +3171,6 @@ begin
       Canvas.Brush.Color := FBackgroundColor;
       Canvas.FillRect(ClientRect);
     end;
-    if FBlockImageEnterDuringLoad then
-      Exit;
 
     // Sort images by layer
     StaticImages := TList.Create;
@@ -3226,7 +3232,7 @@ begin
       begin
         ImageItem := TImageItem(FImages[i]);
         if ImageItem <> nil then
-          if (ImageItem <> FHotItem) and (ImageItem.FHotZoom > 1) then
+          if (ImageItem <> FHotItem)  then
             if (ImageItem = FSelectedImage) then
               DrawZoomedItem(ImageItem, False);
       end;
@@ -3240,9 +3246,18 @@ begin
             DrawZoomedItem(ImageItem, True);
       end;
 
-      // Layer 6: Currently selected image (on top, if not hot)
-      if (FSelectedImage <> FHotItem) then
-        if (FSelectedImage <> nil) then
+      // Layer 6: Previously selected image (zooming out)
+      if FZoomSelectedtoCenter then
+      if FWasSelectedItem <> nil then
+       if (FWasSelectedItem <> FHotItem) then
+        if FWasSelectedItem.FHotZoom <= 1.0 then
+        DrawImage(FWasSelectedItem, False);
+
+
+      // Layer 7: Currently selected image (on top, if not hot)
+      if (FSelectedImage <> nil) then
+        if (FSelectedImage <> FHotItem) then
+         if (FSelectedImage <> FWasSelectedItem) then
           if FSelectedImage.FHotZoom <= 1.0 then
           begin
             ImageItem := FSelectedImage;
@@ -3273,6 +3288,7 @@ begin
               end;
             end;
           end;
+
     finally
       StaticImages.Free;
       AnimatingImages.Free;
@@ -3322,6 +3338,7 @@ var
   PNG: TPNGObject;
   Ext: string;
 begin
+  if not visible then Exit;
   if FClearing then
     Exit;
   if FPageChangeInProgress then
@@ -3337,7 +3354,7 @@ begin
     FLoadingCount := 0;
 
     if (Page <> FCurrentPage) and (FImages.Count > 0) then
-      AnimatePageChange;
+      clear(true,true);
 
     for i := FImages.Count - 1 downto 0 do
       TImageItem(FImages[i]).Free;
@@ -3440,30 +3457,6 @@ begin
   end;
 end;
 
-{ Animates all images falling out when changing pages }
-procedure TFlowmotion.AnimatePageChange;
-var
-  i: Integer;
-begin
-  if FImages.Count = 0 then
-    Exit;
-  FInFallAnimation := True;
-  FFallingOut := True;
-  FPageOutProgress := 0;
-  for i := 0 to FImages.Count - 1 do
-  begin
-    with TImageItem(FImages[i]) do
-    begin
-      StartRect := CurrentRect;
-      TargetRect := Rect(CurrentRect.Left, Height + 100, CurrentRect.Right, Height + 100 + (CurrentRect.Bottom - CurrentRect.Top));
-      AnimationProgress := 0;
-      Animating := True;
-      Alpha := 255;
-      TargetAlpha := 0;
-    end;
-  end;
-  FAnimationTimer.Enabled := True;
-end;
 
 { Checks if any animations are currently running }
 function TFlowmotion.AnimationsRunning: Boolean;
