@@ -1570,7 +1570,6 @@ end;
 ///   Clears all images with optional animation.
 ///   Non-selected images fly out according to FallingStyle.
 ///   If ZoominSelected = True, the selected image flies and shrinks to SelectedTargetPos.
-///   Animation now uses a single loop (no duplicate code).
 /// </summary>
 /// <param name="animated">True = show fly-out animation</param>
 /// <param name="ZoominSelected">True = selected image gets special animation to SelectedTargetPos</param>
@@ -1585,7 +1584,7 @@ var
   AllOut, SelectedDone: Boolean;
   ShrinkFactor: Real;
   R: TRect;
-  NewW, NewH, CurCX, CurCY, CurW, CurH, TargetCX, TargetCY, MoveX, MoveY, Speed: Integer;
+  NewW, NewH, CurCX, CurCY, CurW, CurH, TargetCX, TargetCY, MoveX, MoveY: Integer;
   SelectedItem: TImageItem;
 begin
   if (FImages.Count = 0) or FClearing then
@@ -1635,12 +1634,11 @@ begin
   end;
 
   // ==============================================================
-  // SINGLE ANIMATION LOOP – handles normal images AND selected image
+  // ANIMATION LOOP – handles normal images AND selected image
   // ==============================================================
   StartTick := GetTickCount;
   repeat
     AllOut := True;
-    Speed := FAnimationSpeed + 2;
 
     for i := 0 to FImages.Count - 1 do
     begin
@@ -1655,34 +1653,33 @@ begin
       // --------------------------------------------------------------
       if (ImageItem <> SelectedItem) or (not ZoominSelected) or IsRectEmpty(SelectedTargetPos) then
       begin
-        // Same movement code as in your original Phase 1
         case FallingStyle of
           iesFromTop:
-            OffsetRect(R, 0, -Trunc(FAnimationSpeed * Speed));
+            OffsetRect(R, 0, -Trunc(FAnimationSpeed * FAnimationSpeed));
           iesFromBottom:
-            OffsetRect(R, 0, Trunc(FAnimationSpeed * Speed));
+            OffsetRect(R, 0, Trunc(FAnimationSpeed * FAnimationSpeed));
           iesFromLeft:
-            OffsetRect(R, -Trunc(FAnimationSpeed * Speed), 0);
+            OffsetRect(R, -Trunc(FAnimationSpeed * FAnimationSpeed), 0);
           iesFromRight:
-            OffsetRect(R, Trunc(FAnimationSpeed * Speed), 0);
+            OffsetRect(R, Trunc(FAnimationSpeed * FAnimationSpeed), 0);
           iesFromTopLeft:
-            OffsetRect(R, -Trunc(FAnimationSpeed * Speed), -Trunc(FAnimationSpeed * Speed));
+            OffsetRect(R, -Trunc(FAnimationSpeed * FAnimationSpeed), -Trunc(FAnimationSpeed * FAnimationSpeed));
           iesFromTopRight:
-            OffsetRect(R, Trunc(FAnimationSpeed * Speed), -Trunc(FAnimationSpeed * Speed));
+            OffsetRect(R, Trunc(FAnimationSpeed * FAnimationSpeed), -Trunc(FAnimationSpeed * FAnimationSpeed));
           iesFromBottomLeft:
-            OffsetRect(R, -Trunc(FAnimationSpeed * Speed), Trunc(FAnimationSpeed * Speed));
+            OffsetRect(R, -Trunc(FAnimationSpeed * FAnimationSpeed), Trunc(FAnimationSpeed * FAnimationSpeed));
           iesFromBottomRight:
-            OffsetRect(R, Trunc(FAnimationSpeed * Speed), Trunc(FAnimationSpeed * Speed));
+            OffsetRect(R, Trunc(FAnimationSpeed * FAnimationSpeed), Trunc(FAnimationSpeed * FAnimationSpeed));
           iesRandom:
             case Random(8) of
-              0: OffsetRect(R, 0, -Trunc(FAnimationSpeed * Speed));
-              1: OffsetRect(R, 0, Trunc(FAnimationSpeed * Speed));
-              2: OffsetRect(R, -Trunc(FAnimationSpeed * Speed), 0);
-              3: OffsetRect(R, Trunc(FAnimationSpeed * Speed), 0);
-              4: OffsetRect(R, -Trunc(FAnimationSpeed * Speed), -Trunc(FAnimationSpeed * Speed));
-              5: OffsetRect(R, Trunc(FAnimationSpeed * Speed), -Trunc(FAnimationSpeed * Speed));
-              6: OffsetRect(R, -Trunc(FAnimationSpeed * Speed), Trunc(FAnimationSpeed * Speed));
-              7: OffsetRect(R, Trunc(FAnimationSpeed * Speed), Trunc(FAnimationSpeed * Speed));
+              0: OffsetRect(R, 0, -Trunc(FAnimationSpeed * FAnimationSpeed));
+              1: OffsetRect(R, 0, Trunc(FAnimationSpeed * FAnimationSpeed));
+              2: OffsetRect(R, -Trunc(FAnimationSpeed * FAnimationSpeed), 0);
+              3: OffsetRect(R, Trunc(FAnimationSpeed * FAnimationSpeed), 0);
+              4: OffsetRect(R, -Trunc(FAnimationSpeed * FAnimationSpeed), -Trunc(FAnimationSpeed * FAnimationSpeed));
+              5: OffsetRect(R, Trunc(FAnimationSpeed * FAnimationSpeed), -Trunc(FAnimationSpeed * FAnimationSpeed));
+              6: OffsetRect(R, -Trunc(FAnimationSpeed * FAnimationSpeed), Trunc(FAnimationSpeed * FAnimationSpeed));
+              7: OffsetRect(R, Trunc(FAnimationSpeed * FAnimationSpeed), Trunc(FAnimationSpeed * FAnimationSpeed));
             end;
           iesFromCenter:
             begin
@@ -1697,12 +1694,10 @@ begin
             begin
               TargetCX := (FallingTargetPos.Left + FallingTargetPos.Right) div 2;
               TargetCY := (FallingTargetPos.Top + FallingTargetPos.Bottom) div 2;
-              MoveX := (TargetCX - (R.Left + R.Right) div 2) div Max(1, Trunc(FAnimationSpeed * 0.7));
-              MoveY := (TargetCY - (R.Top + R.Bottom) div 2) div Max(1, Trunc(FAnimationSpeed * 0.7));
-              if Abs(MoveX) < 3 then MoveX := Sign(MoveX) * Max(3, Speed);
-              if Abs(MoveY) < 3 then MoveY := Sign(MoveY) * Max(3, Speed);
-
-              // Shrink exactly like original
+              MoveX := (TargetCX - (R.Left + R.Right) div 2) div Max(1, Trunc(FAnimationSpeed * 0.5));
+              MoveY := (TargetCY - (R.Top + R.Bottom) div 2) div Max(1, Trunc(FAnimationSpeed * 0.5));
+              if Abs(MoveX) < 3 then MoveX := Sign(MoveX) * Max(3, FAnimationSpeed);
+              if Abs(MoveY) < 3 then MoveY := Sign(MoveY) * Max(3, FAnimationSpeed);
               if (R.Right - R.Left > 20) and (R.Bottom - R.Top > 20) then
               begin
                 CurW := R.Right - R.Left;
@@ -1722,11 +1717,11 @@ begin
             else
             begin
               FallingStyle := iesFromBottom;
-              OffsetRect(R, 0, Trunc(FAnimationSpeed * Speed));
+              OffsetRect(R, 0, Trunc(FAnimationSpeed * FAnimationSpeed));
             end;
         end;
 
-        // Hide conditions – exactly like original
+        // Hide conditions
         if (FallingStyle in [iesFromTop, iesFromBottom, iesFromLeft, iesFromRight,
                             iesFromTopLeft, iesFromTopRight, iesFromBottomLeft, iesFromBottomRight, iesRandom]) then
         begin
@@ -1773,10 +1768,10 @@ begin
 
         TargetCX := (SelectedTargetPos.Left + SelectedTargetPos.Right) div 2;
         TargetCY := (SelectedTargetPos.Top + SelectedTargetPos.Bottom) div 2;
-        MoveX := (TargetCX - (R.Left + R.Right) div 2) div Max(1, Trunc(FAnimationSpeed * 0.7));
-        MoveY := (TargetCY - (R.Top + R.Bottom) div 2) div Max(1, Trunc(FAnimationSpeed * 0.7));
+        MoveX := (TargetCX - (R.Left + R.Right) div 2) div Max(1, Trunc(FAnimationSpeed * 0.5));
+        MoveY := (TargetCY - (R.Top + R.Bottom) div 2) div Max(1, Trunc(FAnimationSpeed * 0.5));
 
-        // Shrink exactly like your original Phase 2
+        // Shrink
         if (R.Right - R.Left > 20) and (R.Bottom - R.Top > 20) then
         begin
           CurW := R.Right - R.Left;
@@ -1817,7 +1812,7 @@ begin
       if GetAsyncKeyState(VK_ESCAPE) < 0 then
         Break;
     end;
-    Sleep(FAnimationSpeed);
+    Sleep(trunc(FAnimationSpeed/2));
 
     if (GetTickCount - StartTick) > THREAD_CLEANUP_TIMEOUT then
       AllOut := True;
@@ -1825,14 +1820,15 @@ begin
   until AllOut;
 
   // ==============================================================
-  // Final cleanup – exactly your original finally block
+  // Final cleanup
   // ==============================================================
   FreeAllImagesAndClearLists;
 end;
 
+
+
 /// <summary>
 ///   Frees all image items and clears all lists.
-///   Same code you already had in the finally block.
 /// </summary>
 procedure TFlowmotion.FreeAllImagesAndClearLists;
 var
@@ -2047,19 +2043,6 @@ begin
       Sleep(2);
 
     until AllOut;
-
-  {  repeat
-      R := ImageItem.CurrentRect;
-      if R.Top >= Height + 50 then
-        Break;
-      StepY := 25;
-      OffsetRect(R, 0, StepY);
-      ImageItem.CurrentRect := R;
-      Invalidate;
-      Update;
-      Application.ProcessMessages;
-      Sleep(5);
-    until False;  }
 
     if TImageItem(FImages[Index]) = FSelectedImage then
     begin
@@ -3513,3 +3496,4 @@ end;
 
 
 end.
+
