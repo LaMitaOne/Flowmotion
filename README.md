@@ -2,8 +2,9 @@
 Delphi Gallery Component – Lightweight Animated Coverflow / Masonry Viewer (BETA)  
 
 Sample Video: ---- https://www.youtube.com/watch?v=38Dcwo1VNqQ -----  
+  
 ![screenshot](https://github.com/user-attachments/assets/6e44182f-b24e-4280-b871-e20cfe994212)  
-
+  
 Homepage https://lamita.jimdosite.com/  
 
 A fast, lightweight, Coverflow-style gallery component for Delphi — fully animated without any 3D engine.  
@@ -28,7 +29,8 @@ https://lamita.jimdosite.com/
 At first I just wanted a little picture gallery for my player… but it grew a bit :D  
 So I thought maybe some of you will like it too :)  
   
-Still tweaking and some things are not 100 % perfect yet, but it’s already stable and looks really nice in my player!  
+Still tweaking and some things are not perfect yet, some not fully implemented,   
+but it’s already basically stable and looks really nice in my player!  
   
 ### Latest changes:   
   
