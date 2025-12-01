@@ -4,7 +4,7 @@
 Stable atm: Addimages (not async), SelectNextImage, SelectPreviousImage, Animations, hotzoom, breathing at all stable,  
 Clear animated to direction or target, selected can go to other target, setting Background, color, Glow and all that,   
 DeselectZoomedImage, those i am using in my player already and no problems at all,   
-other functions may work, not work, or it explodes right in ur face :D nah...  
+other functions may work, not work, or it explodes right into ur face :D nah...  
 I am working on getting more of it done :)  
   
 Delphi Gallery Component – Lightweight Animated Coverflow / Masonry Viewer (Alpha)  
