@@ -45,7 +45,11 @@ Still tweaking and some things are not perfect yet, some not fully implemented,
 but it’s already basically stable and looks really nice in my player!  
   
 ### Latest changes:   
-  
+**v 0.981**  
+- combined HottrackTimer into TimerAnimation (looks way better, and a LOT faster)  
+- optimized TimerAnimation for less useless paints when nothing changed  
+- Mousemove -> GetImageAtPoint hotzoomed now highest priority  
+    
 **v 0.98**  
 - New `TImageEntryStyle` → flexible entry/fly-in styles for new images:  
   `iesFromTop`, `iesFromLeft`, `iesFromRight`, etc. and new:  
