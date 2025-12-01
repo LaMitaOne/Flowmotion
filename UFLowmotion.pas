@@ -16,13 +16,12 @@
     - Mousemove -> GetImageAtPoint hotzoomed now highest priority
   v 0.98
     - new TImageEntryStyle -> Flexible entry/fly-in styles for new images:
-      iesFromTop and so on for moving to sides and new:
+      iesFromTop and so on for moving to/from sides and new:
       iesFromCenter, // pop-in from image center
       iesFromPoint  //move to target rect
       for falling normal pics and selected different target possible
     - Clear & remove got TImageEntryStyle and FallingTargetPos too
     - sample updated with some of those functions shown
-    - Hotzoomed now ...always ^^ animate back to min...mostly :D
     - prev selected if hot sometimes dissapears while move to old pos - fixed
     - simplified animated clear cycle
     - some bugfixes
@@ -640,7 +639,7 @@ begin
   HotTrackZoom := True;
   FMaxColumns := 0;
   FMaxRows := 0;
-  FSelectedMovable := False; // Feature not fully implemented yet
+  FSelectedMovable := False;   // Feature not fully implemented yet
   FDraggingSelected := False;
   FSorted := True;
   FAnimationEasing := True;
@@ -720,6 +719,8 @@ begin
   end;
   inherited Destroy;
 end;
+
+
 
 
 { Deselects the currently zoomed/selected image }
@@ -1180,7 +1181,7 @@ begin
   end
   else
   begin
-    // Nur in Masterliste, wird später lazy geladen
+    // only add to Masterliste, lazyload later
     DoImageLoad(FileName, True);
   end;
 end;
@@ -1681,6 +1682,7 @@ begin
     FAllFiles.Clear;
     FAllCaptions.Clear;
     FAllPaths.Clear;
+    FHotItem := nil;
     FSelectedImage := nil;
     FWasSelectedItem := nil;
     FCurrentSelectedIndex := -1;
@@ -3001,7 +3003,7 @@ begin
         NeedRepaint := True;
       end;
 
-      // Breathing-Phase nur fortschreiten, wenn Breathing aktiv ist!
+      // Breathing-Phase
       if FBreathingEnabled and (FHotItem <> nil) and (FHotItem = FSelectedImage) then
         FBreathingPhase := Frac(FBreathingPhase + BREATHING_SPEED_PER_SEC * DeltaTime);
     end;
@@ -3289,7 +3291,7 @@ begin
               DrawImage(FWasSelectedItem, False);
 
 
-      // Layer 7: Currently selected image (on top, if not hot)
+      // Layer 7: Currently selected image (on top, if not already in hot)
       if (FSelectedImage <> nil) then
         if (FSelectedImage <> FHotItem) then
           if (FSelectedImage <> FWasSelectedItem) then
