@@ -98,6 +98,12 @@ begin
      Pathlist.add('Folder or whatever');
      Captionlist.add('Caption');
    end;
+   //twwice
+   for i := 1 to 12 do begin
+     IMList.add(Extractfilepath(Application.ExeName) + inttostr(i) + '.jpg');
+     Pathlist.add('Folder or whatever');
+     Captionlist.add('Caption');
+   end;
    Flowmotion1.MaxZoomSize := trunc(Clientwidth / 3);
    Flowmotion1.AddImages(IMList,Captionlist,Pathlist);
   finally
