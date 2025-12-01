@@ -43,6 +43,12 @@ So I thought maybe some of you will like it too :)
   
 Still tweaking and some things are not perfect yet, some not fully implemented,   
 but it’s already basically stable and looks really nice in my player!  
+
+<p align="center">
+  <a href="https://www.paypal.com/donate/?hosted_button_id=RX5KTTMXW497Q">
+    <img src="https://www.paypalobjects.com/en_US/i/btn/btn_donate_LG.gif" alt="Donate with PayPal"/>
+  </a>
+</p>
   
 ### Latest changes:   
 **v 0.981**  
