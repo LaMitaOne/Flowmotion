@@ -2364,7 +2364,7 @@ begin
   end;
 
   // ==================================================================
-  // 2. SELECTED IMAGE HAS ABSOLUTE PRIORITY (unchanged from your original code)
+  // 2. SELECTED IMAGE HAS ABSOLUTE PRIORITY 
   // ==================================================================
   if (FSelectedImage <> nil) and FSelectedImage.Visible then
   begin
@@ -3540,3 +3540,4 @@ begin
 end;
 
 end.
+
