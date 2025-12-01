@@ -2,7 +2,7 @@
   
 !!! --- NOT FINISHED - Partly stable, parts not working so far. 
 Stable atm: Addimages (not async), SelectNextImage, SelectPreviousImage, Animations, hotzoom, breathing at all stable,  
-Clear animated to direction or target, selected can go to other target, setting Background, color, Glow and all that,   
+Clear animated to direction or target, selected can go to other target, setting Background color/pic, Glow and all that,   
 DeselectZoomedImage, those i am using in my player already and no problems at all,   
 other functions may work, not work, or it explodes right into ur face :D nah...  
 I am working on getting more of it done :)  
