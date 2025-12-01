@@ -14,12 +14,27 @@ type
     Button4: TButton;
     Button5: TButton;
     Flowmotion1: TFlowmotion;
+    Button6: TButton;
+    Button7: TButton;
+    Button8: TButton;
     procedure FormCreate(Sender: TObject);
     procedure Button1Click(Sender: TObject);
     procedure Button2Click(Sender: TObject);
     procedure Button3Click(Sender: TObject);
     procedure Button4Click(Sender: TObject);
     procedure Button5Click(Sender: TObject);
+    procedure Button6Click(Sender: TObject);
+    procedure Button7Click(Sender: TObject);
+    procedure Button8Click(Sender: TObject);
+    procedure Flowmotion1AllAnimationsFinished(Sender: TObject);
+    procedure Flowmotion1ImageLoad(Sender: TObject; const FileName: string;
+        Success: Boolean);
+    procedure Flowmotion1ItemSelected(Sender: TObject; ImageItem: TImageItem;
+        Index: Integer);
+    procedure Flowmotion1SelectedImageDblClick(Sender: TObject; ImageItem:
+        TImageItem; Index: Integer);
+    procedure Flowmotion1SelectedItemMouseDown(Sender: TObject; ImageItem:
+        TImageItem; Index, X, Y: Integer; Button: TMouseButton; Shift: TShiftState);
     procedure FormShow(Sender: TObject);
   private
     procedure WMMouseWheel(var Msg: TWMMouseWheel); message WM_MOUSEWHEEL;
@@ -95,11 +110,13 @@ end;
 procedure TFSampleform.Button3Click(Sender: TObject);
 begin          //only falling
   Flowmotion1.Clear(true);
+  Button8.Enabled := False;
 end;
 
 procedure TFSampleform.Button4Click(Sender: TObject);
 begin          //animated, ZoominSelected, target for selected, target for others, animationstyle
   Flowmotion1.Clear(true, true, Button4.BoundsRect, Button3.BoundsRect, iesFromPoint);
+  Button8.Enabled := False;
 end;
 
 procedure TFSampleform.Button5Click(Sender: TObject);
@@ -107,6 +124,56 @@ begin
   Flowmotion1.ImageEntryStyle := iesFromPoint;
   Flowmotion1.EntryPoint := TPoint.Create(Button5.Left, Button5.Top);
   Flowmotion1.AddImage(Extractfilepath(Application.ExeName) + inttostr(random(11)+1) + '.jpg');
+end;
+
+procedure TFSampleform.Button6Click(Sender: TObject);
+begin
+  Flowmotion1.SelectPreviousImage;
+end;
+
+procedure TFSampleform.Button7Click(Sender: TObject);
+begin
+  Flowmotion1.SelectNextImage;
+end;
+
+procedure TFSampleform.Button8Click(Sender: TObject);
+begin
+  Flowmotion1.DeselectZoomedImage;
+end;
+
+procedure TFSampleform.Flowmotion1AllAnimationsFinished(Sender: TObject);
+begin
+  //stopped animations, idle
+
+end;
+
+procedure TFSampleform.Flowmotion1ImageLoad(Sender: TObject; const FileName:
+    string; Success: Boolean);
+begin
+  //for progress later
+
+end;
+
+procedure TFSampleform.Flowmotion1ItemSelected(Sender: TObject; ImageItem:
+    TImageItem; Index: Integer);
+begin
+  //Get positions caption and whatever
+  if ImageItem <> nil then Button8.Enabled := ImageItem.IsSelected;
+end;
+
+procedure TFSampleform.Flowmotion1SelectedImageDblClick(Sender: TObject;
+    ImageItem: TImageItem; Index: Integer);
+begin
+  //selected dblclicked
+
+end;
+
+procedure TFSampleform.Flowmotion1SelectedItemMouseDown(Sender: TObject;
+    ImageItem: TImageItem; Index, X, Y: Integer; Button: TMouseButton; Shift:
+    TShiftState);
+begin
+  //--
+
 end;
 
 procedure TFSampleform.FormShow(Sender: TObject);

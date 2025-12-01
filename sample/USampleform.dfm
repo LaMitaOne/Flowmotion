@@ -30,17 +30,24 @@ object FSampleform: TFSampleform
     Spacing = 4
     MaxColumns = 24
     MaxRows = 24
+    OnImageLoad = Flowmotion1ImageLoad
+    OnItemSelected = Flowmotion1ItemSelected
     ThreadPriority = tpNormal
+    OnSelectedItemMouseDown = Flowmotion1SelectedItemMouseDown
+    OnAllAnimationsFinished = Flowmotion1AllAnimationsFinished
+    OnSelectedImageDblClick = Flowmotion1SelectedImageDblClick
     PageSize = 100
     Anchors = [akLeft, akTop, akRight, akBottom]
     Color = clBlack
     ParentColor = False
     TabOrder = 5
     TabStop = True
+    ExplicitWidth = 933
+    ExplicitHeight = 720
   end
   object Button1: TButton
     Left = 8
-    Top = 125
+    Top = 24
     Width = 75
     Height = 65
     Caption = 'Add 1 pic random entry'
@@ -50,7 +57,7 @@ object FSampleform: TFSampleform
   end
   object Button2: TButton
     Left = 8
-    Top = 423
+    Top = 202
     Width = 75
     Height = 66
     Caption = 'Load piclist'
@@ -59,7 +66,7 @@ object FSampleform: TFSampleform
   end
   object Button3: TButton
     Left = 8
-    Top = 536
+    Top = 283
     Width = 75
     Height = 25
     Caption = 'Clear'
@@ -67,8 +74,8 @@ object FSampleform: TFSampleform
     OnClick = Button3Click
   end
   object Button4: TButton
-    Left = 144
-    Top = 48
+    Left = 136
+    Top = 56
     Width = 161
     Height = 81
     Caption = 'Clear to pos'
@@ -83,12 +90,39 @@ object FSampleform: TFSampleform
   end
   object Button5: TButton
     Left = 8
-    Top = 215
+    Top = 114
     Width = 75
     Height = 66
     Caption = 'Add 1 pic from rect'
     TabOrder = 4
     WordWrap = True
     OnClick = Button5Click
+  end
+  object Button6: TButton
+    Left = 8
+    Top = 323
+    Width = 25
+    Height = 25
+    Caption = '<'
+    TabOrder = 6
+    OnClick = Button6Click
+  end
+  object Button7: TButton
+    Left = 58
+    Top = 323
+    Width = 25
+    Height = 25
+    Caption = '>'
+    TabOrder = 7
+    OnClick = Button7Click
+  end
+  object Button8: TButton
+    Left = 8
+    Top = 379
+    Width = 75
+    Height = 25
+    Caption = 'Deselect'
+    TabOrder = 8
+    OnClick = Button8Click
   end
 end
