@@ -1,7 +1,7 @@
 
 {------------------------------------------------------------------------------}
 {                                                                              }
-{ Flowmotion v0.98                                                             }
+{ Flowmotion v0.981                                                             }
 { by Lara Miriam Tamy Reschke                                                  }
 {                                                                              }
 { larate@gmx.net                                                               }
@@ -10,6 +10,10 @@
 {------------------------------------------------------------------------------}
 {
  ----Latest Changes
+  v 0.981
+    - combined HottrackTimer into TimerAnimation (looks way better, and a LOT faster)
+    - optimized TimerAnimation for less useless paints when nothing changed
+    - Mousemove -> GetImageAtPoint hotzoomed now highest priority
   v 0.98
     - new TImageEntryStyle -> Flexible entry/fly-in styles for new images:
       iesFromTop and so on for moving to sides and new:
@@ -83,7 +87,7 @@ const
 
   // Spacing / Effects
   DEFAULT_GLOW_WIDTH = 2;
-  DEFAULT_MAX_ZOOM_SIZE = 400;
+  DEFAULT_MAX_ZOOM_SIZE = 300;
   HOT_ZOOM_MIN_FACTOR = 1.1;
   HOT_ZOOM_MAX_FACTOR = 1.3;
   HOT_ZOOM_IN_SPEED = 0.07;
@@ -91,9 +95,10 @@ const
   MIN_CELL_SIZE = 22;
   MIN_HOTTRACK_CELL_SIZE = 80;
   HOT_ZOOM_REFERENCE_SIZE = 100;
-  BREATHING_AMPLITUDE = 1.8;
-  BREATHING_IN_SPEED = 0.0015;
-  BREATHING_OUT_SPEED = 0.004;
+  HOT_ZOOM_IN_PER_SEC       = 2.5;
+  HOT_ZOOM_OUT_PER_SEC      = 3.0;
+  BREATHING_AMPLITUDE       = 1.4;
+  BREATHING_SPEED_PER_SEC   = 0.05;
 
 type
   TFlowLayout = (flPerfectSize, flSorted);
@@ -227,8 +232,8 @@ type
     FClearing: Boolean;
 
     // Animation
+    inPaintCycle : Boolean;  //.paint cycle running atm
     FAnimationTimer: TTimer;
-    FHotTrackTimer: TTimer;
     FAnimationSpeed: Integer; // 1-100, higher = faster
     FAnimationEasing: Boolean; // Use easing function
     FInFallAnimation: Boolean; // Currently in fall animation
@@ -238,6 +243,7 @@ type
     FImageEntryStyle: TImageEntryStyle;
     FEntryPoint: TPoint; // only used with iesFromPoint
     FLastHotTrackCalc: Cardinal;
+    TargetZoom : Double;
 
     // Layout
     FFlowLayout: TFlowLayout;
@@ -300,7 +306,6 @@ type
     procedure WaitForAllAnimations;
     procedure FreeAllImagesAndClearLists;
     procedure TimerAnimation(Sender: TObject);
-    procedure HotTrackTimerTick(Sender: TObject);
     procedure AnimateImage(ImageItem: TImageItem; EntryStyle: TImageEntryStyle);
     procedure StartZoomAnimation(ImageItem: TImageItem; ZoomIn: Boolean);
     procedure SetImageEntryStyle(Value: TImageEntryStyle);
@@ -653,11 +658,6 @@ begin
   FAnimationTimer.OnTimer := TimerAnimation;
   FAnimationTimer.Enabled := False;
 
-  FHotTrackTimer := TTimer.Create(Self);
-  FHotTrackTimer.Interval := DEFAULT_TIMER_INTERVAL;
-  FHotTrackTimer.OnTimer := HotTrackTimerTick;
-  FHotTrackTimer.Enabled := False;
-
   FKeepSpaceforZoomed := False;
   FLoadMode := lmLazy;
   FAnimationSpeed := DEFAULT_ANIMATION_SPEED;
@@ -749,156 +749,6 @@ begin
   inherited Destroy;
 end;
 
-{ Timer event for hot-track zoom animation and breathing effect }
-procedure TFlowmotion.HotTrackTimerTick(Sender: TObject);
-var
-  i: Integer;
-  Item: TImageItem;
-  AvgCellSize, CurrentW, CurrentH, RelSize: Double;
-  BaseZoom, BreathOffset, TargetZoom, Speed: Double;
-  NeedRepaint: Boolean;
-
-  function GetAverageCellSize: Double;
-  var
-    TotalW, TotalH, Count: Integer;
-    j: Integer;
-  begin
-    Result := 1;
-    TotalW := 0;
-    TotalH := 0;
-    Count := 0;
-    for j := 0 to FImages.Count - 1 do
-      with TImageItem(FImages[j]) do
-        if Visible and (CurrentRect.Right > CurrentRect.Left) then
-        begin
-          Inc(TotalW, CurrentRect.Right - CurrentRect.Left);
-          Inc(TotalH, CurrentRect.Bottom - CurrentRect.Top);
-          Inc(Count);
-        end;
-    if Count = 0 then
-      Exit;
-    Result := (TotalW + TotalH) / (2 * Count);
-  end;
-
-begin
-  if FClearing or (not Visible) then
-  begin
-    FHotTrackTimer.Enabled := False;
-    Exit;
-  end;
-  if AnimationsRunning then
-  begin
-    // new select set back hot for breath
-    if FSelectedImage <> nil then
-    begin
-      if FSelectedImage.FHotZoom < 1 then
-        FSelectedImage.FHotZoom := 1.0;
-      FSelectedImage.FHotZoomTarget := 1.0;
-    end;
-    Exit; // HotTrack pause
-  end;
-
-  if GetTickCount - FLastHotTrackCalc < 30 then
-  begin
-    Invalidate;
-    Exit;
-  end;
-  FLastHotTrackCalc := GetTickCount;
-
-
-  AvgCellSize := GetAverageCellSize;
-
-  // Advance breathing phase ONLY when selected AND hovered
-  if FBreathingEnabled then
-    if (FSelectedImage <> nil) and (FSelectedImage = FHotItem) then
-    begin
-      if Sin(FBreathingPhase * 2 * Pi) > 0 then
-        FBreathingPhase := FBreathingPhase + BREATHING_IN_SPEED // inhale
-      else
-        FBreathingPhase := FBreathingPhase + BREATHING_OUT_SPEED; // exhale
-
-      if FBreathingPhase >= 1.0 then
-        FBreathingPhase := FBreathingPhase - 1.0;
-    end;
-
-  for i := 0 to FImages.Count - 1 do
-  begin
-    Item := TImageItem(FImages[i]);
-
-    // 1. HOVER ? calculate base HotTrack zoom first
-    if (Item = FHotItem) and HotTrackZoom and Item.Visible then
-    begin
-      CurrentW := Item.CurrentRect.Right - Item.CurrentRect.Left;
-      CurrentH := Item.CurrentRect.Bottom - Item.CurrentRect.Top;
-      RelSize := (CurrentW + CurrentH) / 2.0 / AvgCellSize;
-
-      if RelSize < 0.6 then
-        BaseZoom := HOT_ZOOM_MAX_FACTOR
-      else if RelSize < 1.0 then
-        BaseZoom := HOT_ZOOM_MAX_FACTOR - (HOT_ZOOM_MAX_FACTOR - HOT_ZOOM_MIN_FACTOR) * (RelSize - 0.6) / 0.4
-      else
-        BaseZoom := HOT_ZOOM_MIN_FACTOR + (HOT_ZOOM_MAX_FACTOR - HOT_ZOOM_MIN_FACTOR) * (1.0 / RelSize) * 0.5;
-
-      BaseZoom := EnsureRange(BaseZoom, HOT_ZOOM_MIN_FACTOR, HOT_ZOOM_MAX_FACTOR);
-
-      // If it's the selected image ? breathe AROUND the base zoom (never below!)
-      if FBreathingEnabled and (Item = FSelectedImage) then
-      begin
-        BreathOffset := BREATHING_AMPLITUDE * 0.2 * (Sin(FBreathingPhase * 2 * Pi) + 1);
-        TargetZoom := BaseZoom + BreathOffset;
-      end
-      else
-        TargetZoom := BaseZoom * HOT_ZOOM_MIN_FACTOR;
-
-      // Speed: fast out, slow in
-      if Item.FHotZoom < TargetZoom then
-        Speed := HOT_ZOOM_OUT_SPEED
-      else
-        Speed := HOT_ZOOM_IN_SPEED;
-    end
-
-      // 2. Selected but NOT hovered ? stay at 1.0
-    else if Item = FSelectedImage then
-    begin
-      TargetZoom := 1.0;
-      Speed := HOT_ZOOM_OUT_SPEED;
-    end
-
-      // 3. Normal image ? back to 1.0
-    else
-    begin
-      TargetZoom := 1.0;
-      Speed := HOT_ZOOM_OUT_SPEED;
-    end;
-
-    Item.FHotZoomTarget := TargetZoom;
-
-    if Abs(Item.FHotZoom - TargetZoom) > 0.006 then
-    begin
-      Item.FHotZoom := Item.FHotZoom + (TargetZoom - Item.FHotZoom) * Speed;
-    end
-    else
-      Item.FHotZoom := TargetZoom;
-  end;
-
-  NeedRepaint := False;
-
-  for i := 0 to FImages.Count - 1 do
-    if Abs(TImageItem(FImages[i]).FHotZoom - TImageItem(FImages[i]).FHotZoomTarget) > 0.006 then
-    begin
-      Item.FHotZoom := Item.FHotZoom + (TargetZoom - Item.FHotZoom) * Speed;
-      NeedRepaint := True;
-      if (i mod 30 = 29) then
-        Sleep(1);
-    end;
-
-  if (FSelectedImage <> nil) and (FSelectedImage = FHotItem) then NeedRepaint := True;
-
-  if NeedRepaint then
-    Invalidate
-  else
-    FHotTrackTimer.Enabled := False;
-end;
 
 { Deselects the currently zoomed/selected image }
 procedure TFlowmotion.DeselectZoomedImage;
@@ -1579,11 +1429,13 @@ var
   NewW, NewH, CurCX, CurCY, CurW, CurH, TargetCX, TargetCY, MoveX, MoveY: Integer;
   SelectedItem: TImageItem;
 begin
-  if (FImages.Count = 0) or FClearing then
+  if (FImages.Count = 0) or FClearing or FInFallAnimation then
     Exit;
 
   WaitForAllLoads;
-  WaitForAllAnimations;
+
+  FAnimationTimer.Enabled := False;
+  FInFallAnimation := True;
 
   // Stop all loading threads
   for i := 0 to FLoadingThreads.Count - 1 do
@@ -1596,10 +1448,6 @@ begin
   FLoadingThreads.Clear;
   FLoadingCount := 0;
 
-  FAnimationTimer.Enabled := False;
-  FHotTrackTimer.Enabled := False;
-  FInFallAnimation := True;
-
   // Find selected item
   SelectedItem := nil;
   if ZoominSelected then
@@ -1609,14 +1457,6 @@ begin
         SelectedItem := TImageItem(FImages[i]);
         Break;
       end;
-
-  // Reset hot-zoom for all images
-  for i := 0 to FImages.Count - 1 do
-  begin
-    TImageItem(FImages[i]).FHotZoom := 1.0;
-    TImageItem(FImages[i]).FHotZoomTarget := 1.0;
-    TImageItem(FImages[i]).FAnimating := False;
-  end;
 
   if not animated then
   begin
@@ -2461,44 +2301,159 @@ begin
   end;
 end;
 
+
 { Returns the index of an image item in the current page, or -1 if not found }
 function TFlowmotion.GetImageIndex(ImageItem: TImageItem): Integer;
 begin
   Result := FImages.IndexOf(ImageItem);
 end;
 
+
 { Returns the image item at the specified screen coordinates, or nil if none }
 function TFlowmotion.GetImageAtPoint(X, Y: Integer): TImageItem;
 var
   i: Integer;
   ImageItem: TImageItem;
+  P: TPoint;
+  CenterX, CenterY, BaseW, BaseH, DrawW, DrawH: Integer;
+  DrawRect: TRect;
+  ZoomFactor: Double;
 begin
-  // First check selected image (has highest priority)
-  if (FSelectedImage <> nil) and FSelectedImage.Visible and PtInRect(FSelectedImage.CurrentRect, Point(X, Y)) then
+  P := Point(X, Y);
+  Result := nil;
+
+  // ==================================================================
+  // 1. Special case: Hot-tracked item that is NOT the selected image
+  //     ? must be clickable even if overlapped by the selected image
+  // ==================================================================
+  if (FHotItem <> nil) and (FHotItem <> FSelectedImage) and FHotItem.Visible then
   begin
-    Result := FSelectedImage;
-    Exit;
+    ZoomFactor := FHotItem.FHotZoom;
+
+    if (FHotItem.CurrentRect.Right - FHotItem.CurrentRect.Left <= 0) or
+       (FHotItem.CurrentRect.Bottom - FHotItem.CurrentRect.Top <= 0) then
+    begin
+      CenterX := (FHotItem.TargetRect.Left + FHotItem.TargetRect.Right) div 2;
+      CenterY := (FHotItem.TargetRect.Top + FHotItem.TargetRect.Bottom) div 2;
+      BaseW := FHotItem.TargetRect.Right - FHotItem.TargetRect.Left;
+      BaseH := FHotItem.TargetRect.Bottom - FHotItem.TargetRect.Top;
+    end
+    else
+    begin
+      CenterX := (FHotItem.CurrentRect.Left + FHotItem.CurrentRect.Right) div 2;
+      CenterY := (FHotItem.CurrentRect.Top + FHotItem.CurrentRect.Bottom) div 2;
+      BaseW := FHotItem.CurrentRect.Right - FHotItem.CurrentRect.Left;
+      BaseH := FHotItem.CurrentRect.Bottom - FHotItem.CurrentRect.Top;
+    end;
+
+    DrawW := Round(BaseW * ZoomFactor);
+    DrawH := Round(BaseH * ZoomFactor);
+    DrawRect.Left   := CenterX - DrawW div 2;
+    DrawRect.Top    := CenterY - DrawH div 2;
+    DrawRect.Right  := DrawRect.Left + DrawW;
+    DrawRect.Bottom := DrawRect.Top + DrawH;
+    InflateRect(DrawRect, 6, 6);
+
+    if PtInRect(DrawRect, P) then
+    begin
+      Result := FHotItem;
+      Exit;
+    end;
   end;
 
-  // Then check other images in reverse order (top to bottom)
+  // ==================================================================
+  // 2. SELECTED IMAGE HAS ABSOLUTE PRIORITY (unchanged from your original code)
+  // ==================================================================
+  if (FSelectedImage <> nil) and FSelectedImage.Visible then
+  begin
+    if (FSelectedImage = FHotItem) or (FSelectedImage.FHotZoom > 1.01) then
+      ZoomFactor := FSelectedImage.FHotZoom
+    else
+      ZoomFactor := 1.0;
+
+    if (FSelectedImage.CurrentRect.Right - FSelectedImage.CurrentRect.Left <= 0) or
+       (FSelectedImage.CurrentRect.Bottom - FSelectedImage.CurrentRect.Top <= 0) then
+    begin
+      CenterX := (FSelectedImage.TargetRect.Left + FSelectedImage.TargetRect.Right) div 2;
+      CenterY := (FSelectedImage.TargetRect.Top + FSelectedImage.TargetRect.Bottom) div 2;
+      BaseW := FSelectedImage.TargetRect.Right - FSelectedImage.TargetRect.Left;
+      BaseH := FSelectedImage.TargetRect.Bottom - FSelectedImage.TargetRect.Top;
+    end
+    else
+    begin
+      CenterX := (FSelectedImage.CurrentRect.Left + FSelectedImage.CurrentRect.Right) div 2;
+      CenterY := (FSelectedImage.CurrentRect.Top + FSelectedImage.CurrentRect.Bottom) div 2;
+      BaseW := FSelectedImage.CurrentRect.Right - FSelectedImage.CurrentRect.Left;
+      BaseH := FSelectedImage.CurrentRect.Bottom - FSelectedImage.CurrentRect.Top;
+    end;
+
+    DrawW := Round(BaseW * ZoomFactor);
+    DrawH := Round(BaseH * ZoomFactor);
+    DrawRect.Left   := CenterX - DrawW div 2;
+    DrawRect.Top    := CenterY - DrawH div 2;
+    DrawRect.Right  := DrawRect.Left + DrawW;
+    DrawRect.Bottom := DrawRect.Top + DrawH;
+    InflateRect(DrawRect, 4, 4);
+
+    if PtInRect(DrawRect, P) then
+    begin
+      Result := FSelectedImage;
+      Exit;
+    end;
+  end;
+
+  // ==================================================================
+  // 3. All other images (back to front) – unchanged from your original code
+  // ==================================================================
   for i := FImages.Count - 1 downto 0 do
   begin
     ImageItem := TImageItem(FImages[i]);
-    if ImageItem.Visible and PtInRect(ImageItem.CurrentRect, Point(X, Y)) and (ImageItem <> FSelectedImage) then
+    if not ImageItem.Visible or (ImageItem = FSelectedImage) then
+      Continue;
+
+    if (ImageItem.FHotZoom > 1.01) then
+    begin
+      ZoomFactor := ImageItem.FHotZoom;
+      CenterX := (ImageItem.CurrentRect.Left + ImageItem.CurrentRect.Right) div 2;
+      CenterY := (ImageItem.CurrentRect.Top + ImageItem.CurrentRect.Bottom) div 2;
+      BaseW := ImageItem.CurrentRect.Right - ImageItem.CurrentRect.Left;
+      BaseH := ImageItem.CurrentRect.Bottom - ImageItem.CurrentRect.Top;
+
+      if (BaseW <= 0) or (BaseH <= 0) then
+      begin
+        BaseW := ImageItem.TargetRect.Right - ImageItem.TargetRect.Left;
+        BaseH := ImageItem.TargetRect.Bottom - ImageItem.TargetRect.Top;
+        CenterX := (ImageItem.TargetRect.Left + ImageItem.TargetRect.Right) div 2;
+        CenterY := (ImageItem.TargetRect.Top + ImageItem.TargetRect.Bottom) div 2;
+      end;
+
+      DrawW := Round(BaseW * ZoomFactor);
+      DrawH := Round(BaseH * ZoomFactor);
+      DrawRect.Left   := CenterX - DrawW div 2;
+      DrawRect.Top    := CenterY - DrawH div 2;
+      DrawRect.Right  := DrawRect.Left + DrawW;
+      DrawRect.Bottom := DrawRect.Top + DrawH;
+
+      if PtInRect(DrawRect, P) then
+      begin
+        Result := ImageItem;
+        Exit;
+      end;
+    end
+    else if PtInRect(ImageItem.CurrentRect, P) then
     begin
       Result := ImageItem;
       Exit;
     end;
   end;
-  Result := nil;
 end;
+
+
 
 { Handles mouse button release events }
 procedure TFlowmotion.MouseUp(Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
 begin
   if FClearing then
-    Exit;
-  if AnimationsRunning then
     Exit;
   if FDraggingSelected and (Button = mbLeft) then
   begin
@@ -2509,12 +2464,12 @@ begin
   inherited MouseUp(Button, Shift, X, Y);
 end;
 
-{ Handles mouse movement for hot-tracking and dragging }
+{ Handles mouse movement for hot-tracking }
 procedure TFlowmotion.MouseMove(Shift: TShiftState; X, Y: Integer);
 var
   NewHot: TImageItem;
 begin
-  if AnimationsRunning or FClearing then
+  if FClearing then
     Exit;
 
   NewHot := GetImageAtPoint(X, Y);
@@ -2523,18 +2478,21 @@ begin
   begin
     FHotItem.FHotZoomTarget := 1.0;
     FHotItem := nil;
-    FHotTrackTimer.Enabled := True;
-    Invalidate;
+    if not FAnimationTimer.Enabled then
+      FAnimationTimer.Enabled := True;
+    if not inPaintCycle then Invalidate;
   end
   else if (NewHot <> FHotItem) and (NewHot <> nil) then
   begin
-    if FHotItem <> nil then
+    if (FHotItem <> nil) and (FHotItem <> NewHot) then
+    begin
       FHotItem.FHotZoomTarget := 1.0;
-
+    end;
     FHotItem := NewHot;
     FHotItem.FHotZoomTarget := HOT_ZOOM_MAX_FACTOR;
-    FHotTrackTimer.Enabled := True;
-    Invalidate;
+    if not FAnimationTimer.Enabled then
+      FAnimationTimer.Enabled := True;
+    if not inPaintCycle then Invalidate;
   end;
 
   // Cursor
@@ -2544,20 +2502,21 @@ begin
     Cursor := crDefault;
 end;
 
-{ Handles mouse button press events for selection and dragging }
+{ Handles mouse button press events for selection, double-click and dragging }
 procedure TFlowmotion.MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
 var
   ImageItem: TImageItem;
   Index: Integer;
 begin
-
   FLastMouseButton := Button;
-
   inherited MouseDown(Button, Shift, X, Y);
 
   ImageItem := GetImageAtPoint(X, Y);
   Index := FImages.IndexOf(ImageItem);
 
+  // ------------------------------------------------------------------
+  // 1. Double-click on an image
+  // ------------------------------------------------------------------
   if (Button = mbLeft) and (ssDouble in Shift) then
   begin
     if ImageItem <> nil then
@@ -2571,20 +2530,42 @@ begin
     Exit;
   end;
 
+  // ------------------------------------------------------------------
+  // 2. Click on background ? deselect and zoom everything back to normal view
+  // ------------------------------------------------------------------
+  if (Button = mbLeft) and (ImageItem = nil) then
+  begin
+    if FSelectedImage <> nil then
+    begin
+      DeselectZoomedImage;   // Smoothly returns all images to normal grid size
+      Invalidate;           // Repaint immediately
+    end;
+    Exit;
+  end;
+
+  // ------------------------------------------------------------------
+  // 3. Left click on an actual image
+  // ------------------------------------------------------------------
   if Button = mbLeft then
   begin
-    if Assigned(FOnSelectedItemMouseDown) and (ImageItem <> nil) then
+    // External handler (e.g. for dragging support)
+    if Assigned(FOnSelectedItemMouseDown) then
       FOnSelectedItemMouseDown(Self, ImageItem, Index, X, Y, Button, Shift);
 
-    if (ImageItem <> nil) and (FSelectedImage <> ImageItem) then
+    // Select new image (if not already selected)
+    if FSelectedImage <> ImageItem then
     begin
+      // Small tactile "dip" when clicking a hot-tracked (zoomed) image
       if ImageItem.FHotZoom >= 1.1 then
-        ImageItem.FHotZoom := ImageItem.FHotZoom - 0.1; // tactile Reaction
-      SetSelectedImage(ImageItem, Index);
-    end;
+        ImageItem.FHotZoom := ImageItem.FHotZoom - 0.1;
 
-    if (ImageItem <> nil) and (FSelectedImage = ImageItem) then
-      FBreathingPhase := FBreathingPhase - 0.4; // tactile Reaction on selected
+      SetSelectedImage(ImageItem, Index);
+    end
+    else
+    begin
+      // Already selected ? small breathing push for tactile feedback
+      FBreathingPhase := FBreathingPhase - 0.4;
+    end;
   end;
 end;
 
@@ -2701,7 +2682,6 @@ var
 begin
   if ImageItem = nil then
     Exit;
-  FHotTrackTimer.Enabled := False;
   ImageItem.ZoomProgress := 0;
   ImageItem.Animating := True;
   ImageItem.StartRect := ImageItem.CurrentRect;
@@ -2786,7 +2766,6 @@ begin
 
   if ImageItem <> nil then
   begin
-    FHotTrackTimer.Enabled := False;
     ImageItem.IsSelected := True;
     ImageItem.ZoomProgress := 0;
     if ImageItem.FHotZoom < 1 then
@@ -2825,13 +2804,16 @@ end;
 procedure TFlowmotion.TimerAnimation(Sender: TObject);
 var
   i: Integer;
+  DeltaTime: Double;
+  XNow: Cardinal;
   ImageItem: TImageItem;
-  Progress, Eased: Double;
-  AnyAnimating, AnyAnimatingAfter, AllFinishedAtStart: Boolean;
+  Progress, Eased, Speed: Double;
+  AnyAnimating, AnyAnimatingAfter, AllFinishedAtStart, NeedRepaint: Boolean;
   NowTick: Cardinal;
+  TempRect: TRect;
+  TempZoom, TempAlpha: Double;
 
   { Checks if two rectangles are equal }
-
   function RectsEqual(const A, B: TRect): Boolean;
   begin
     Result := (A.Left = B.Left) and (A.Top = B.Top) and (A.Right = B.Right) and (A.Bottom = B.Bottom);
@@ -2840,39 +2822,49 @@ var
   { Checks if an image item has finished all animations }
   function ItemFinished(const It: TImageItem): Boolean;
   begin
-    Result := (It.AnimationProgress >= 1.0) and ((It.ZoomProgress = 0.0) or (It.ZoomProgress = 1.0)) and RectsEqual(It.CurrentRect, It.TargetRect);
+    // only finished if:
+    // - Position + Zoom done
+    // - HotZoom at Target (1.0 or Breathing-target)
+    // - No more running Breathing-Animations (if Hot + Selected)
+    Result :=
+      (It.AnimationProgress >= 1.0) and
+      ( (It.ZoomProgress <= 0.0001) or (It.ZoomProgress >= 0.9999) ) and
+      RectsEqual(It.CurrentRect, It.TargetRect) and
+      (Abs(It.FHotZoom - It.FHotZoomTarget) <= 0.006);
+
+    // Extra: If Breathing active ? go on
+    if FBreathingEnabled and (It = FSelectedImage) and (It = FHotItem) then
+      Result := False;
   end;
 
 begin
-  if FClearing then
+  if FInFallAnimation or FClearing or (not Visible) or FBlockImageEnterDuringLoad then begin
+    FAnimationTimer.Enabled := False;
     Exit;
-  if not Visible then
-    Exit;
-  if FBlockImageEnterDuringLoad then
-    Exit;
-
-  // FPS limiter: prevent excessive repaints
+  end;
+  // FPS limiter
   NowTick := GetTickCount;
   if (NowTick - FLastPaintTick) < MIN_FRAME_TIME then
     Exit;
+
+  XNow := GetTickCount;
+  DeltaTime := (XNow - FLastHotTrackCalc) / 1000.0;
+  if DeltaTime <= 0 then DeltaTime := 0.016; // fallback
+  FLastHotTrackCalc := XNow;
+
   FLastPaintTick := NowTick;
 
-
-  // Phase 0: Pre-check - determine if any animations are running
+  // Check if any animation is already running
   AnyAnimating := FFallingOut;
   AllFinishedAtStart := not AnyAnimating;
-
   for i := 0 to FImages.Count - 1 do
-  begin
-    ImageItem := TImageItem(FImages[i]);
-    if not ItemFinished(ImageItem) then
-    begin
+    if not ItemFinished(TImageItem(FImages[i])) then
       AllFinishedAtStart := False;
-    end;
-  end;
+
+  NeedRepaint := False;
 
   try
-    // Phase 1: Fall animation (page change)
+    // --- Phase 1: Page Fall Animation ---
     if FFallingOut then
     begin
       FPageOutProgress := FPageOutProgress + (FAnimationSpeed / 100);
@@ -2882,131 +2874,206 @@ begin
         FFallingOut := False;
         FInFallAnimation := False;
       end;
-      Eased := EaseInOutQuad(FPageOutProgress);
 
+      Eased := EaseInOutQuad(FPageOutProgress);
       for i := 0 to FImages.Count - 1 do
       begin
         ImageItem := TImageItem(FImages[i]);
-        ImageItem.CurrentRect := Rect(Round(ImageItem.StartRect.Left + (ImageItem.TargetRect.Left - ImageItem.StartRect.Left) * Eased), Round(ImageItem.StartRect.Top + (ImageItem.TargetRect.Top - ImageItem.StartRect.Top) * Eased), Round(ImageItem.StartRect.Right + (ImageItem.TargetRect.Right - ImageItem.StartRect.Right) * Eased), Round(ImageItem.StartRect.Bottom + (ImageItem.TargetRect.Bottom - ImageItem.StartRect.Bottom) * Eased));
-        ImageItem.Alpha := 255;
+        TempRect := Rect(
+          Round(ImageItem.StartRect.Left + (ImageItem.TargetRect.Left - ImageItem.StartRect.Left) * Eased),
+          Round(ImageItem.StartRect.Top + (ImageItem.TargetRect.Top - ImageItem.StartRect.Top) * Eased),
+          Round(ImageItem.StartRect.Right + (ImageItem.TargetRect.Right - ImageItem.StartRect.Right) * Eased),
+          Round(ImageItem.StartRect.Bottom + (ImageItem.TargetRect.Bottom - ImageItem.StartRect.Bottom) * Eased)
+        );
+
+        // Only update if different
+        if not RectsEqual(ImageItem.CurrentRect, TempRect) then
+        begin
+          ImageItem.CurrentRect := TempRect;
+          NeedRepaint := True;
+        end;
+
+        if ImageItem.Alpha <> 255 then
+        begin
+          ImageItem.Alpha := 255;
+          NeedRepaint := True;
+        end;
       end;
     end
     else
-      // Phase 2: Normal animations (position, zoom, fade)
     begin
+      // --- Phase 2: Normal Animations (Position, Zoom, Fade) ---
       for i := FImages.Count - 1 downto 0 do
       begin
         ImageItem := TImageItem(FImages[i]);
-        ImageItem.Alpha := 255;
 
-        // Position
+        // --- Alpha ---
+        TempAlpha := 255;
+        if Abs(ImageItem.Alpha - TempAlpha) > 0.5 then
+        begin
+          ImageItem.Alpha := Round(TempAlpha);
+          NeedRepaint := True;
+        end;
+
+        // --- Animation Progress ---
         if ImageItem.AnimationProgress < 1.0 then
-          ImageItem.AnimationProgress := Min(1.0, ImageItem.AnimationProgress + FAnimationSpeed / 100);
+        begin
+          TempZoom := Min(1.0, ImageItem.AnimationProgress + FAnimationSpeed / 100);
+          if Abs(ImageItem.AnimationProgress - TempZoom) > 0.001 then
+          begin
+            ImageItem.AnimationProgress := TempZoom;
+            NeedRepaint := True;
+          end;
+        end;
 
-        // Zoom
+        // --- Zoom Progress ---
         if ImageItem.IsSelected then
-          ImageItem.ZoomProgress := Min(1.0, ImageItem.ZoomProgress + FAnimationSpeed / 100)
+          TempZoom := Min(1.0, ImageItem.ZoomProgress + FAnimationSpeed / 100)
         else if ImageItem.ZoomProgress > 0.0 then
-          ImageItem.ZoomProgress := Max(0.0, ImageItem.ZoomProgress - FAnimationSpeed / 100);
+          TempZoom := Max(0.0, ImageItem.ZoomProgress - FAnimationSpeed / 100)
+        else
+          TempZoom := ImageItem.ZoomProgress;
 
-        // Progress
+        if Abs(ImageItem.ZoomProgress - TempZoom) > 0.001 then
+        begin
+          ImageItem.ZoomProgress := TempZoom;
+          NeedRepaint := True;
+        end;
+
+        // --- Eased Progress ---
         Progress := Max(ImageItem.AnimationProgress, ImageItem.ZoomProgress);
         if FAnimationEasing then
           Progress := EaseInOutQuad(Progress);
 
-        // Rect
-      //  if FZoomSelectedtoCenter then ImageItem.CurrentRect := ImageItem.TargetRect
-      //   else
-        ImageItem.CurrentRect := Rect(Round(ImageItem.StartRect.Left + (ImageItem.TargetRect.Left - ImageItem.StartRect.Left) * Progress), Round(ImageItem.StartRect.Top + (ImageItem.TargetRect.Top - ImageItem.StartRect.Top) * Progress), Round(ImageItem.StartRect.Right + (ImageItem.TargetRect.Right - ImageItem.StartRect.Right) * Progress), Round(ImageItem.StartRect.Bottom + (ImageItem.TargetRect.Bottom - ImageItem.StartRect.Bottom) * Progress));
+        // --- Position Rect ---
+        TempRect := Rect(
+          Round(ImageItem.StartRect.Left + (ImageItem.TargetRect.Left - ImageItem.StartRect.Left) * Progress),
+          Round(ImageItem.StartRect.Top + (ImageItem.TargetRect.Top - ImageItem.StartRect.Top) * Progress),
+          Round(ImageItem.StartRect.Right + (ImageItem.TargetRect.Right - ImageItem.StartRect.Right) * Progress),
+          Round(ImageItem.StartRect.Bottom + (ImageItem.TargetRect.Bottom - ImageItem.StartRect.Bottom) * Progress)
+        );
 
-        // Animating
+        if not RectsEqual(ImageItem.CurrentRect, TempRect) then
+        begin
+          ImageItem.CurrentRect := TempRect;
+          NeedRepaint := True;
+        end;
+
+        // --- Animating flag ---
         ImageItem.Animating := not ItemFinished(ImageItem);
 
-        // Zoom + Position done -> reset selected
+        // Reset selected tracker if done
         if (ImageItem.AnimationProgress >= 1.0) and ((ImageItem.ZoomProgress = 0.0) or (ImageItem.ZoomProgress = 1.0)) then
           FWasSelectedItem := nil;
       end;
     end;
 
-    // --- Phase 2b: Breathing-Effect for Selected Images ---
-    if FBreathingEnabled then
-      if (FSelectedImage <> nil) and (not FSelectedImage.Animating) and FSelectedImage.Visible then
-      begin
-        FBreathingPhase := FBreathingPhase + BREATHING_OUT_SPEED;
-        if FBreathingPhase >= 1.0 then
-          FBreathingPhase := FBreathingPhase - 1.0; // repeat cycle
-      end
-      else
-        FBreathingPhase := 0.0; // Reset if none selected
 
-    // Phase 3: Timer management
-    if AllFinishedAtStart then
-    begin
-      // All animations finished, stop timer
-      if FAnimationTimer.Enabled then
-        FAnimationTimer.Enabled := False;
-      if Assigned(FOnAllAnimationsFinished) then
-        FOnAllAnimationsFinished(Self);
-      Exit;
+       // --- Phase 2.5: HotZoom + Breathing ---
+     if FAnimationTimer.Enabled then begin
+
+      for i := 0 to FImages.Count - 1 do
+      begin
+        ImageItem := TImageItem(FImages[i]);
+        if not (ImageItem.Visible and HotTrackZoom) then
+          Continue;
+
+        // Breathing only when is HotItem and SelectedImage!
+        if (ImageItem = FHotItem) and (ImageItem = FSelectedImage) and FBreathingEnabled then
+        begin
+          TargetZoom := 1.0 + BREATHING_AMPLITUDE * 0.2 * (Sin(FBreathingPhase * 2 * Pi) + 1.0);
+        end
+        else if ImageItem = FHotItem then
+        begin
+          TargetZoom := HOT_ZOOM_MAX_FACTOR;
+        end
+        else
+        begin
+          TargetZoom := 1.0;
+        end;
+
+        // zoom speed
+        if ImageItem.FHotZoom < TargetZoom then
+          Speed := HOT_ZOOM_IN_PER_SEC
+        else
+          Speed := HOT_ZOOM_OUT_PER_SEC;
+
+        ImageItem.FHotZoom := ImageItem.FHotZoom + (TargetZoom - ImageItem.FHotZoom) * Speed * DeltaTime;
+
+        // never < 1.0
+        if ImageItem.FHotZoom < 1.0 then
+          ImageItem.FHotZoom := 1.0;
+
+          // or > max
+        if (ImageItem.FHotZoom > HOT_ZOOM_MAX_FACTOR)
+        and (ImageItem <> FSelectedImage) then
+          ImageItem.FHotZoom := 1.0;
+
+        NeedRepaint := True;
+      end;
+
+      // Breathing-Phase nur fortschreiten, wenn Breathing aktiv ist!
+      if FBreathingEnabled and (FHotItem <> nil) and (FHotItem = FSelectedImage) then
+        FBreathingPhase := Frac(FBreathingPhase + BREATHING_SPEED_PER_SEC * DeltaTime);
     end;
 
-    // Check if any animations are still running
+    // --- Phase 3: Timer Management ---
     AnyAnimatingAfter := FFallingOut;
     for i := 0 to FImages.Count - 1 do
     begin
       ImageItem := TImageItem(FImages[i]);
       if ImageItem.Animating then
+        AnyAnimatingAfter := True
+      else if Abs(ImageItem.FHotZoom - 1.0) > 0.01 then
+        AnyAnimatingAfter := True;
+    end;
+    if AnyAnimatingAfter then
+      FAnimationTimer.Enabled := True
+    else
+    begin
+      FAnimationTimer.Enabled := False;
+    end;
+
+    // Check if any animation still running
+    AnyAnimatingAfter := FFallingOut;
+    for i := 0 to FImages.Count - 1 do
+      if TImageItem(FImages[i]).Animating then
       begin
         AnyAnimatingAfter := True;
         Break;
       end;
-    end;
 
-    if AnyAnimatingAfter then
+    // Repaint only if something changed
+    if NeedRepaint or AnyAnimatingAfter then
       Invalidate
     else
     begin
-      // All main animations finished ? final frame
-      Invalidate;
-
-      // ------------------------------------------------------------------
-      // 1. Stop Main Animation Timer
-      // ------------------------------------------------------------------
+      // Stop timer
       FAnimationTimer.Enabled := False;
       if Assigned(FOnAllAnimationsFinished) then
         FOnAllAnimationsFinished(Self);
 
-      // ------------------------------------------------------------------
-      // 2. HotTrackTimer restart if something still hotzoomed
-      // ------------------------------------------------------------------
-      if FHotTrackTimer.Enabled then
+      // Restart HotTrackTimer if any hotzoom still active
+      if not FAnimationTimer.Enabled then
       begin
-        // already active
-      end
-      else
-      begin
-        // off? then check if some still hotzoomed
         for i := 0 to FImages.Count - 1 do
         begin
           ImageItem := TImageItem(FImages[i]);
           if Abs(ImageItem.FHotZoom - ImageItem.FHotZoomTarget) > 0.006 then
           begin
-            FHotTrackTimer.Enabled := True;
+            FAnimationTimer.Enabled := True;
             Break;
           end;
         end;
-
-        // breathing selected
-        if (FSelectedImage <> nil) and (FSelectedImage = FHotItem) and FBreathingEnabled then
-          FHotTrackTimer.Enabled := True;
       end;
     end;
 
   except
     on E: Exception do
-      ; // Silently handle exceptions to prevent timer crashes
+      ; // prevent timer crash
   end;
 end;
+
 
 { Main paint procedure: draws background and all images in correct z-order }
 procedure TFlowmotion.Paint;
@@ -3021,7 +3088,6 @@ var
   CenterX, CenterY, MinSize: Integer;
 
   { Draws an image with hot-track zoom effect applied }
-
   procedure DrawZoomedItem(Item: TImageItem; IsCurrentHot: Boolean);
   var
     CenterX, CenterY, W, H, NewW, NewH: Integer;
@@ -3033,6 +3099,7 @@ var
       Exit;
     if (not Item.Visible) or Item.Bitmap.Empty then
       Exit;
+
     try
       // If CurrentRect is too small (e.g., zatZoom animation start), use TargetRect center
       if (Item.CurrentRect.Right <= Item.CurrentRect.Left) or (Item.CurrentRect.Bottom <= Item.CurrentRect.Top) then
@@ -3124,8 +3191,8 @@ var
   end;
 
 begin
-  if FClearing then
-    Exit;
+  if inPaintCycle or FClearing then Exit;
+  inPaintCycle := True;
   Canvas.Lock;
   try
     // Initialize background alpha for blending
@@ -3272,6 +3339,7 @@ begin
     end;
   finally
     Canvas.Unlock;
+    inPaintCycle := False;
   end;
 end;
 
