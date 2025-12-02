@@ -54,7 +54,10 @@ but it’s already basically stable and looks really nice in my player!
    
 ### Latest changes:  
 
-**v 0.982  
+**v 0.983**
+- Animations now Threaded, massive performance gain like 20 times faster and smoother
+      
+**v 0.982**  
 - Paint routine optimized  
 - fixed some wrong Z-orders of prevsel or prevhot back zooming pictures getting painted below static pics
     
