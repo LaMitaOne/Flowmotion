@@ -52,7 +52,12 @@ So I thought maybe some of you will like it too :)
 Still tweaking and some things are not perfect yet, some not fully implemented,   
 but it’s already basically stable and looks really nice in my player!  
    
-### Latest changes:   
+### Latest changes:  
+
+**v 0.982  
+- Paint routine optimized  
+- fixed some wrong Z-orders of prevsel or prevhot back zooming pictures getting painted below static pics
+    
 **v 0.981**  
 - combined HottrackTimer into TimerAnimation (looks way better, and a LOT faster)  
 - optimized TimerAnimation for less useless paints when nothing changed  
