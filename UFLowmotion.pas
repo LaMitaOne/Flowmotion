@@ -10,7 +10,8 @@
 {------------------------------------------------------------------------------}
 {
  ----Latest Changes
-
+  v 0.983
+    - Animations now Threaded, massive performance gain like 20 times faster and smoother
   v 0.982
     - Paint routine optimized
     - fixed some wrong Z-orders of prevsel or prevhot back zooming pictures getting painted below static pics
@@ -36,14 +37,14 @@ unit UFLowmotion;
 interface
 
 uses
-  Windows, SysUtils, Classes, Graphics, Controls, ExtCtrls, Forms, JPEG, Math,
+  Windows, Messages, SysUtils, Classes, Graphics, Controls, ExtCtrls, Forms, JPEG, Math,
   Pngimage;
 
 const
   // Animation constants
-  DEFAULT_TIMER_INTERVAL = 42; // ~24 FPS
-  MIN_FRAME_TIME = 16; // ~60 FPS max
-  DEFAULT_ANIMATION_SPEED = 12;
+  TARGET_FPS = 50;
+  MIN_FRAME_TIME = 1000 div TARGET_FPS;
+  DEFAULT_ANIMATION_SPEED = 3;
   DEFAULT_ALPHA = 255;
 
   // Timeouts
@@ -59,6 +60,7 @@ const
   MIN_CELL_SIZE = 22;
   HOT_ZOOM_IN_PER_SEC = 2.5;
   HOT_ZOOM_OUT_PER_SEC = 3.0;
+  HOT_ZOOM_EPSILON = 0.0001;
   BREATHING_AMPLITUDE = 2.0;
   BREATHING_SPEED_PER_SEC = 0.06;
 
@@ -86,6 +88,7 @@ type
     iesFromCenter, // pop-in from image center
     iesFromPoint // all fly in from a custom point (e.g. mouse)
   );
+
 
   {
     TImageItem - Represents a single image in the gallery with animation state
@@ -165,6 +168,24 @@ type
     destructor Destroy; override;
   end;
 
+
+type
+  TAnimationThread = class(TThread)
+  private
+    FOwner: TCustomControl;
+    FLastTick: Cardinal;
+    FStopRequested: Boolean;
+    FEvent: THandle;
+  protected
+    procedure Execute; override;
+  public
+    constructor Create(AOwner: TCustomControl);
+    destructor Destroy; override;
+    procedure Stop;
+  end;
+
+
+
   {
     TFlowmotion - Main component for animated image gallery
 
@@ -189,13 +210,13 @@ type
     FAllPaths: TStringList; // All paths
 
     // Threading
+    FAnimationThread : TAnimationThread;
     FLoadingThreads: TList; // Active loading threads
     FLoadingCount: Integer; // Number of loading threads
     FClearing: Boolean;
 
     // Animation
     inPaintCycle: Boolean;  //.paint cycle running atm
-    FAnimationTimer: TTimer;
     FAnimationSpeed: Integer; // 1-100, higher = faster
     FAnimationEasing: Boolean; // Use easing function
     FInFallAnimation: Boolean; // Currently in fall animation
@@ -205,7 +226,6 @@ type
     FImageEntryStyle: TImageEntryStyle;
     FEntryPoint: TPoint; // only used with iesFromPoint
     FLastHotTrackCalc: Cardinal;
-    TargetZoom: Double;
 
     // Layout
     FFlowLayout: TFlowLayout;
@@ -262,12 +282,18 @@ type
     FOnSelectedImageDblClick: TOnSelectedImageDblClick;
 
     // Internal methods - Animation
+    procedure WMUser1(var Message: TMessage); message WM_USER + 1;
+    procedure WMUser2(var Message: TMessage);
+    procedure StopAnimationThread;
+    procedure StartAnimationThread;
+    procedure ThreadSafeFireAllAnimationsFinished;
+    procedure ThreadSafeInvalidate;
+    procedure PerformAnimationUpdate(DeltaMS: Cardinal);
     function AnimationsRunning: Boolean;
     function EaseInOutQuad(t: Double): Double;
     function GetEntryDirection: TImageEntryStyle;
     procedure WaitForAllAnimations;
     procedure FreeAllImagesAndClearLists;
-    procedure TimerAnimation(Sender: TObject);
     procedure AnimateImage(ImageItem: TImageItem; EntryStyle: TImageEntryStyle);
     procedure StartZoomAnimation(ImageItem: TImageItem; ZoomIn: Boolean);
     procedure SetImageEntryStyle(Value: TImageEntryStyle);
@@ -436,6 +462,8 @@ type
     property OnResize;
   end;
 
+
+
 procedure Register;
 
 implementation
@@ -446,6 +474,69 @@ procedure Register;
 begin
   RegisterComponents('LaMita Components', [TFlowmotion]);
 end;
+
+
+{ TAnimationThread }
+
+constructor TAnimationThread.Create(AOwner: TCustomControl);
+begin
+  inherited Create(False);
+  FreeOnTerminate := False;
+  FOwner := AOwner;
+  FLastTick := GetTickCount;
+  FStopRequested := False;
+  FEvent := CreateEvent(nil, True, False, nil);
+end;
+
+destructor TAnimationThread.Destroy;
+begin
+  CloseHandle(FEvent);
+  inherited Destroy;
+end;
+
+procedure TAnimationThread.Stop;
+begin
+  FStopRequested := True;
+  SetEvent(FEvent);
+end;
+
+procedure TAnimationThread.Execute;
+var
+  NowTick, LastTick, ElapsedMS, SleepTime: Cardinal;
+begin
+  // Initialize the timer for the first frame.
+  LastTick := GetTickCount;
+
+  // The main animation loop. It runs until the thread is terminated or a stop is requested.
+  while not Terminated and not FStopRequested do
+  begin
+    // --- 1. Execute the main animation logic ---
+    // Call the owner's update method, passing the time delta since the last frame.
+    // This ensures smooth animation regardless of the actual frame rate.
+    (FOwner as TFlowMotion).PerformAnimationUpdate(GetTickCount - LastTick);
+
+    // --- 2. Calculate timing for the next frame ---
+    NowTick := GetTickCount;
+    ElapsedMS := NowTick - LastTick; // Measure how long the work took.
+    LastTick := NowTick;             // Reset the timer for the next iteration.
+
+    // --- 3. Wait until the next frame is due ---
+    // We need to subtract the work duration from the total frame time to achieve our target FPS.
+    SleepTime := 0;
+    if ElapsedMS < MIN_FRAME_TIME then
+    begin
+      SleepTime := MIN_FRAME_TIME - ElapsedMS;
+    end;
+
+    // Wait for the stop event, but only for the calculated sleep time.
+    // This is much more efficient than a fixed Sleep() duration because it allows
+    // the thread to wake up immediately if a stop is requested.
+    if WaitForSingleObject(FEvent, SleepTime) = WAIT_OBJECT_0 then
+      Break; // Stop event was triggered, exit the loop immediately.
+  end;
+end;
+
+
 
 { TImageItem }
 
@@ -591,7 +682,7 @@ begin
     end;
   finally
     TFlowmotion(FOwner).ThreadFinished(Self);
-    TFlowmotion(FOwner).FAnimationTimer.Enabled := True;
+    TFlowmotion(FOwner).StartAnimationThread;
   end;
 end;
 
@@ -612,16 +703,10 @@ begin
   FBackgroundCache := TBitmap.Create;
   FTempBitmap := TBitmap.Create;
   FLastHotTrackCalc := 0;
-
+  FAnimationThread := nil;
   FImageEntryStyle := iesRandom;
   FEntryPoint := Point(-1000, -1000);
-
   FFlowLayout := flSorted;
-  FAnimationTimer := TTimer.Create(Self);
-  FAnimationTimer.Interval := DEFAULT_TIMER_INTERVAL;
-  FAnimationTimer.OnTimer := TimerAnimation;
-  FAnimationTimer.Enabled := False;
-
   FKeepSpaceforZoomed := False;
   FLoadMode := lmLazy;
   FAnimationSpeed := DEFAULT_ANIMATION_SPEED;
@@ -667,8 +752,12 @@ var
   StartTime: Cardinal;
 begin
   try
-    // Stop timer immediately
-    FAnimationTimer.Enabled := False;
+  if FAnimationThread <> nil then
+  begin
+    FAnimationThread.Stop;
+    FAnimationThread.WaitFor;
+    FreeAndNil(FAnimationThread);
+  end;
     // Terminate all threads
     for i := 0 to FLoadingThreads.Count - 1 do
     begin
@@ -703,7 +792,6 @@ begin
     FBackgroundCache.Free;
     FTempBitmap.free;
     FBackgroundpicture.Free;
-    FAnimationTimer.Free;
     FAllFiles.Free;
     FAllCaptions.Free;
     FAllPaths.Free;
@@ -713,8 +801,26 @@ begin
   inherited Destroy;
 end;
 
+procedure TFlowmotion.StartAnimationThread;
+begin
+  if (FAnimationThread = nil) or FAnimationThread.Terminated then
+  begin
+    if FAnimationThread <> nil then
+      FreeAndNil(FAnimationThread);
 
+    FAnimationThread := TAnimationThread.Create(Self);
+  end;
+end;
 
+procedure TFlowmotion.StopAnimationThread;
+begin
+  if FAnimationThread <> nil then
+  begin
+    FAnimationThread.Stop;
+    FAnimationThread.WaitFor;
+    FreeAndNil(FAnimationThread);
+  end;
+end;
 
 { Deselects the currently zoomed/selected image }
 procedure TFlowmotion.DeselectZoomedImage;
@@ -804,7 +910,6 @@ begin
   if FActive <> Value then
   begin
     FActive := Value;
-    FAnimationTimer.Enabled := FActive;
   end;
 end;
 
@@ -840,6 +945,299 @@ begin
   finally
     Bitmap.Free;
   end;
+end;
+
+procedure TFlowmotion.PerformAnimationUpdate(DeltaMS: Cardinal);
+var
+  i: Integer;
+  DeltaTime: Double;
+  XNow: Cardinal;
+  ImageItem: TImageItem;
+  Progress, Eased, Speed: Double;
+  AnyAnimating, AnyAnimatingAfter, AllFinishedAtStart, NeedRepaint: Boolean;
+  TempRect: TRect;
+  TempZoom, TempAlpha: Double;
+  TargetZoom: Double;
+
+  // -----------------------------------------------------------------------
+  // Helper: compare two TRects for equality (pixel-exact)
+  // -----------------------------------------------------------------------
+  function RectsEqual(const A, B: TRect): Boolean;
+  begin
+    Result := (A.Left = B.Left) and (A.Top = B.Top) and
+              (A.Right = B.Right) and (A.Bottom = B.Bottom);
+  end;
+
+  // -----------------------------------------------------------------------
+  // Returns true when an image item has no more animation work left
+  // (position, zoom, hot-zoom, breathing)
+  // -----------------------------------------------------------------------
+  function ItemFinished(const It: TImageItem): Boolean;
+  begin
+    Result := (It.AnimationProgress >= 1.0) and
+              ((It.ZoomProgress <= 0.0001) or (It.ZoomProgress >= 0.9999)) and
+              RectsEqual(It.CurrentRect, It.TargetRect) and
+              (Abs(It.FHotZoom - It.FHotZoomTarget) <= 0.006);
+
+    // Breathing is an endless animation ? never "finished" while active
+    if FBreathingEnabled and (It = FSelectedImage) and (It = FHotItem) then
+      Result := False;
+  end;
+
+begin
+  // -----------------------------------------------------------------------
+  // Early exit conditions – same as original timer
+  // -----------------------------------------------------------------------
+  if FInFallAnimation or FClearing or (not Visible) or FBlockImageEnterDuringLoad then
+    Exit;
+
+  // -----------------------------------------------------------------------
+  // Convert milliseconds from thread to seconds
+  // -----------------------------------------------------------------------
+  DeltaTime := DeltaMS / 1000.0;
+  if DeltaTime <= 0 then
+    DeltaTime := 0.016; // fallback ~60 fps
+
+  XNow := GetTickCount;
+  FLastHotTrackCalc := XNow;
+
+  // -----------------------------------------------------------------------
+  // Determine initial animation state
+  // -----------------------------------------------------------------------
+  AnyAnimating := FFallingOut;
+  AllFinishedAtStart := not AnyAnimating;
+
+  for i := 0 to FImages.Count - 1 do
+    if not ItemFinished(TImageItem(FImages[i])) then
+    begin
+      AllFinishedAtStart := False;
+      Break;
+    end;
+
+  NeedRepaint := False;
+
+  try
+    // =====================================================================
+    // PHASE 1: Page fall-out animation (when changing pages)
+    // =====================================================================
+    if FFallingOut then
+    begin
+      FPageOutProgress := FPageOutProgress + (FAnimationSpeed / 100);
+      if FPageOutProgress >= 1.0 then
+      begin
+        FPageOutProgress := 1.0;
+        FFallingOut := False;
+        FInFallAnimation := False;
+      end;
+
+      Eased := EaseInOutQuad(FPageOutProgress);
+
+      for i := 0 to FImages.Count - 1 do
+      begin
+        ImageItem := TImageItem(FImages[i]);
+
+        TempRect := Rect(
+          Round(ImageItem.StartRect.Left   + (ImageItem.TargetRect.Left   - ImageItem.StartRect.Left)   * Eased),
+          Round(ImageItem.StartRect.Top    + (ImageItem.TargetRect.Top    - ImageItem.StartRect.Top)    * Eased),
+          Round(ImageItem.StartRect.Right  + (ImageItem.TargetRect.Right  - ImageItem.StartRect.Right)  * Eased),
+          Round(ImageItem.StartRect.Bottom + (ImageItem.TargetRect.Bottom - ImageItem.StartRect.Bottom) * Eased)
+        );
+
+        if not RectsEqual(ImageItem.CurrentRect, TempRect) then
+        begin
+          ImageItem.CurrentRect := TempRect;
+          NeedRepaint := True;
+        end;
+
+        if ImageItem.Alpha <> 255 then
+        begin
+          ImageItem.Alpha := 255;
+          NeedRepaint := True;
+        end;
+      end;
+    end
+    else
+    begin
+      // ===================================================================
+      // PHASE 2: Normal item animations (move + zoom in/out)
+      // ===================================================================
+      for i := FImages.Count - 1 downto 0 do
+      begin
+        ImageItem := TImageItem(FImages[i]);
+
+        // ----- Alpha (currently always 255, but kept for consistency) -----
+        TempAlpha := 255;
+        if Abs(ImageItem.Alpha - TempAlpha) > 0.5 then
+        begin
+          ImageItem.Alpha := Round(TempAlpha);
+          NeedRepaint := True;
+        end;
+
+        // ----- Main position/scale animation progress -----
+        if ImageItem.AnimationProgress < 1.0 then
+        begin
+          TempZoom := Min(1.0, ImageItem.AnimationProgress + FAnimationSpeed / 100);
+          if Abs(ImageItem.AnimationProgress - TempZoom) > 0.001 then
+          begin
+            ImageItem.AnimationProgress := TempZoom;
+            NeedRepaint := True;
+          end;
+        end;
+
+        // ----- Selection zoom (big zoom when selected) -----
+        if ImageItem.IsSelected then
+          TempZoom := Min(1.0, ImageItem.ZoomProgress + FAnimationSpeed / 100)
+        else if ImageItem.ZoomProgress > 0.0 then
+          TempZoom := Max(0.0, ImageItem.ZoomProgress - FAnimationSpeed / 100)
+        else
+          TempZoom := ImageItem.ZoomProgress;
+
+        if Abs(ImageItem.ZoomProgress - TempZoom) > 0.001 then
+        begin
+          ImageItem.ZoomProgress := TempZoom;
+          NeedRepaint := True;
+        end;
+
+        // ----- Combined progress for position interpolation -----
+        Progress := Max(ImageItem.AnimationProgress, ImageItem.ZoomProgress);
+        if FAnimationEasing then
+          Progress := EaseInOutQuad(Progress);
+
+        TempRect := Rect(
+          Round(ImageItem.StartRect.Left   + (ImageItem.TargetRect.Left   - ImageItem.StartRect.Left)   * Progress),
+          Round(ImageItem.StartRect.Top    + (ImageItem.TargetRect.Top    - ImageItem.StartRect.Top)    * Progress),
+          Round(ImageItem.StartRect.Right  + (ImageItem.TargetRect.Right  - ImageItem.StartRect.Right)  * Progress),
+          Round(ImageItem.StartRect.Bottom + (ImageItem.TargetRect.Bottom - ImageItem.StartRect.Bottom) * Progress)
+        );
+
+        if not RectsEqual(ImageItem.CurrentRect, TempRect) then
+        begin
+          ImageItem.CurrentRect := TempRect;
+          NeedRepaint := True;
+        end;
+
+        // Update per-item animating flag
+        ImageItem.Animating := not ItemFinished(ImageItem);
+
+        // Precise clearing of the previous selection to prevent flicker ---
+        // We only clear the FWasSelectedItem reference when the zoom-out animation
+        // is definitively finished. This prevents the item from losing its
+        // "special" status mid-animation, which causes a one-frame flicker.
+        if (ImageItem = FWasSelectedItem) and
+           (ImageItem.ZoomProgress <= 0.0001) and // Must be fully zoomed out
+           RectsEqual(ImageItem.CurrentRect, ImageItem.TargetRect) then // Must be at its final position
+        begin
+          FWasSelectedItem := nil;
+        end;
+      end;
+    end;
+
+    // ===================================================================
+    // PHASE 2.5: Hot-track zoom + Breathing animation
+    // ===================================================================
+    for i := 0 to FImages.Count - 1 do
+    begin
+      ImageItem := TImageItem(FImages[i]);
+
+      if not (ImageItem.Visible and HotTrackZoom) then
+        Continue;
+
+      // Breathing when selected AND hovered
+      if FBreathingEnabled and (ImageItem = FSelectedImage) and (ImageItem = FHotItem) then
+        TargetZoom := 1.0 + BREATHING_AMPLITUDE * 0.2 * (Sin(FBreathingPhase * 2 * Pi) + 1.0)
+
+      // Normal hot-zoom when only hovered
+      else if ImageItem = FHotItem then
+        TargetZoom := HOT_ZOOM_MAX_FACTOR
+      else
+        TargetZoom := 1.0;
+
+      // Choose speed (in = faster when breathing)
+      if ImageItem.FHotZoom < TargetZoom then
+        Speed := HOT_ZOOM_IN_PER_SEC
+      else
+        Speed := HOT_ZOOM_OUT_PER_SEC;
+
+      // Smooth approach
+      ImageItem.FHotZoom := ImageItem.FHotZoom + (TargetZoom - ImageItem.FHotZoom) * Speed * DeltaTime;
+      ImageItem.FHotZoomTarget := TargetZoom; // for ItemFinished check
+
+      // Clamp non-breathing hotzoom
+      if (ImageItem <> FSelectedImage) and (ImageItem.FHotZoom > HOT_ZOOM_MAX_FACTOR) then
+        ImageItem.FHotZoom := HOT_ZOOM_MAX_FACTOR;
+      if ImageItem.FHotZoom < 1.0 then
+        ImageItem.FHotZoom := 1.0;
+
+      NeedRepaint := True;
+    end;
+
+    // Advance breathing phase only when selected item is hovered
+    if FBreathingEnabled and (FHotItem <> nil) and (FHotItem = FSelectedImage) then
+      FBreathingPhase := Frac(FBreathingPhase + BREATHING_SPEED_PER_SEC * DeltaTime);
+
+    // ===================================================================
+    // PHASE 3: Final decision – repaint + stop condition (Delphi 7 safe)
+    // ===================================================================
+    AnyAnimatingAfter := FFallingOut;
+    for i := 0 to FImages.Count - 1 do
+    begin
+      if not ItemFinished(TImageItem(FImages[i])) then
+      begin
+        AnyAnimatingAfter := True;
+        Break;
+      end;
+    end;
+
+  // At the end of the method, ensure proper synchronization
+  if NeedRepaint or AnyAnimatingAfter then
+    ThreadSafeInvalidate;
+
+  if not AnyAnimatingAfter and not AllFinishedAtStart and Assigned(FOnAllAnimationsFinished) then
+    ThreadSafeFireAllAnimationsFinished;
+
+  except
+    on E: Exception do
+    begin
+      // Swallow exceptions – we never want the background thread to die
+      // (same behavior as original timer)
+    end;
+  end;
+end;
+
+
+procedure TFlowmotion.ThreadSafeInvalidate;
+begin
+  if not FClearing then
+  begin
+    if GetCurrentThreadId = MainThreadId then
+      Invalidate // We're already in the main thread
+    else
+      PostMessage(Handle, WM_USER + 1, 0, 0); // Send a message to invalidate
+  end;
+end;
+
+
+procedure TFlowmotion.ThreadSafeFireAllAnimationsFinished;
+begin
+  if Assigned(FOnAllAnimationsFinished) then
+  begin
+    if GetCurrentThreadId = MainThreadId then
+      FOnAllAnimationsFinished(Self)
+    else
+      PostMessage(Handle, WM_USER + 2, 0, 0); // Send a message to fire the event
+  end;
+end;
+
+procedure TFlowmotion.WMUser1(var Message: TMessage);
+begin
+  if not FClearing then
+    Invalidate;
+end;
+
+procedure TFlowmotion.WMUser2(var Message: TMessage);
+begin
+  if Assigned(FOnAllAnimationsFinished) then
+    FOnAllAnimationsFinished(Self);
 end;
 
 { Returns the bitmap at the specified index, or nil if index is invalid }
@@ -1166,8 +1564,7 @@ begin
         AnimateImage(NewItem, NewItem.Direction);
       end;
 
-      FAnimationTimer.Enabled := True;
-      //DoImageLoad(FileName, True);
+      StartAnimationThread;
     finally
       Bitmap.Free;
     end;
@@ -1228,7 +1625,7 @@ begin
     CalculateLayout;
     AnimateImage(ImageItem, ImageItem.Direction);
   end;
-  FAnimationTimer.Enabled := True;
+  StartAnimationThread;
 end;
 
 { Scrolls to and selects an image by absolute index (switches page if needed) }
@@ -1416,15 +1813,18 @@ var
   AllOut: Boolean;
   ShrinkFactor: Real;
   R: TRect;
+  AnimSpeed,
   NewW, NewH, CurCX, CurCY, CurW, CurH, TargetCX, TargetCY, MoveX, MoveY: Integer;
   SelectedItem: TImageItem;
 begin
   if (FImages.Count = 0) or FClearing or FInFallAnimation then
     Exit;
 
+  AnimSpeed := 12;
+
   WaitForAllLoads;
 
-  FAnimationTimer.Enabled := False;
+  StopAnimationThread;
   FInFallAnimation := True;
 
   // Stop all loading threads
@@ -1476,39 +1876,39 @@ begin
       begin
         case FallingStyle of
           iesFromTop:
-            OffsetRect(R, 0, -Trunc(FAnimationSpeed * FAnimationSpeed));
+            OffsetRect(R, 0, -Trunc(AnimSpeed * AnimSpeed));
           iesFromBottom:
-            OffsetRect(R, 0, Trunc(FAnimationSpeed * FAnimationSpeed));
+            OffsetRect(R, 0, Trunc(AnimSpeed * AnimSpeed));
           iesFromLeft:
-            OffsetRect(R, -Trunc(FAnimationSpeed * FAnimationSpeed), 0);
+            OffsetRect(R, -Trunc(AnimSpeed * AnimSpeed), 0);
           iesFromRight:
-            OffsetRect(R, Trunc(FAnimationSpeed * FAnimationSpeed), 0);
+            OffsetRect(R, Trunc(AnimSpeed * AnimSpeed), 0);
           iesFromTopLeft:
-            OffsetRect(R, -Trunc(FAnimationSpeed * FAnimationSpeed), -Trunc(FAnimationSpeed * FAnimationSpeed));
+            OffsetRect(R, -Trunc(AnimSpeed * AnimSpeed), -Trunc(AnimSpeed * AnimSpeed));
           iesFromTopRight:
-            OffsetRect(R, Trunc(FAnimationSpeed * FAnimationSpeed), -Trunc(FAnimationSpeed * FAnimationSpeed));
+            OffsetRect(R, Trunc(AnimSpeed * AnimSpeed), -Trunc(AnimSpeed * AnimSpeed));
           iesFromBottomLeft:
-            OffsetRect(R, -Trunc(FAnimationSpeed * FAnimationSpeed), Trunc(FAnimationSpeed * FAnimationSpeed));
+            OffsetRect(R, -Trunc(AnimSpeed * AnimSpeed), Trunc(AnimSpeed * AnimSpeed));
           iesFromBottomRight:
-            OffsetRect(R, Trunc(FAnimationSpeed * FAnimationSpeed), Trunc(FAnimationSpeed * FAnimationSpeed));
+            OffsetRect(R, Trunc(AnimSpeed * AnimSpeed), Trunc(AnimSpeed * AnimSpeed));
           iesRandom:
             case Random(8) of
               0:
-                OffsetRect(R, 0, -Trunc(FAnimationSpeed * FAnimationSpeed));
+                OffsetRect(R, 0, -Trunc(AnimSpeed * AnimSpeed));
               1:
-                OffsetRect(R, 0, Trunc(FAnimationSpeed * FAnimationSpeed));
+                OffsetRect(R, 0, Trunc(AnimSpeed * AnimSpeed));
               2:
-                OffsetRect(R, -Trunc(FAnimationSpeed * FAnimationSpeed), 0);
+                OffsetRect(R, -Trunc(AnimSpeed * AnimSpeed), 0);
               3:
-                OffsetRect(R, Trunc(FAnimationSpeed * FAnimationSpeed), 0);
+                OffsetRect(R, Trunc(AnimSpeed * AnimSpeed), 0);
               4:
-                OffsetRect(R, -Trunc(FAnimationSpeed * FAnimationSpeed), -Trunc(FAnimationSpeed * FAnimationSpeed));
+                OffsetRect(R, -Trunc(AnimSpeed * AnimSpeed), -Trunc(AnimSpeed * AnimSpeed));
               5:
-                OffsetRect(R, Trunc(FAnimationSpeed * FAnimationSpeed), -Trunc(FAnimationSpeed * FAnimationSpeed));
+                OffsetRect(R, Trunc(AnimSpeed * AnimSpeed), -Trunc(AnimSpeed * AnimSpeed));
               6:
-                OffsetRect(R, -Trunc(FAnimationSpeed * FAnimationSpeed), Trunc(FAnimationSpeed * FAnimationSpeed));
+                OffsetRect(R, -Trunc(AnimSpeed * AnimSpeed), Trunc(AnimSpeed * AnimSpeed));
               7:
-                OffsetRect(R, Trunc(FAnimationSpeed * FAnimationSpeed), Trunc(FAnimationSpeed * FAnimationSpeed));
+                OffsetRect(R, Trunc(AnimSpeed * AnimSpeed), Trunc(AnimSpeed * AnimSpeed));
             end;
           iesFromCenter:
             begin
@@ -1523,17 +1923,17 @@ begin
             begin
               TargetCX := (FallingTargetPos.Left + FallingTargetPos.Right) div 2;
               TargetCY := (FallingTargetPos.Top + FallingTargetPos.Bottom) div 2;
-              MoveX := (TargetCX - (R.Left + R.Right) div 2) div Max(1, Trunc(FAnimationSpeed * 0.6));
-              MoveY := (TargetCY - (R.Top + R.Bottom) div 2) div Max(1, Trunc(FAnimationSpeed * 0.6));
+              MoveX := (TargetCX - (R.Left + R.Right) div 2) div Max(1, Trunc(AnimSpeed * 0.6));
+              MoveY := (TargetCY - (R.Top + R.Bottom) div 2) div Max(1, Trunc(AnimSpeed * 0.6));
               if Abs(MoveX) < 3 then
-                MoveX := Sign(MoveX) * Max(3, FAnimationSpeed);
+                MoveX := Sign(MoveX) * Max(3, AnimSpeed);
               if Abs(MoveY) < 3 then
-                MoveY := Sign(MoveY) * Max(3, FAnimationSpeed);
+                MoveY := Sign(MoveY) * Max(3, AnimSpeed);
               if (R.Right - R.Left > 20) and (R.Bottom - R.Top > 20) then
               begin
                 CurW := R.Right - R.Left;
                 CurH := R.Bottom - R.Top;
-                ShrinkFactor := 0.92 + (FAnimationSpeed * 0.001);
+                ShrinkFactor := 0.92 + (AnimSpeed * 0.001);
                 NewW := Trunc(CurW * ShrinkFactor);
                 NewH := Trunc(CurH * ShrinkFactor);
                 CurCX := (R.Left + R.Right) div 2;
@@ -1548,7 +1948,7 @@ begin
             else
             begin
               FallingStyle := iesFromBottom;
-              OffsetRect(R, 0, Trunc(FAnimationSpeed * FAnimationSpeed));
+              OffsetRect(R, 0, Trunc(AnimSpeed * AnimSpeed));
             end;
         end;
 
@@ -1595,15 +1995,15 @@ begin
 
         TargetCX := (SelectedTargetPos.Left + SelectedTargetPos.Right) div 2;
         TargetCY := (SelectedTargetPos.Top + SelectedTargetPos.Bottom) div 2;
-        MoveX := (TargetCX - (R.Left + R.Right) div 2) div Max(1, Trunc(FAnimationSpeed * 0.6));
-        MoveY := (TargetCY - (R.Top + R.Bottom) div 2) div Max(1, Trunc(FAnimationSpeed * 0.6));
+        MoveX := (TargetCX - (R.Left + R.Right) div 2) div Max(1, Trunc(AnimSpeed * 0.6));
+        MoveY := (TargetCY - (R.Top + R.Bottom) div 2) div Max(1, Trunc(AnimSpeed * 0.6));
 
         // Shrink
         if (R.Right - R.Left > 20) and (R.Bottom - R.Top > 20) then
         begin
           CurW := R.Right - R.Left;
           CurH := R.Bottom - R.Top;
-          ShrinkFactor := 0.93 + (FAnimationSpeed * 0.001);
+          ShrinkFactor := 0.93 + (AnimSpeed * 0.001);
           NewW := Trunc(CurW * ShrinkFactor);
           NewH := Trunc(CurH * ShrinkFactor);
           CurCX := (R.Left + R.Right) div 2;
@@ -1639,7 +2039,7 @@ begin
       if GetAsyncKeyState(VK_ESCAPE) < 0 then
         Break;
     end;
-    Sleep(trunc(FAnimationSpeed / 3));
+    Sleep(trunc(AnimSpeed / 3));
 
     if (GetTickCount - StartTick) > THREAD_CLEANUP_TIMEOUT then
       AllOut := True;
@@ -1684,7 +2084,7 @@ begin
   finally
     FClearing := False;
     FInFallAnimation := False;
-    FAnimationTimer.Enabled := False;
+    StopAnimationThread;
     Repaint;
   end;
 end;
@@ -1737,7 +2137,7 @@ begin
     end;
 
     FInFallAnimation := True;
-    FAnimationTimer.Enabled := False;
+    StopAnimationThread;
     ImageItem := TImageItem(FImages[Index]);
     ImageItem.Animating := True;
 
@@ -2434,8 +2834,7 @@ begin
   begin
     FHotItem.FHotZoomTarget := 1.0;
     FHotItem := nil;
-    if not FAnimationTimer.Enabled then
-      FAnimationTimer.Enabled := True;
+    StartAnimationThread;
     if not inPaintCycle then
       Invalidate;
   end
@@ -2446,8 +2845,7 @@ begin
       FHotItem.FHotZoomTarget := 1.0;
     end;
     FHotItem := NewHot;
-    if not FAnimationTimer.Enabled then
-      FAnimationTimer.Enabled := True;
+    StartAnimationThread;
     if not inPaintCycle then
       Invalidate;
   end;
@@ -2750,257 +3148,12 @@ begin
       StartZoomAnimation(ImageItem, True);
   end;
 
-  FAnimationTimer.Enabled := True;
+  StartAnimationThread;
 
   Invalidate;
 
   if Assigned(FOnItemSelected) then
     FOnItemSelected(Self, ImageItem, Index);
-end;
-
-{ Main animation timer: updates all image positions, zooms, and alpha values }
-procedure TFlowmotion.TimerAnimation(Sender: TObject);
-var
-  i: Integer;
-  DeltaTime: Double;
-  XNow: Cardinal;
-  ImageItem: TImageItem;
-  Progress, Eased, Speed: Double;
-  AnyAnimating, AnyAnimatingAfter, AllFinishedAtStart, NeedRepaint: Boolean;
-  NowTick: Cardinal;
-  TempRect: TRect;
-  TempZoom, TempAlpha: Double;
-
-  { Checks if two rectangles are equal }
-
-  function RectsEqual(const A, B: TRect): Boolean;
-  begin
-    Result := (A.Left = B.Left) and (A.Top = B.Top) and (A.Right = B.Right) and (A.Bottom = B.Bottom);
-  end;
-
-  { Checks if an image item has finished all animations }
-  function ItemFinished(const It: TImageItem): Boolean;
-  begin
-    // only finished if:
-    // - Position + Zoom done
-    // - HotZoom at Target (1.0 or Breathing-target)
-    // - No more running Breathing-Animations (if Hot + Selected)
-    Result := (It.AnimationProgress >= 1.0) and ((It.ZoomProgress <= 0.0001) or (It.ZoomProgress >= 0.9999)) and RectsEqual(It.CurrentRect, It.TargetRect) and (Abs(It.FHotZoom - It.FHotZoomTarget) <= 0.006);
-
-    // Extra: If Breathing active ? go on
-    if FBreathingEnabled and (It = FSelectedImage) and (It = FHotItem) then
-      Result := False;
-  end;
-
-begin
-  if FInFallAnimation or FClearing or (not Visible) or FBlockImageEnterDuringLoad then
-  begin
-    FAnimationTimer.Enabled := False;
-    Exit;
-  end;
-  // FPS limiter
-  NowTick := GetTickCount;
-  if (NowTick - FLastPaintTick) < MIN_FRAME_TIME then
-    Exit;
-
-  XNow := GetTickCount;
-  DeltaTime := (XNow - FLastHotTrackCalc) / 1000.0;
-  if DeltaTime <= 0 then
-    DeltaTime := 0.016; // fallback
-  FLastHotTrackCalc := XNow;
-
-  FLastPaintTick := NowTick;
-
-  // Check if any animation is already running
-  AnyAnimating := FFallingOut;
-  AllFinishedAtStart := not AnyAnimating;
-  for i := 0 to FImages.Count - 1 do
-    if not ItemFinished(TImageItem(FImages[i])) then
-      AllFinishedAtStart := False;
-
-  NeedRepaint := False;
-
-  try
-    // --- Phase 1: Page Fall Animation ---
-    if FFallingOut then
-    begin
-      FPageOutProgress := FPageOutProgress + (FAnimationSpeed / 100);
-      if FPageOutProgress >= 1.0 then
-      begin
-        FPageOutProgress := 1.0;
-        FFallingOut := False;
-        FInFallAnimation := False;
-      end;
-
-      Eased := EaseInOutQuad(FPageOutProgress);
-      for i := 0 to FImages.Count - 1 do
-      begin
-        ImageItem := TImageItem(FImages[i]);
-        TempRect := Rect(Round(ImageItem.StartRect.Left + (ImageItem.TargetRect.Left - ImageItem.StartRect.Left) * Eased), Round(ImageItem.StartRect.Top + (ImageItem.TargetRect.Top - ImageItem.StartRect.Top) * Eased), Round(ImageItem.StartRect.Right + (ImageItem.TargetRect.Right - ImageItem.StartRect.Right) * Eased), Round(ImageItem.StartRect.Bottom + (ImageItem.TargetRect.Bottom - ImageItem.StartRect.Bottom) * Eased));
-
-        // Only update if different
-        if not RectsEqual(ImageItem.CurrentRect, TempRect) then
-        begin
-          ImageItem.CurrentRect := TempRect;
-          NeedRepaint := True;
-        end;
-
-        if ImageItem.Alpha <> 255 then
-        begin
-          ImageItem.Alpha := 255;
-          NeedRepaint := True;
-        end;
-      end;
-    end
-    else
-    begin
-      // --- Phase 2: Normal Animations (Position, Zoom, Fade) ---
-      for i := FImages.Count - 1 downto 0 do
-      begin
-        ImageItem := TImageItem(FImages[i]);
-
-        // --- Alpha ---
-        TempAlpha := 255;
-        if Abs(ImageItem.Alpha - TempAlpha) > 0.5 then
-        begin
-          ImageItem.Alpha := Round(TempAlpha);
-          NeedRepaint := True;
-        end;
-
-        // --- Animation Progress ---
-        if ImageItem.AnimationProgress < 1.0 then
-        begin
-          TempZoom := Min(1.0, ImageItem.AnimationProgress + FAnimationSpeed / 100);
-          if Abs(ImageItem.AnimationProgress - TempZoom) > 0.001 then
-          begin
-            ImageItem.AnimationProgress := TempZoom;
-            NeedRepaint := True;
-          end;
-        end;
-
-        // --- Zoom Progress ---
-        if ImageItem.IsSelected then
-          TempZoom := Min(1.0, ImageItem.ZoomProgress + FAnimationSpeed / 100)
-        else if ImageItem.ZoomProgress > 0.0 then
-          TempZoom := Max(0.0, ImageItem.ZoomProgress - FAnimationSpeed / 100)
-        else
-          TempZoom := ImageItem.ZoomProgress;
-
-        if Abs(ImageItem.ZoomProgress - TempZoom) > 0.001 then
-        begin
-          ImageItem.ZoomProgress := TempZoom;
-          NeedRepaint := True;
-        end;
-
-        // --- Eased Progress ---
-        Progress := Max(ImageItem.AnimationProgress, ImageItem.ZoomProgress);
-        if FAnimationEasing then
-          Progress := EaseInOutQuad(Progress);
-
-        // --- Position Rect ---
-        TempRect := Rect(Round(ImageItem.StartRect.Left + (ImageItem.TargetRect.Left - ImageItem.StartRect.Left) * Progress), Round(ImageItem.StartRect.Top + (ImageItem.TargetRect.Top - ImageItem.StartRect.Top) * Progress), Round(ImageItem.StartRect.Right + (ImageItem.TargetRect.Right - ImageItem.StartRect.Right) * Progress), Round(ImageItem.StartRect.Bottom + (ImageItem.TargetRect.Bottom - ImageItem.StartRect.Bottom) * Progress));
-
-        if not RectsEqual(ImageItem.CurrentRect, TempRect) then
-        begin
-          ImageItem.CurrentRect := TempRect;
-          NeedRepaint := True;
-        end;
-
-        // --- Animating flag ---
-        ImageItem.Animating := not ItemFinished(ImageItem);
-
-        // Reset selected tracker if done
-        if (ImageItem.AnimationProgress >= 1.0) and ((ImageItem.ZoomProgress = 0.0) or (ImageItem.ZoomProgress = 1.0)) then
-          FWasSelectedItem := nil;
-      end;
-    end;
-
-
-    // --- Phase 2.5: HotZoom + Breathing ---
-    if FAnimationTimer.Enabled then
-    begin
-      for i := 0 to FImages.Count - 1 do
-      begin
-        ImageItem := TImageItem(FImages[i]);
-        if not (ImageItem.Visible and HotTrackZoom) then
-          Continue;
-
-        if (ImageItem = FHotItem) and (ImageItem = FSelectedImage) and FBreathingEnabled then
-        begin
-          TargetZoom := 1.0 + BREATHING_AMPLITUDE * 0.2 * (Sin(FBreathingPhase * 2 * Pi) + 1.0);
-        end
-
-        // Regular hot-zoom when only hovered (not selected)
-        else if ImageItem = FHotItem then
-        begin
-          TargetZoom := HOT_ZOOM_MAX_FACTOR;  
-        end
-        
-        // No hover, no selection ? normal size
-        else
-        begin
-          TargetZoom := 1.0;
-        end;
-
-        // Choose animation speed (faster when breathing!)
-        if ImageItem.FHotZoom < TargetZoom then
-          Speed := HOT_ZOOM_IN_PER_SEC
-        else
-          Speed := HOT_ZOOM_OUT_PER_SEC;
-  
-
-        // Apply smooth zoom
-        ImageItem.FHotZoom := ImageItem.FHotZoom + (TargetZoom - ImageItem.FHotZoom) * Speed * DeltaTime;
-
-        // --- SMART CLAMPING: Only limit non-breathing hotzoom ---
-        if (ImageItem <> FSelectedImage) and (ImageItem.FHotZoom > HOT_ZOOM_MAX_FACTOR) then
-          ImageItem.FHotZoom := HOT_ZOOM_MAX_FACTOR;
-
-        if ImageItem.FHotZoom < 1.0 then
-          ImageItem.FHotZoom := 1.0;
-
-        NeedRepaint := True;
-      end;
-
-      // Advance breathing phase only when the selected image is currently hovered
-      if FBreathingEnabled and (FHotItem <> nil) and (FHotItem = FSelectedImage) then
-        FBreathingPhase := Frac(FBreathingPhase + BREATHING_SPEED_PER_SEC * DeltaTime);
-    end;
-
-
-
-    // --- Phase 3: Timer management – clean & final version ---
-    AnyAnimatingAfter := FFallingOut;
-
-    for i := 0 to FImages.Count - 1 do
-    begin
-      if not ItemFinished(TImageItem(FImages[i])) then
-      begin
-        AnyAnimatingAfter := True;     // main animation, hotzoom or breathing still running
-        Break;
-      end;
-    end;
-
-    if AnyAnimatingAfter then
-    begin
-      FAnimationTimer.Enabled := True; // keep animating
-    end
-    else
-    begin
-      FAnimationTimer.Enabled := False; // everything truly finished
-
-      // fire event only once, exactly when animations actually stop
-      if not AllFinishedAtStart and Assigned(FOnAllAnimationsFinished) then
-        FOnAllAnimationsFinished(Self);
-    end;
-
-    // repaint only when necessary
-    if NeedRepaint or AnyAnimatingAfter then
-      Invalidate;
-
-  except
-    on E: Exception do ; // swallow – prevent timer from dying
-  end;
 end;
 
 
@@ -3153,7 +3306,7 @@ begin
       ImageItem := TImageItem(FImages[i]);
       if (ImageItem = FHotItem) or ImageItem.IsSelected or (ImageItem = FWasSelectedItem) then
         Continue;
-      if ImageItem.FHotZoom > 1.01 then
+      if ImageItem.FHotZoom > 1.0 then
         DrawZoomedItem(ImageItem, False);
     end;
 
@@ -3309,7 +3462,7 @@ begin
     FCurrentPage := Page;
     CalculateLayout;
     Invalidate;
-    FAnimationTimer.Enabled := True;
+    StartAnimationThread;
   finally
     FPageChangeInProgress := False;
   end;
