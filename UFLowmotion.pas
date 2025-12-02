@@ -10,6 +10,7 @@
 {------------------------------------------------------------------------------}
 {
  ----Latest Changes
+
   v 0.982
     - Paint routine optimized
     - fixed some wrong Z-orders of prevsel or prevhot back zooming pictures getting painted below static pics
@@ -36,9 +37,7 @@ interface
 
 uses
   Windows, SysUtils, Classes, Graphics, Controls, ExtCtrls, Forms, JPEG, Math,
-  Pngimage
-  // , GR32, GR32_Image    // Future: Consider using Graphics32 for better performance
-;
+  Pngimage;
 
 const
   // Animation constants
@@ -46,13 +45,6 @@ const
   MIN_FRAME_TIME = 16; // ~60 FPS max
   DEFAULT_ANIMATION_SPEED = 12;
   DEFAULT_ALPHA = 255;
-  MAX_ALPHA = 255;
-
-  // Grid constants
-  MIN_GRID_COLS = 3;
-  MIN_GRID_ROWS = 3;
-  MAX_GRID_COLS = 24;
-  GRID_MULTIPLIER = 2.0;
 
   // Timeouts
   THREAD_CLEANUP_TIMEOUT = 3000;
@@ -60,17 +52,15 @@ const
   // Spacing / Effects
   DEFAULT_GLOW_WIDTH = 2;
   DEFAULT_MAX_ZOOM_SIZE = 300;
-  HOT_ZOOM_MIN_FACTOR = 1.1;
-  HOT_ZOOM_MAX_FACTOR = 1.3;
+  HOT_ZOOM_MIN_FACTOR = 1.02;
+  HOT_ZOOM_MAX_FACTOR = 1.4;
   HOT_ZOOM_IN_SPEED = 0.07;
   HOT_ZOOM_OUT_SPEED = 0.09;
   MIN_CELL_SIZE = 22;
-  MIN_HOTTRACK_CELL_SIZE = 80;
-  HOT_ZOOM_REFERENCE_SIZE = 100;
   HOT_ZOOM_IN_PER_SEC = 2.5;
   HOT_ZOOM_OUT_PER_SEC = 3.0;
-  BREATHING_AMPLITUDE = 1.4;
-  BREATHING_SPEED_PER_SEC = 0.05;
+  BREATHING_AMPLITUDE = 2.0;
+  BREATHING_SPEED_PER_SEC = 0.06;
 
 type
   TFlowLayout = (flPerfectSize, flSorted);
@@ -2943,7 +2933,7 @@ begin
         // Regular hot-zoom when only hovered (not selected)
         else if ImageItem = FHotItem then
         begin
-          TargetZoom := HOT_ZOOM_MAX_FACTOR;  // normal hover = 1.3
+          TargetZoom := HOT_ZOOM_MAX_FACTOR;  
         end
         
         // No hover, no selection ? normal size
@@ -2979,60 +2969,37 @@ begin
 
 
 
-    // --- Phase 3: Timer Management ---
+    // --- Phase 3: Timer management – clean & final version ---
     AnyAnimatingAfter := FFallingOut;
-    for i := 0 to FImages.Count - 1 do
-    begin
-      ImageItem := TImageItem(FImages[i]);
-      if ImageItem.Animating then
-        AnyAnimatingAfter := True
-      else if Abs(ImageItem.FHotZoom - 1.0) > 0.01 then
-        AnyAnimatingAfter := True;
-    end;
-    if AnyAnimatingAfter then
-      FAnimationTimer.Enabled := True
-    else
-    begin
-      FAnimationTimer.Enabled := False;
-    end;
 
-    // Check if any animation still running
-    AnyAnimatingAfter := FFallingOut;
     for i := 0 to FImages.Count - 1 do
-      if TImageItem(FImages[i]).Animating then
+    begin
+      if not ItemFinished(TImageItem(FImages[i])) then
       begin
-        AnyAnimatingAfter := True;
+        AnyAnimatingAfter := True;     // main animation, hotzoom or breathing still running
         Break;
       end;
-
-    // Repaint only if something changed
-    if NeedRepaint or AnyAnimatingAfter then
-      Invalidate
-    else
-    begin
-      // Stop timer
-      FAnimationTimer.Enabled := False;
-      if Assigned(FOnAllAnimationsFinished) then
-        FOnAllAnimationsFinished(Self);
-
-      // Restart HotTrackTimer if any hotzoom still active
-      if not FAnimationTimer.Enabled then
-      begin
-        for i := 0 to FImages.Count - 1 do
-        begin
-          ImageItem := TImageItem(FImages[i]);
-          if Abs(ImageItem.FHotZoom - ImageItem.FHotZoomTarget) > 0.006 then
-          begin
-            FAnimationTimer.Enabled := True;
-            Break;
-          end;
-        end;
-      end;
     end;
 
+    if AnyAnimatingAfter then
+    begin
+      FAnimationTimer.Enabled := True; // keep animating
+    end
+    else
+    begin
+      FAnimationTimer.Enabled := False; // everything truly finished
+
+      // fire event only once, exactly when animations actually stop
+      if not AllFinishedAtStart and Assigned(FOnAllAnimationsFinished) then
+        FOnAllAnimationsFinished(Self);
+    end;
+
+    // repaint only when necessary
+    if NeedRepaint or AnyAnimatingAfter then
+      Invalidate;
+
   except
-    on E: Exception do
-      ; // prevent timer crash
+    on E: Exception do ; // swallow – prevent timer from dying
   end;
 end;
 
