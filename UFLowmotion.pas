@@ -1,7 +1,7 @@
 
 {------------------------------------------------------------------------------}
 {                                                                              }
-{ Flowmotion v0.983                                                            }
+{ Flowmotion v0.984                                                            }
 { by Lara Miriam Tamy Reschke                                                  }
 {                                                                              }
 { larate@gmx.net                                                               }
@@ -10,6 +10,15 @@
 {------------------------------------------------------------------------------}
 {
  ----Latest Changes
+  v 0.984
+    - higher hotzoomed get painted above lower hotzoomed
+      (think that way almost perfect z-order... as possible for me at least)
+    - fixed that last flicker sometimes of just hotzoomed down, in line,
+      that moment before it gets static pic again. Now all...perfect smooth,
+      no flicker, looks really awesome for my first playing planless around on canvas
+      and having no idea of what im doing :D)
+  v 0.983
+    - Animations now Threaded, massive performance gain like 20 times faster
   v 0.983
     - Animations now Threaded, massive performance gain like 20 times faster
   v 0.982
@@ -30,6 +39,36 @@
     - prev selected if hot sometimes dissapears while move to old pos - fixed
     - simplified animated clear cycle
     - some bugfixes
+  v 0.97
+    - hotzoom now faster zooms in, slower zooms out
+    - selected image breathing effect while mouseover
+    - ZoomSelectedtoCenter optional now, more grid style then
+    - Images zoom down now on mousedown
+    - some bugfixes
+  v 0.96
+    - some more Hottrackzoom improvements at edges and Prefhot...
+    - some bugfixes
+  v 0.95
+    - ZoominSelected option at clear added
+    - Zoominselected at clear to Targetpos added
+    - HotTrack added
+    - HotTrack Zoom added
+  v 0.94
+    - Animation Timer now stops always after all animations finished
+    - Keep space under zoomed setting added
+    - DeselectZoomedImage proc added
+    - some bugfixes
+  v 0.93
+    - Bug fixed at single picture add
+  v 0.92
+    - Some stability and performance improvements
+    - Some code cleanup
+  v 0.91
+    - Fixed performance problem with background pic
+  v 0.90
+    - Fixed sometimes not working dblclick
+    - Layout changed
+    - Improved performance
 }
 
 unit UFLowmotion;
@@ -514,7 +553,7 @@ var
   begin
       // Process only a small number of messages (e.g., 10)
       // and then release control. This keeps the main thread responsive.
-    for i := 1 to 10 do
+    for i := 1 to 20 do
     begin
       if not PeekMessage(Msg, 0, 0, 0, PM_REMOVE) then
         Break; // No more messages in the queue, so we're done for now
@@ -3189,124 +3228,143 @@ var
   i: Integer;
   ImageItem: TImageItem;
   DrawRect: TRect;
-  Border: TRect;
-  BackgroundAlpha: Byte;
-  BlendFunction: TBlendFunction;
+  AnimatingItems: TList;
 
-  // Returns true if the item is currently hovered or still shrinking back from hot-zoom
-
-  function ShouldDrawHotZoomed(Item: TImageItem): Boolean;
-  begin
-    Result := (Item = FHotItem) or (Item.FHotZoom > 1.01);
-  end;
-
-  { Draws an image with hot-track zoom effect applied }
-  procedure DrawZoomedItem(Item: TImageItem; IsCurrentHot: Boolean);
+  // --------------------------------------------------------------
+  // Compare function: ascending HotZoom ? higher zoom = drawn later = on top
+  // --------------------------------------------------------------
+  function CompareHotZoom(Item1, Item2: Pointer): Integer;
   var
-    CenterX, CenterY, W, H, NewW, NewH: Integer;
-    ZoomFactor: Double;
-    DrawRect: TRect;
-    OffsetX, OffsetY: Integer;
+    Z1, Z2: Double;
   begin
-    if Item = nil then
-      Exit;
-    if (not Item.Visible) or Item.Bitmap.Empty then
-      Exit;
-    try
-      if (Item.CurrentRect.Right <= Item.CurrentRect.Left) or (Item.CurrentRect.Bottom <= Item.CurrentRect.Top) then
-      begin
-        CenterX := (Item.TargetRect.Left + Item.TargetRect.Right) div 2;
-        CenterY := (Item.TargetRect.Top + Item.TargetRect.Bottom) div 2;
-        W := Item.TargetRect.Right - Item.TargetRect.Left;
-        H := Item.TargetRect.Bottom - Item.TargetRect.Top;
-      end
-      else
-      begin
-        CenterX := (Item.CurrentRect.Left + Item.CurrentRect.Right) div 2;
-        CenterY := (Item.CurrentRect.Top + Item.CurrentRect.Bottom) div 2;
-        W := Item.CurrentRect.Right - Item.CurrentRect.Left;
-        H := Item.CurrentRect.Bottom - Item.CurrentRect.Top;
-      end;
-
-      ZoomFactor := Item.FHotZoom;
-      NewW := Round(W * ZoomFactor);
-      NewH := Round(H * ZoomFactor);
-
-      DrawRect := Rect(CenterX - NewW div 2, CenterY - NewH div 2, CenterX + NewW div 2, CenterY + NewH div 2);
-
-      OffsetX := 0;
-      OffsetY := 0;
-      if DrawRect.Left < 0 then
-        OffsetX := -DrawRect.Left + FGlowWidth;
-      if DrawRect.Right > Width then
-        OffsetX := Width - DrawRect.Right - FGlowWidth;
-      if DrawRect.Top < 0 then
-        OffsetY := -DrawRect.Top + FGlowWidth;
-      if DrawRect.Bottom > Height then
-        OffsetY := Height - DrawRect.Bottom - FGlowWidth;
-      OffsetRect(DrawRect, OffsetX, OffsetY);
-
-      Canvas.StretchDraw(DrawRect, Item.Bitmap);
-
-      if IsCurrentHot or Item.IsSelected then
-      begin
-        Border := DrawRect;
-        InflateRect(Border, 1, 1);
-        Canvas.Pen.Width := FGlowWidth;
-        Canvas.Pen.Color := ifThen(Item.IsSelected, FGlowColor, FHotTrackColor);
-        Canvas.Brush.Style := bsClear;
-        Canvas.Rectangle(Border);
-      end;
-    except
-    end;
+    Z1 := TImageItem(Item1).FHotZoom;
+    Z2 := TImageItem(Item2).FHotZoom;
+    if Z1 < Z2 then Result := -1
+    else if Z1 > Z2 then Result := 1
+    else Result := 0;
   end;
 
-  { Draws an image }
-  procedure DrawImage(Item: TImageItem; WithAlpha: Boolean = False);
+  // --------------------------------------------------------------
+  // Draw static item (no zoom, no animation)
+  // --------------------------------------------------------------
+  procedure DrawNormalItem(Item: TImageItem);
+  var
+    BlendFunction: TBlendFunction;
+    W, H: Integer;
   begin
-    if Item = nil then
-      Exit;
-    if (not Item.Visible) or (Item.Alpha <= 0) or Item.Bitmap.Empty then
-      Exit;
-    try
-      if WithAlpha and (Item.Alpha < 255) then
-      begin
-        try
-          FTempBitmap.Canvas.Lock;
-          FTempBitmap.Width := Item.CurrentRect.Right - Item.CurrentRect.Left;
-          FTempBitmap.Height := Item.CurrentRect.Bottom - Item.CurrentRect.Top;
-          FTempBitmap.Canvas.StretchDraw(Rect(0, 0, FTempBitmap.Width, FTempBitmap.Height), Item.Bitmap);
+    if not Item.Visible or Item.Bitmap.Empty or (Item.Alpha <= 0) then Exit;
 
-          BlendFunction.BlendOp := AC_SRC_OVER;
-          BlendFunction.BlendFlags := 0;
-          BlendFunction.SourceConstantAlpha := Min(Item.Alpha, BackgroundAlpha);
-          BlendFunction.AlphaFormat := 0;
+    W := Item.CurrentRect.Right  - Item.CurrentRect.Left;
+    H := Item.CurrentRect.Bottom - Item.CurrentRect.Top;
 
-          AlphaBlend(Canvas.Handle, Item.CurrentRect.Left, Item.CurrentRect.Top, FTempBitmap.Width, FTempBitmap.Height, FTempBitmap.Canvas.Handle, 0, 0, FTempBitmap.Width, FTempBitmap.Height, BlendFunction);
-        finally
-          FTempBitmap.Canvas.Unlock;
-        end;
-      end
-      else
-        Canvas.StretchDraw(Item.CurrentRect, Item.Bitmap);
-    except
+    if Item.Alpha < 255 then
+    begin
+      FTempBitmap.Width  := W;
+      FTempBitmap.Height := H;
+      FTempBitmap.Canvas.StretchDraw(Rect(0,0,W,H), Item.Bitmap);
+
+      BlendFunction.BlendOp             := AC_SRC_OVER;
+      BlendFunction.BlendFlags          := 0;
+      BlendFunction.SourceConstantAlpha := Item.Alpha;
+      BlendFunction.AlphaFormat         := 0;
+
+      AlphaBlend(Canvas.Handle,
+                 Item.CurrentRect.Left, Item.CurrentRect.Top,
+                 W, H,
+                 FTempBitmap.Canvas.Handle, 0, 0, W, H,
+                 BlendFunction);
+    end
+    else
+      Canvas.StretchDraw(Item.CurrentRect, Item.Bitmap);
+  end;
+
+  // --------------------------------------------------------------
+  // Draw zoomed + alpha + glow item
+  // --------------------------------------------------------------
+  procedure DrawHotZoomedItem(Item: TImageItem; IsCurrentHot: Boolean);
+  var
+    CenterX, CenterY, BaseW, BaseH, NewW, NewH: Integer;
+    ZoomFactor: Double;
+    R: TRect;
+    OffsetX, OffsetY: Integer;
+    BF: TBlendFunction;
+  begin
+    if not Item.Visible or Item.Bitmap.Empty then Exit;
+
+    // Base size and center
+    if (Item.CurrentRect.Right > Item.CurrentRect.Left) and
+       (Item.CurrentRect.Bottom > Item.CurrentRect.Top) then
+    begin
+      CenterX := Item.CurrentRect.Left + (Item.CurrentRect.Right  - Item.CurrentRect.Left) div 2;
+      CenterY := Item.CurrentRect.Top  + (Item.CurrentRect.Bottom - Item.CurrentRect.Top)  div 2;
+      BaseW   := Item.CurrentRect.Right  - Item.CurrentRect.Left;
+      BaseH   := Item.CurrentRect.Bottom - Item.CurrentRect.Top;
+    end
+    else
+    begin
+      CenterX := Item.TargetRect.Left + (Item.TargetRect.Right  - Item.TargetRect.Left) div 2;
+      CenterY := Item.TargetRect.Top  + (Item.TargetRect.Bottom - Item.TargetRect.Top)  div 2;
+      BaseW   := Item.TargetRect.Right  - Item.TargetRect.Left;
+      BaseH   := Item.TargetRect.Bottom - Item.TargetRect.Top;
+    end;
+
+    ZoomFactor := Item.FHotZoom;
+    NewW := Round(BaseW * ZoomFactor);
+    NewH := Round(BaseH * ZoomFactor);
+
+    R := Rect(CenterX - NewW div 2, CenterY - NewH div 2,
+              CenterX + NewW div 2, CenterY + NewH div 2);
+
+    // Keep inside control (glow margin)
+    OffsetX := 0; OffsetY := 0;
+    if R.Left   < 0       then OffsetX := -R.Left   + FGlowWidth;
+    if R.Right  > Width   then OffsetX := Width  - R.Right - FGlowWidth;
+    if R.Top    < 0       then OffsetY := -R.Top    + FGlowWidth;
+    if R.Bottom > Height  then OffsetY := Height - R.Bottom - FGlowWidth;
+    OffsetRect(R, OffsetX, OffsetY);
+
+    // Draw with alpha if needed
+    if Item.Alpha < 255 then
+    begin
+      FTempBitmap.Width  := NewW;
+      FTempBitmap.Height := NewH;
+      FTempBitmap.Canvas.StretchDraw(Rect(0,0,NewW,NewH), Item.Bitmap);
+
+      BF.BlendOp             := AC_SRC_OVER;
+      BF.BlendFlags          := 0;
+      BF.SourceConstantAlpha := Item.Alpha;
+      BF.AlphaFormat         := 0;
+
+      AlphaBlend(Canvas.Handle, R.Left, R.Top, NewW, NewH,
+                 FTempBitmap.Canvas.Handle, 0, 0, NewW, NewH, BF);
+    end
+    else
+      Canvas.StretchDraw(R, Item.Bitmap);
+
+    // Glow / hot border
+    if IsCurrentHot or Item.IsSelected then
+    begin
+      InflateRect(R, 2, 2);
+      Canvas.Pen.Width := FGlowWidth;
+      Canvas.Pen.Color := ifThen(Item.IsSelected, FGlowColor, FHotTrackColor);
+      Canvas.Brush.Style := bsClear;
+      Canvas.Rectangle(R.Left, R.Top, R.Right, R.Bottom);
     end;
   end;
 
 begin
-  if inPaintCycle or FClearing then
-    Exit;
+  if inPaintCycle or FClearing then Exit;
   inPaintCycle := True;
   Canvas.Lock;
   try
-    // Background
+    // 1. Background
     if not FBackgroundpicture.Empty then
     begin
       if not FBackgroundCacheValid or (FBackgroundCache.Width <> Width) or (FBackgroundCache.Height <> Height) then
       begin
-        FBackgroundCache.Width := Width;
+        FBackgroundCache.Width  := Width;
         FBackgroundCache.Height := Height;
-        FBackgroundCache.Canvas.StretchDraw(Rect(0, 0, Width, Height), FBackgroundpicture);
+        FBackgroundCache.Canvas.StretchDraw(Rect(0,0,Width,Height), FBackgroundpicture);
         FBackgroundCacheValid := True;
       end;
       Canvas.CopyRect(ClientRect, FBackgroundCache.Canvas, ClientRect);
@@ -3317,59 +3375,59 @@ begin
       Canvas.FillRect(ClientRect);
     end;
 
-    // Layer 1: All normal images (no hot-zoom, not selected, not previous)
-    for i := 0 to FImages.Count - 1 do
-    begin
-      ImageItem := TImageItem(FImages[i]);
-      if ImageItem.IsSelected or (ImageItem = FWasSelectedItem) or ShouldDrawHotZoomed(ImageItem) then
-        Continue;
-      DrawImage(ImageItem, ImageItem.Alpha < 255);
-    end;
-
-    // Layer 2: Items still shrinking back from hot-zoom
-    for i := 0 to FImages.Count - 1 do
-    begin
-      ImageItem := TImageItem(FImages[i]);
-      if (ImageItem = FHotItem) or ImageItem.IsSelected or (ImageItem = FWasSelectedItem) then
-        Continue;
-      if ImageItem.FHotZoom > 1.0 then
-        DrawZoomedItem(ImageItem, False);
-    end;
-
-    // Current hot item FIRST
-    if FHotItem <> nil then
-      DrawZoomedItem(FHotItem, True);
-
-    // Previous selected item (shrinking back) – UNDER the new hot item
-    if (FWasSelectedItem <> nil) and (FWasSelectedItem <> FHotItem) then
-    begin
-      if ShouldDrawHotZoomed(FWasSelectedItem) then
-        DrawZoomedItem(FWasSelectedItem, False)
-      else
-        DrawImage(FWasSelectedItem, False);
-    end;
-
-    // Selected image – topmost layer with glow
-    if FSelectedImage <> nil then
-    begin
-      if FSelectedImage = FHotItem then
-        DrawZoomedItem(FSelectedImage, True)
-      else if ShouldDrawHotZoomed(FSelectedImage) then
-        DrawZoomedItem(FSelectedImage, True)
-      else
-        DrawImage(FSelectedImage, False);
-
-      if (FSelectedImage <> FHotItem) and (FSelectedImage.FHotZoom <= 1.01) then
+    AnimatingItems := TList.Create;
+    try
+      // 2. Collect every item that is still animating
+      for i := 0 to FImages.Count - 1 do
       begin
-        Canvas.Pen.Color := FGlowColor;
-        Canvas.Pen.Width := FGlowWidth;
-        Canvas.Brush.Style := bsClear;
-        DrawRect := FSelectedImage.CurrentRect;
-        if (DrawRect.Right - DrawRect.Left < 10) or (DrawRect.Bottom - DrawRect.Top < 10) then
-          DrawRect := FSelectedImage.TargetRect;
-        InflateRect(DrawRect, 2, 2);
-        Canvas.Rectangle(DrawRect);
+        ImageItem := TImageItem(FImages[i]);
+        if (ImageItem.FHotZoom > 1.0) or
+           (ImageItem.Alpha < 255) or
+           (ImageItem = FWasSelectedItem) then
+          AnimatingItems.Add(ImageItem);
       end;
+
+      // 3. Draw completely static items
+      for i := 0 to FImages.Count - 1 do
+      begin
+        ImageItem := TImageItem(FImages[i]);
+        if AnimatingItems.IndexOf(ImageItem) >= 0 then Continue;
+        DrawNormalItem(ImageItem);
+      end;
+
+      // 4. Draw all animating items – sorted by zoom
+      if AnimatingItems.Count > 0 then
+      begin
+        AnimatingItems.Sort(@CompareHotZoom);
+        for i := 0 to AnimatingItems.Count - 1 do
+          DrawHotZoomedItem(TImageItem(AnimatingItems[i]),
+                            TImageItem(AnimatingItems[i]) = FHotItem);
+      end;
+
+      // 5. Current hovered item on top (unless it's selected)
+      if (FHotItem <> nil) and (FHotItem <> FSelectedImage) then
+        DrawHotZoomedItem(FHotItem, True);
+
+      // 6. Selected item – ALWAYS absolute top
+      if FSelectedImage <> nil then
+      begin
+        if FSelectedImage.FHotZoom > 1.0 then
+          DrawHotZoomedItem(FSelectedImage, FSelectedImage = FHotItem)
+        else
+        begin
+          DrawNormalItem(FSelectedImage);
+          DrawRect := FSelectedImage.CurrentRect;
+          if IsRectEmpty(DrawRect) then DrawRect := FSelectedImage.TargetRect;
+          InflateRect(DrawRect, 2, 2);
+          Canvas.Pen.Color := FGlowColor;
+          Canvas.Pen.Width := FGlowWidth;
+          Canvas.Brush.Style := bsClear;
+          Canvas.Rectangle(DrawRect.Left, DrawRect.Top, DrawRect.Right, DrawRect.Bottom);
+        end;
+      end;
+
+    finally
+      AnimatingItems.Free;
     end;
 
   finally
@@ -3377,6 +3435,8 @@ begin
     inPaintCycle := False;
   end;
 end;
+
+
 
 { Handles component resize: invalidates background cache and recalculates layout }
 procedure TFlowmotion.Resize;
@@ -3582,4 +3642,3 @@ begin
 end;
 
 end.
-
