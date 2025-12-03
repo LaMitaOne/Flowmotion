@@ -4,7 +4,7 @@ interface
 
 uses
   Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, Vcl.Graphics,
-  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, UFLowmotion;
+  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, UFLowmotion, Vcl.ExtCtrls;
 
 type
   TFSampleform = class(TForm)
@@ -17,6 +17,13 @@ type
     Button6: TButton;
     Button7: TButton;
     Button8: TButton;
+    Button9: TButton;
+    OpenDialog1: TOpenDialog;
+    Button10: TButton;
+    Label1: TLabel;
+    Panel1: TPanel;
+    Timer1: TTimer;
+    procedure Button10Click(Sender: TObject);
     procedure FormCreate(Sender: TObject);
     procedure Button1Click(Sender: TObject);
     procedure Button2Click(Sender: TObject);
@@ -26,6 +33,7 @@ type
     procedure Button6Click(Sender: TObject);
     procedure Button7Click(Sender: TObject);
     procedure Button8Click(Sender: TObject);
+    procedure Button9Click(Sender: TObject);
     procedure Flowmotion1AllAnimationsFinished(Sender: TObject);
     procedure Flowmotion1ImageLoad(Sender: TObject; const FileName: string;
         Success: Boolean);
@@ -36,6 +44,7 @@ type
     procedure Flowmotion1SelectedItemMouseDown(Sender: TObject; ImageItem:
         TImageItem; Index, X, Y: Integer; Button: TMouseButton; Shift: TShiftState);
     procedure FormShow(Sender: TObject);
+    procedure Timer1Timer(Sender: TObject);
   private
     procedure WMMouseWheel(var Msg: TWMMouseWheel); message WM_MOUSEWHEEL;
   public
@@ -49,6 +58,11 @@ implementation
 
 {$R *.dfm}
 
+
+procedure TFSampleform.Button10Click(Sender: TObject);
+begin
+ Flowmotion1.SetBackgroundpicture('');
+end;
 
 procedure TFSampleform.FormCreate(Sender: TObject);
 begin
@@ -147,6 +161,11 @@ begin
   Flowmotion1.DeselectZoomedImage;
 end;
 
+procedure TFSampleform.Button9Click(Sender: TObject);
+begin
+  if Opendialog1.Execute then Flowmotion1.SetBackgroundpicture(Opendialog1.FileName);
+end;
+
 procedure TFSampleform.Flowmotion1AllAnimationsFinished(Sender: TObject);
 begin
   //stopped animations, idle
@@ -171,7 +190,8 @@ procedure TFSampleform.Flowmotion1SelectedImageDblClick(Sender: TObject;
     ImageItem: TImageItem; Index: Integer);
 begin
   //selected dblclicked
-
+  Panel1.Show;
+  Timer1.Enabled := True;
 end;
 
 procedure TFSampleform.Flowmotion1SelectedItemMouseDown(Sender: TObject;
@@ -185,6 +205,12 @@ end;
 procedure TFSampleform.FormShow(Sender: TObject);
 begin
    Button2Click(Self);
+end;
+
+procedure TFSampleform.Timer1Timer(Sender: TObject);
+begin
+  Timer1.Enabled := False;
+  Panel1.Hide;
 end;
 
 end.

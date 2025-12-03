@@ -16,17 +16,28 @@ object FSampleform: TFSampleform
   WindowState = wsMaximized
   OnCreate = FormCreate
   OnShow = FormShow
-  DesignSize = (
-    1434
-    953)
   TextHeight = 15
+  object Label1: TLabel
+    Left = 192
+    Top = 208
+    Width = 98
+    Height = 40
+    Caption = 'Clicked'
+    Font.Charset = DEFAULT_CHARSET
+    Font.Color = clWhite
+    Font.Height = -29
+    Font.Name = 'Segoe UI'
+    Font.Style = [fsBold]
+    ParentFont = False
+  end
   object Flowmotion1: TFlowmotion
-    Left = 96
-    Top = 24
-    Width = 929
-    Height = 713
+    Left = 0
+    Top = 0
+    Width = 1434
+    Height = 953
     LoadMode = lmLazy
     FlowLayout = flSorted
+    AnimationSpeed = 3
     Spacing = 4
     MaxColumns = 24
     MaxRows = 24
@@ -37,17 +48,17 @@ object FSampleform: TFSampleform
     OnAllAnimationsFinished = Flowmotion1AllAnimationsFinished
     OnSelectedImageDblClick = Flowmotion1SelectedImageDblClick
     PageSize = 100
-    Anchors = [akLeft, akTop, akRight, akBottom]
+    Align = alClient
     Color = clBlack
     ParentColor = False
     TabOrder = 5
     TabStop = True
-    ExplicitWidth = 933
-    ExplicitHeight = 720
+    ExplicitLeft = -24
+    ExplicitTop = -8
   end
   object Button1: TButton
     Left = 8
-    Top = 24
+    Top = 8
     Width = 75
     Height = 65
     Caption = 'Add 1 pic random entry'
@@ -57,7 +68,7 @@ object FSampleform: TFSampleform
   end
   object Button2: TButton
     Left = 8
-    Top = 202
+    Top = 151
     Width = 75
     Height = 66
     Caption = 'Load piclist'
@@ -66,7 +77,7 @@ object FSampleform: TFSampleform
   end
   object Button3: TButton
     Left = 8
-    Top = 283
+    Top = 223
     Width = 75
     Height = 25
     Caption = 'Clear'
@@ -90,7 +101,7 @@ object FSampleform: TFSampleform
   end
   object Button5: TButton
     Left = 8
-    Top = 114
+    Top = 79
     Width = 75
     Height = 66
     Caption = 'Add 1 pic from rect'
@@ -100,7 +111,7 @@ object FSampleform: TFSampleform
   end
   object Button6: TButton
     Left = 8
-    Top = 323
+    Top = 285
     Width = 25
     Height = 25
     Caption = '<'
@@ -109,7 +120,7 @@ object FSampleform: TFSampleform
   end
   object Button7: TButton
     Left = 58
-    Top = 323
+    Top = 285
     Width = 25
     Height = 25
     Caption = '>'
@@ -118,11 +129,60 @@ object FSampleform: TFSampleform
   end
   object Button8: TButton
     Left = 8
-    Top = 379
+    Top = 254
     Width = 75
     Height = 25
     Caption = 'Deselect'
     TabOrder = 8
     OnClick = Button8Click
+  end
+  object Button9: TButton
+    Left = 8
+    Top = 316
+    Width = 75
+    Height = 66
+    Caption = 'Load background pic'
+    TabOrder = 9
+    WordWrap = True
+    OnClick = Button9Click
+  end
+  object Button10: TButton
+    Left = 8
+    Top = 388
+    Width = 75
+    Height = 66
+    Caption = 'Clear background pic'
+    TabOrder = 10
+    WordWrap = True
+    OnClick = Button10Click
+  end
+  object Panel1: TPanel
+    Left = 136
+    Top = 176
+    Width = 193
+    Height = 72
+    Caption = 'DblClicked selected'
+    Color = 1907997
+    Font.Charset = DEFAULT_CHARSET
+    Font.Color = clTeal
+    Font.Height = -19
+    Font.Name = 'Segoe UI'
+    Font.Style = [fsBold]
+    ParentBackground = False
+    ParentFont = False
+    TabOrder = 11
+    Visible = False
+    StyleElements = [seClient, seBorder]
+  end
+  object OpenDialog1: TOpenDialog
+    Left = 88
+    Top = 328
+  end
+  object Timer1: TTimer
+    Enabled = False
+    Interval = 2000
+    OnTimer = Timer1Timer
+    Left = 216
+    Top = 232
   end
 end
