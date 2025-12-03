@@ -11,7 +11,7 @@
 {
  ----Latest Changes
   v 0.983
-    - Animations now Threaded, massive performance gain like 20 times faster and smoother
+    - Animations now Threaded, massive performance gain like 20 times faster
   v 0.982
     - Paint routine optimized
     - fixed some wrong Z-orders of prevsel or prevhot back zooming pictures getting painted below static pics
@@ -42,7 +42,7 @@ uses
 
 const
   // Animation constants
-  TARGET_FPS = 50;
+  TARGET_FPS = 30;
   MIN_FRAME_TIME = 1000 div TARGET_FPS;
   DEFAULT_ANIMATION_SPEED = 3;
   DEFAULT_ALPHA = 255;
@@ -486,6 +486,7 @@ begin
   FLastTick := GetTickCount;
   FStopRequested := False;
   FEvent := CreateEvent(nil, True, False, nil);
+  Priority := tpLower;
 end;
 
 destructor TAnimationThread.Destroy;
@@ -500,9 +501,27 @@ begin
   SetEvent(FEvent);
 end;
 
+
 procedure TAnimationThread.Execute;
 var
   NowTick, LastTick, ElapsedMS, SleepTime: Cardinal;
+
+  // Helper procedure to process a few messages without blocking the main thread
+  procedure ProcessFewMessages;
+  var
+    Msg: TMsg;
+    i: Integer;
+  begin
+      // Process only a small number of messages (e.g., 10)
+      // and then release control. This keeps the main thread responsive.
+    for i := 1 to 10 do
+    begin
+      if not PeekMessage(Msg, 0, 0, 0, PM_REMOVE) then
+        Break; // No more messages in the queue, so we're done for now
+      TranslateMessage(Msg);
+      DispatchMessage(Msg);
+    end;
+  end;
 begin
   // Initialize the timer for the first frame.
   LastTick := GetTickCount;
@@ -528,11 +547,18 @@ begin
       SleepTime := MIN_FRAME_TIME - ElapsedMS;
     end;
 
-    // Wait for the stop event, but only for the calculated sleep time.
-    // This is much more efficient than a fixed Sleep() duration because it allows
-    // the thread to wake up immediately if a stop is requested.
+    // --- FIX: The 'cooperative' waiting that gives the main thread time to breathe ---
+    // When we wait here, we use the calculated sleep time. This is much more efficient
+    // than a fixed Sleep() duration because it allows the thread to wake up immediately
+    // if a stop is requested.
     if WaitForSingleObject(FEvent, SleepTime) = WAIT_OBJECT_0 then
-      Break; // Stop event was triggered, exit the loop immediately.
+      Break // Stop event was triggered, exit the loop immediately.
+    else
+    begin
+      // During the wait time, we use the opportunity to allow the main thread
+      // to process its message queue (e.g., Synchronize requests from other threads).
+      ProcessFewMessages;
+    end;
   end;
 end;
 
@@ -682,7 +708,7 @@ begin
     end;
   finally
     TFlowmotion(FOwner).ThreadFinished(Self);
-    TFlowmotion(FOwner).StartAnimationThread;
+    TFlowmotion(FOwner).StartAnimationThread; 
   end;
 end;
 
@@ -705,7 +731,7 @@ begin
   FLastHotTrackCalc := 0;
   FAnimationThread := nil;
   FImageEntryStyle := iesRandom;
-  FEntryPoint := Point(-1000, -1000);
+  FEntryPoint := Point(-1000, -1000);    
   FFlowLayout := flSorted;
   FKeepSpaceforZoomed := False;
   FLoadMode := lmLazy;
@@ -734,7 +760,7 @@ begin
   FLastPaintTick := 0;
   FActive := True;
   FAutoActiveOnMouseMove := False;
-  FThreadPriority := tpHigher;
+  FThreadPriority := tpNormal;
   DoubleBuffered := True;
   TabStop := True;
   ControlStyle := ControlStyle + [csOpaque, csDoubleClicks];
@@ -1191,7 +1217,7 @@ begin
   // At the end of the method, ensure proper synchronization
   if NeedRepaint or AnyAnimatingAfter then
     ThreadSafeInvalidate;
-
+  
   if not AnyAnimatingAfter and not AllFinishedAtStart and Assigned(FOnAllAnimationsFinished) then
     ThreadSafeFireAllAnimationsFinished;
 
