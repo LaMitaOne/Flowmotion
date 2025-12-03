@@ -1,7 +1,7 @@
 
 {------------------------------------------------------------------------------}
 {                                                                              }
-{ Flowmotion v0.984                                                            }
+{ Flowmotion v0.985                                                            }
 { by Lara Miriam Tamy Reschke                                                  }
 {                                                                              }
 { larate@gmx.net                                                               }
@@ -18,6 +18,7 @@
     - fixed that last flicker sometimes of just hotzoomed down, in line,
       that moment before it gets static pic again. Now all...perfect smooth,
       no flicker)
+    - pause animationthread each cycle 16ms to workdown messages, no more problems with animations like smarteffects that way
   v 0.983
     - Animations now Threaded, massive performance gain like 20 times faster
   v 0.983
@@ -84,20 +85,20 @@ const
   // Animation constants
   TARGET_FPS = 30;
   MIN_FRAME_TIME = 1000 div TARGET_FPS;
-  DEFAULT_ANIMATION_SPEED = 3;
+  DEFAULT_ANIMATION_SPEED = 6;
   DEFAULT_ALPHA = 255;
 
   // Timeouts
   THREAD_CLEANUP_TIMEOUT = 3000;
 
   // Spacing / Effects
+  MIN_CELL_SIZE = 22;
   DEFAULT_GLOW_WIDTH = 2;
   DEFAULT_MAX_ZOOM_SIZE = 300;
   HOT_ZOOM_MIN_FACTOR = 1.02;
   HOT_ZOOM_MAX_FACTOR = 1.4;
   HOT_ZOOM_IN_SPEED = 0.07;
   HOT_ZOOM_OUT_SPEED = 0.09;
-  MIN_CELL_SIZE = 22;
   HOT_ZOOM_IN_PER_SEC = 2.5;
   HOT_ZOOM_OUT_PER_SEC = 3.0;
   HOT_ZOOM_EPSILON = 0.0001;
@@ -553,7 +554,7 @@ var
   begin
       // Process only a small number of messages (e.g., 10)
       // and then release control. This keeps the main thread responsive.
-    for i := 1 to 20 do
+    for i := 1 to 10 do
     begin
       if not PeekMessage(Msg, 0, 0, 0, PM_REMOVE) then
         Break; // No more messages in the queue, so we're done for now
@@ -583,7 +584,8 @@ begin
     SleepTime := 0;
     if ElapsedMS < MIN_FRAME_TIME then
     begin
-      SleepTime := MIN_FRAME_TIME - ElapsedMS;
+      SleepTime := 16 + MIN_FRAME_TIME - ElapsedMS;
+      //20 min..that way only we get enough free time for problematic same time running animations like from smart effects
     end;
 
     // --- FIX: The 'cooperative' waiting that gives the main thread time to breathe ---
@@ -596,7 +598,8 @@ begin
     begin
       // During the wait time, we use the opportunity to allow the main thread
       // to process its message queue (e.g., Synchronize requests from other threads).
-      ProcessFewMessages;
+     // ProcessFewMessages;
+      Application.ProcessMessages;
     end;
   end;
 end;
@@ -836,12 +839,12 @@ begin
     StartTime := GetTickCount;
     while (FLoadingThreads.Count > 0) and ((GetTickCount - StartTime) < THREAD_CLEANUP_TIMEOUT) do
     begin
-      CheckSynchronize;
+      CheckSynchronize(20);
       Sleep(5);
     end;
     // Force clear remaining threads
     FLoadingThreads.Clear;
-    CheckSynchronize;
+    CheckSynchronize(20);
     FLoadingThreads.Free;
     // Free all images
     for i := 0 to FImages.Count - 1 do
@@ -1622,7 +1625,7 @@ begin
       NewItem.Path := APath;
       NewItem.Direction := GetEntryDirection;
       FImages.Add(NewItem);
-
+      CheckSynchronize(20);
       if Visible then
       begin
         CalculateLayout;
@@ -3620,7 +3623,7 @@ begin
   while (FLoadingCount > 0) do
   begin
     Sleep(5);
-    CheckSynchronize;
+    CheckSynchronize(20);
   end;
 end;
 
@@ -3635,9 +3638,8 @@ begin
     if (GetTickCount - StartTick) >= THREAD_CLEANUP_TIMEOUT then
       Exit;
     Sleep(5);
-    CheckSynchronize;
+    CheckSynchronize(20);
   end;
 end;
 
 end.
-
