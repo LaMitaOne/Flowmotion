@@ -1,7 +1,7 @@
 
 {------------------------------------------------------------------------------}
 {                                                                              }
-{ Flowmotion v0.984                                                            }
+{ Flowmotion v0.985                                                            }
 { by Lara Miriam Tamy Reschke                                                  }
 {                                                                              }
 { larate@gmx.net                                                               }
@@ -13,6 +13,7 @@
   v 0.984
     - higher hotzoomed get painted above lower hotzoomed
       (think that way almost perfect z-order... as possible for me at least)
+    - fixed z-order of new animated incoming single images from Addimage
     - fixed that last flicker sometimes of just hotzoomed down, in line,
       that moment before it gets static pic again. Now all...perfect smooth,
       no flicker, looks really awesome for my first playing planless around on canvas
@@ -747,7 +748,7 @@ begin
     end;
   finally
     TFlowmotion(FOwner).ThreadFinished(Self);
-    TFlowmotion(FOwner).StartAnimationThread; 
+    TFlowmotion(FOwner).StartAnimationThread;
   end;
 end;
 
@@ -770,7 +771,7 @@ begin
   FLastHotTrackCalc := 0;
   FAnimationThread := nil;
   FImageEntryStyle := iesRandom;
-  FEntryPoint := Point(-1000, -1000);    
+  FEntryPoint := Point(-1000, -1000);
   FFlowLayout := flSorted;
   FKeepSpaceforZoomed := False;
   FLoadMode := lmLazy;
@@ -1256,7 +1257,7 @@ begin
   // At the end of the method, ensure proper synchronization
   if NeedRepaint or AnyAnimatingAfter then
     ThreadSafeInvalidate;
-  
+
   if not AnyAnimatingAfter and not AllFinishedAtStart and Assigned(FOnAllAnimationsFinished) then
     ThreadSafeFireAllAnimationsFinished;
 
@@ -3078,6 +3079,7 @@ begin
   ImageItem.CurrentRect := ImageItem.StartRect;
   ImageItem.AnimationProgress := 0;
   ImageItem.Animating := True;
+  ImageItem.FHotZoom := 1.1;
 
   // =================================================================
   // Fade only for center pop
