@@ -61,8 +61,7 @@ but it’s already basically stable and looks really nice in my player!
   (think that way almost perfect z-order... for now)     
 - fixed that last flicker sometimes of just hotzoomed down, in line,     
   that moment before it gets static pic again. Now all...perfect smooth,   
-  no flicker, looks really awesome for my first playing planless around on canvas   
-  and having no idea of what im doing :D)   
+  no flicker, looks really awesome)   
         
 **v 0.983**
 - Animations now Threaded, massive performance gain like 20 times faster and smoother
