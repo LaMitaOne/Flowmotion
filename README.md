@@ -43,6 +43,7 @@ Low CPU usage, easy to integrate, and smooth visual effects even with large imag
 On my Asus Zenbook ux305ca (dual-core toy):  
 - ImageEn: 1/4 screen, 30 pics → 50 % CPU and almost unusable  
 - Flowmotion: Fullscreen, 80 pics → 25 % CPU usage, still perfectly smooth :)
+  (since threading of animation its smooth like its running in some 3d engine)
    
 Not finished completely yet, but already in use in **MEDIA Revolution X** (freeware):  
 https://lamita.jimdosite.com/
