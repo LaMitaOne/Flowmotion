@@ -14,10 +14,10 @@
     - higher hotzoomed get painted above lower hotzoomed
       (think that way almost perfect z-order... as possible for me at least)
     - fixed z-order of new animated incoming single images from Addimage
+    - fixed z-order of prev selected animating back from selectnext or prev pic function.
     - fixed that last flicker sometimes of just hotzoomed down, in line,
       that moment before it gets static pic again. Now all...perfect smooth,
-      no flicker, looks really awesome for my first playing planless around on canvas
-      and having no idea of what im doing :D)
+      no flicker)
   v 0.983
     - Animations now Threaded, massive performance gain like 20 times faster
   v 0.983
@@ -312,7 +312,6 @@ type
     FAutoActiveOnMouseMove: Boolean;
     FThreadPriority: TThreadPriority;
     FLastMouseButton: TMouseButton;
-    FBlockImageEnterDuringLoad: Boolean;
 
     // Events
     FOnImageLoad: TImageLoadEvent;
@@ -1054,7 +1053,7 @@ begin
   // -----------------------------------------------------------------------
   // Early exit conditions – same as original timer
   // -----------------------------------------------------------------------
-  if FInFallAnimation or FClearing or (not Visible) or FBlockImageEnterDuringLoad then
+  if FInFallAnimation or FClearing or (not Visible) then
     Exit;
 
   // -----------------------------------------------------------------------
@@ -1765,7 +1764,6 @@ begin
   WasEmpty := (FAllFiles.Count = 0);
   WaitForAllLoads;
   FLoadingCount := 0;
-  FBlockImageEnterDuringLoad := True;
   // Add all files to master list
   for i := 0 to FileNames.Count - 1 do
   begin
@@ -1776,9 +1774,6 @@ begin
       FAllPaths.Add(Paths[i]);
     end;
   end;
-
-  FBlockImageEnterDuringLoad := False;
-
   if WasEmpty then
     ShowPage(FCurrentPage);  //else  to do
 end;
@@ -2419,8 +2414,6 @@ end;
 { Calculates the layout for all images based on current FlowLayout setting }
 procedure TFlowmotion.CalculateLayout;
 begin
-  if FBlockImageEnterDuringLoad then
-    Exit;
   case FFlowLayout of
     flPerfectSize:
       CalculateLayoutPerfectSized;
@@ -3079,7 +3072,7 @@ begin
   ImageItem.CurrentRect := ImageItem.StartRect;
   ImageItem.AnimationProgress := 0;
   ImageItem.Animating := True;
-  ImageItem.FHotZoom := 1.1;
+ // if ImageItem.FHotZoom <= 1 then ImageItem.FHotZoom := 1.05;
 
   // =================================================================
   // Fade only for center pop
@@ -3178,6 +3171,7 @@ begin
   begin
     OldSelected.IsSelected := False;
     OldSelected.ZoomProgress := 0;
+    if OldSelected.FHotZoom >= 1 then OldSelected.FHotZoom := 1.1;
   end;
 
   // Set new selection
@@ -3383,7 +3377,9 @@ begin
       for i := 0 to FImages.Count - 1 do
       begin
         ImageItem := TImageItem(FImages[i]);
-        if (ImageItem.FHotZoom > 1.0) or
+        if //(ImageItem.FAnimationProgress < 1.0) or
+           (ImageItem.ZoomProgress > 0.01) or
+           (Abs(ImageItem.FHotZoom - ImageItem.FHotZoomTarget) > 0.01) or
            (ImageItem.Alpha < 255) or
            (ImageItem = FWasSelectedItem) then
           AnimatingItems.Add(ImageItem);
