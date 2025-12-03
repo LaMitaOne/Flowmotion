@@ -58,7 +58,8 @@ but it’s already basically stable and looks really nice in my player!
    
 **v 0.984**   
 - higher hotzoomed get painted above lower hotzoomed   
-  (think that way almost perfect z-order... for now)     
+  (think that way almost perfect z-order... for now)  
+- fixed z-order of new animated incoming single images from Addimage   
 - fixed that last flicker sometimes of just hotzoomed down, in line,     
   that moment before it gets static pic again. Now all...perfect smooth,   
   no flicker, looks really awesome)   
