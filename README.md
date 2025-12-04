@@ -50,7 +50,7 @@ Still tweaking and some things are not perfect yet, some not fully implemented,
 but it’s already basically stable and looks really nice in my player!   
   
 !!! --- NOT FINISHED - Partly stable, parts not working so far.  
-Stable atm: Addimages (not async), SelectNextImage, SelectPreviousImage, Animations, hotzoom, breathing at all stable,  
+Stable atm: Addimages, SelectNextImage, SelectPreviousImage, Animations, hotzoom, breathing at all stable,  
 Clear animated to direction or target, selected can go to other target, setting Background color/pic, Glow and all that,   
 DeselectZoomedImage, those i am using in my player already and no problems at all,   
 other functions may work, not work, or it explodes right into ur face :D nah...  
@@ -67,8 +67,9 @@ I am working on getting more of it done :)
   that moment before it gets static pic again. Now all...perfect smooth,   
   no flicker, looks really awesome)    
 - pause animationthread each cycle 16ms to workdown messages, no problems with animations like smarteffects that way  
-- new HotTrackWidth property  
-- new inoming pics now start tiny sized START_SCALE    
+- new HotTrackWidth property   
+- new inoming pics now start tiny sized START_SCALE  
+- AddImagesAsync & AddImageAsync now working     
    
 **v 0.983**
 - Animations now Threaded, massive performance gain like 20 times faster and smoother
