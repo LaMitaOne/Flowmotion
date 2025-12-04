@@ -12,7 +12,7 @@ That was around 830 pictures...2560x1440 screen resolution...no problem... 7% cp
         
 Homepage https://lamita.jimdosite.com/  
   
-If you want tip me a coffee :)  
+If you want tip me a coffee for my unbelievable awesome and free for you work :)  
 
 <p align="center">
   <a href="https://www.paypal.com/donate/?hosted_button_id=RX5KTTMXW497Q">
