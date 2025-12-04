@@ -1,18 +1,21 @@
 # Flowmotion
   
 Delphi Gallery Component – Lightweight Animated Coverflow / Masonry Viewer (Alpha)  
-  
-![screenshot](https://github.com/user-attachments/assets/6e44182f-b24e-4280-b871-e20cfe994212)  
-    
-[https://www.youtube.com/watch?v=38Dcwo1VNqQ](https://youtu.be/D5KmriyDTWk?si=yKdP_7NnGoMoiCrJ)  
-    
-  <img width="2560" height="1440" alt="Unbenannt" src="https://github.com/user-attachments/assets/a1930022-e8a9-4bb5-9eb9-ba1dbd2108e0" />   
+
+
+    <img width="2560" height="1440" alt="Unbenannt" src="https://github.com/user-attachments/assets/a1930022-e8a9-4bb5-9eb9-ba1dbd2108e0" />   
 That was around 830 pictures...2560x1440 screen resolution...no problem... 7% cpu usage(ryzen 7 5800x)...  :D    
   
 That beats almost everything in performance, and it's free for you to use!          
                     
   
+
   
+![screenshot](https://github.com/user-attachments/assets/6e44182f-b24e-4280-b871-e20cfe994212)  
+    
+[https://www.youtube.com/watch?v=38Dcwo1VNqQ](https://youtu.be/D5KmriyDTWk?si=yKdP_7NnGoMoiCrJ)  
+    
+
       
 If you want to tip me a coffee for my unbelievable awesome work, I'd be grateful! :)  
 
