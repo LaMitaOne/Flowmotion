@@ -68,7 +68,7 @@ I am working on getting more of it done :)
   no flicker, looks really awesome)    
 - pause animationthread each cycle 16ms to workdown messages, no problems with animations like smarteffects that way  
 - new HotTrackWidth property   
-- new inoming pics now start tiny sized START_SCALE  
+- new inoming pics now start tiny sized -> START_SCALE  
 - AddImagesAsync & AddImageAsync now working     
    
 **v 0.983**
