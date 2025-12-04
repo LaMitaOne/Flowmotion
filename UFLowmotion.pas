@@ -20,7 +20,7 @@
       no flicker)
     - pause animationthread each cycle 16ms to workdown messages, no more problems with animations like smarteffects that way
     - new HotTrackWidth property
-    - new inoming pics now start tiny sized
+    - new inoming pics now start tiny sized START_SCALE
   v 0.983
     - Animations now Threaded, massive performance gain like 20 times faster
   v 0.983
@@ -75,13 +75,15 @@
     - Improved performance
 }
 
+
 unit UFLowmotion;
 
 interface
 
 uses
-  Windows, Messages, SysUtils, Classes, Graphics, Controls, ExtCtrls, Forms, JPEG, Math,
-  Pngimage; //, GR32, GR32_Image, GR32_Resamplers;
+  Windows, Messages, SysUtils, Classes, Graphics, Controls, Forms, JPEG, Math,
+  Pngimage;
+   //, GR32, GR32_Image, GR32_Resamplers;  //for test gr32 draw
 
 const
   // Animation constants
@@ -89,9 +91,7 @@ const
   MIN_FRAME_TIME = 1000 div TARGET_FPS;
   DEFAULT_ANIMATION_SPEED = 6;
   DEFAULT_ALPHA = 255;
-
-  // Timeouts
-  THREAD_CLEANUP_TIMEOUT = 3000;
+  START_SCALE = 0.02;
 
   // Spacing / Effects
   MIN_CELL_SIZE = 22;
@@ -107,6 +107,9 @@ const
   HOT_ZOOM_EPSILON = 0.0001;
   BREATHING_AMPLITUDE = 2.0;
   BREATHING_SPEED_PER_SEC = 0.06;
+
+  // Timeouts
+  THREAD_CLEANUP_TIMEOUT = 3000;
 
 type
   TFlowLayout = (flPerfectSize, flSorted);
@@ -212,7 +215,6 @@ type
     destructor Destroy; override;
   end;
 
-
 type
   TAnimationThread = class(TThread)
   private
@@ -254,7 +256,7 @@ type
     FAllPaths: TStringList; // All paths
 
     // Threading
-    FAnimationThread : TAnimationThread;
+    FAnimationThread: TAnimationThread;
     FLoadingThreads: TList; // Active loading threads
     FLoadingCount: Integer; // Number of loading threads
     FClearing: Boolean;
@@ -414,7 +416,7 @@ type
     procedure AddImageAsync(const FileName: string; const ACaption: string = ''; const APath: string = '');
     procedure AddImages(const FileNames, Captions, Paths: TStringList);
     procedure AddImagesAsync(const FileNames, Captions, Paths: TStringList);
-    procedure InsertPicture(Pic: TPicture; const XCaption, XPath: string);
+    procedure InsertPicture(Pic: TBitmap; const XCaption, XPath: string);
     procedure InsertImageAsync(const FileName, Caption: string);
     procedure SetImage(Index: Integer; Bitmap: TBitmap);
     procedure RemoveImage(Index: Integer; animated: Boolean = True); overload;
@@ -508,11 +510,10 @@ type
     property OnResize;
   end;
 
-
-
 procedure Register;
 
 implementation
+
 
 { Registers the component in the IDE component palette }
 
@@ -535,11 +536,13 @@ begin
   Priority := (AOwner as TFlowmotion).FThreadPriority;  //tpNormal
 end;
 
+
 destructor TAnimationThread.Destroy;
 begin
   CloseHandle(FEvent);
   inherited Destroy;
 end;
+
 
 procedure TAnimationThread.Stop;
 begin
@@ -553,7 +556,7 @@ var
   NowTick, LastTick, ElapsedMS, SleepTime: Cardinal;
 
   // Helper procedure to process a few messages without blocking the main thread
-  procedure ProcessFewMessages;
+{  procedure ProcessFewMessages;
   var
     Msg: TMsg;
     i: Integer;
@@ -567,7 +570,7 @@ var
       TranslateMessage(Msg);
       DispatchMessage(Msg);
     end;
-  end;
+  end;     }
 begin
   // Initialize the timer for the first frame.
   LastTick := GetTickCount;
@@ -630,6 +633,7 @@ begin
   FHotZoomTarget := 1;
 end;
 
+
 { Frees the bitmap and destroys the image item }
 destructor TImageItem.Destroy;
 begin
@@ -637,6 +641,7 @@ begin
     FBitmap.Free;
   inherited Destroy;
 end;
+
 
 { TImageLoadThread }
 
@@ -654,6 +659,7 @@ begin
   Priority := TFlowmotion(FOwner).FThreadPriority;
 end;
 
+
 { Frees the bitmap and destroys the thread }
 destructor TImageLoadThread.Destroy;
 begin
@@ -661,6 +667,7 @@ begin
     FBitmap.Free;
   inherited Destroy;
 end;
+
 
 { Main thread execution: loads image from file }
 procedure TImageLoadThread.Execute;
@@ -760,6 +767,7 @@ begin
   end;
 end;
 
+
 { TFlowmotion }
 
 { Creates and initializes the Flowmotion component }
@@ -820,6 +828,7 @@ begin
   FZoomSelectedtoCenter := True;
 end;
 
+
 { Destroys the component and frees all resources }
 destructor TFlowmotion.Destroy;
 var
@@ -827,12 +836,12 @@ var
   StartTime: Cardinal;
 begin
   try
-  if FAnimationThread <> nil then
-  begin
-    FAnimationThread.Stop;
-    FAnimationThread.WaitFor;
-    FreeAndNil(FAnimationThread);
-  end;
+    if FAnimationThread <> nil then
+    begin
+      FAnimationThread.Stop;
+      FAnimationThread.WaitFor;
+      FreeAndNil(FAnimationThread);
+    end;
     // Terminate all threads
     for i := 0 to FLoadingThreads.Count - 1 do
     begin
@@ -846,12 +855,12 @@ begin
     StartTime := GetTickCount;
     while (FLoadingThreads.Count > 0) and ((GetTickCount - StartTime) < THREAD_CLEANUP_TIMEOUT) do
     begin
-      CheckSynchronize(20);
+      CheckSynchronize(10);
       Sleep(5);
     end;
     // Force clear remaining threads
     FLoadingThreads.Clear;
-    CheckSynchronize(20);
+    CheckSynchronize(10);
     FLoadingThreads.Free;
     // Free all images
     for i := 0 to FImages.Count - 1 do
@@ -876,6 +885,7 @@ begin
   inherited Destroy;
 end;
 
+
 procedure TFlowmotion.StartAnimationThread;
 begin
   if (FAnimationThread = nil) or FAnimationThread.Terminated then
@@ -887,6 +897,7 @@ begin
   end;
 end;
 
+
 procedure TFlowmotion.StopAnimationThread;
 begin
   if FAnimationThread <> nil then
@@ -896,6 +907,7 @@ begin
     FreeAndNil(FAnimationThread);
   end;
 end;
+
 
 { Deselects the currently zoomed/selected image }
 procedure TFlowmotion.DeselectZoomedImage;
@@ -910,6 +922,7 @@ begin
   SetSelectedImage(nil, -1);
 end;
 
+
 { Returns the total number of pages based on page size and total files }
 function TFlowmotion.GetPageCount: Integer;
 begin
@@ -918,6 +931,7 @@ begin
   else
     Result := 1;
 end;
+
 
 { Sets the image loading mode and refreshes the display }
 procedure TFlowmotion.SetLoadMode(Value: TFlowmotionLoadMode);
@@ -929,6 +943,7 @@ begin
   end;
 end;
 
+
 { Sets the flow layout algorithm }
 procedure TFlowmotion.SetFlowLayout(Value: TFlowLayout);
 begin
@@ -938,6 +953,7 @@ begin
     Invalidate;
   end;
 end;
+
 
 { Sets the ImageEntryStyle for new images }
 procedure TFlowmotion.SetImageEntryStyle(Value: TImageEntryStyle);
@@ -949,6 +965,7 @@ begin
   end;
 end;
 
+
 { Sets the color for hot-track border }
 procedure TFlowmotion.SetHotTrackColor(Value: TColor);
 begin
@@ -958,6 +975,7 @@ begin
     Invalidate;
   end;
 end;
+
 
 { Sets the color for selected image glow border }
 procedure TFlowmotion.SetGlowColor(Value: TColor);
@@ -969,6 +987,7 @@ begin
   end;
 end;
 
+
 { Sets the width of the glow border }
 procedure TFlowmotion.SetGlowWidth(Value: Integer);
 begin
@@ -978,6 +997,7 @@ begin
     Invalidate;
   end;
 end;
+
 
 { Sets the width of the hot border }
 procedure TFlowmotion.SetHotTrackWidth(Value: Integer);
@@ -1006,24 +1026,23 @@ begin
   FAutoActiveOnMouseMove := Value;
 end;
 
+
 { Sets the priority for image loading threads }
 procedure TFlowmotion.SetThreadPriority(Value: TThreadPriority);
 begin
   FThreadPriority := Value;
-  if Assigned(FAnimationThread) then FAnimationThread.Priority := Value;
+  if Assigned(FAnimationThread) then
+    FAnimationThread.Priority := Value;
 end;
 
+
 { Inserts a picture from TPicture with caption and path }
-procedure TFlowmotion.InsertPicture(Pic: TPicture; const XCaption, XPath: string);
-var
-  Bitmap: TBitmap;
+procedure TFlowmotion.InsertPicture(Pic: TBitmap; const XCaption, XPath: string);
 begin
   if Pic = nil then
     Exit;
-  Bitmap := TBitmap.Create;
   try
-    Bitmap.Assign(Pic.Graphic);
-    AddImage(Bitmap);
+    AddImage(Pic);
     if FImages.Count > 0 then
       with TImageItem(FImages[FImages.Count - 1]) do
       begin
@@ -1031,9 +1050,10 @@ begin
         Path := XPath;
       end;
   finally
-    Bitmap.Free;
+
   end;
 end;
+
 
 procedure TFlowmotion.PerformAnimationUpdate(DeltaMS: Cardinal);
 var
@@ -1050,10 +1070,10 @@ var
   // -----------------------------------------------------------------------
   // Helper: compare two TRects for equality (pixel-exact)
   // -----------------------------------------------------------------------
+
   function RectsEqual(const A, B: TRect): Boolean;
   begin
-    Result := (A.Left = B.Left) and (A.Top = B.Top) and
-              (A.Right = B.Right) and (A.Bottom = B.Bottom);
+    Result := (A.Left = B.Left) and (A.Top = B.Top) and (A.Right = B.Right) and (A.Bottom = B.Bottom);
   end;
 
   // -----------------------------------------------------------------------
@@ -1062,10 +1082,7 @@ var
   // -----------------------------------------------------------------------
   function ItemFinished(const It: TImageItem): Boolean;
   begin
-    Result := (It.AnimationProgress >= 1.0) and
-              ((It.ZoomProgress <= 0.0001) or (It.ZoomProgress >= 0.9999)) and
-              RectsEqual(It.CurrentRect, It.TargetRect) and
-              (Abs(It.FHotZoom - It.FHotZoomTarget) <= 0.006);
+    Result := (It.AnimationProgress >= 1.0) and ((It.ZoomProgress <= 0.0001) or (It.ZoomProgress >= 0.9999)) and RectsEqual(It.CurrentRect, It.TargetRect) and (Abs(It.FHotZoom - It.FHotZoomTarget) <= 0.006);
 
     // Breathing is an endless animation ? never "finished" while active
     if FBreathingEnabled and (It = FSelectedImage) and (It = FHotItem) then
@@ -1124,12 +1141,7 @@ begin
       begin
         ImageItem := TImageItem(FImages[i]);
 
-        TempRect := Rect(
-          Round(ImageItem.StartRect.Left   + (ImageItem.TargetRect.Left   - ImageItem.StartRect.Left)   * Eased),
-          Round(ImageItem.StartRect.Top    + (ImageItem.TargetRect.Top    - ImageItem.StartRect.Top)    * Eased),
-          Round(ImageItem.StartRect.Right  + (ImageItem.TargetRect.Right  - ImageItem.StartRect.Right)  * Eased),
-          Round(ImageItem.StartRect.Bottom + (ImageItem.TargetRect.Bottom - ImageItem.StartRect.Bottom) * Eased)
-        );
+        TempRect := Rect(Round(ImageItem.StartRect.Left + (ImageItem.TargetRect.Left - ImageItem.StartRect.Left) * Eased), Round(ImageItem.StartRect.Top + (ImageItem.TargetRect.Top - ImageItem.StartRect.Top) * Eased), Round(ImageItem.StartRect.Right + (ImageItem.TargetRect.Right - ImageItem.StartRect.Right) * Eased), Round(ImageItem.StartRect.Bottom + (ImageItem.TargetRect.Bottom - ImageItem.StartRect.Bottom) * Eased));
 
         if not RectsEqual(ImageItem.CurrentRect, TempRect) then
         begin
@@ -1191,12 +1203,7 @@ begin
         if FAnimationEasing then
           Progress := EaseInOutQuad(Progress);
 
-        TempRect := Rect(
-          Round(ImageItem.StartRect.Left   + (ImageItem.TargetRect.Left   - ImageItem.StartRect.Left)   * Progress),
-          Round(ImageItem.StartRect.Top    + (ImageItem.TargetRect.Top    - ImageItem.StartRect.Top)    * Progress),
-          Round(ImageItem.StartRect.Right  + (ImageItem.TargetRect.Right  - ImageItem.StartRect.Right)  * Progress),
-          Round(ImageItem.StartRect.Bottom + (ImageItem.TargetRect.Bottom - ImageItem.StartRect.Bottom) * Progress)
-        );
+        TempRect := Rect(Round(ImageItem.StartRect.Left + (ImageItem.TargetRect.Left - ImageItem.StartRect.Left) * Progress), Round(ImageItem.StartRect.Top + (ImageItem.TargetRect.Top - ImageItem.StartRect.Top) * Progress), Round(ImageItem.StartRect.Right + (ImageItem.TargetRect.Right - ImageItem.StartRect.Right) * Progress), Round(ImageItem.StartRect.Bottom + (ImageItem.TargetRect.Bottom - ImageItem.StartRect.Bottom) * Progress));
 
         if not RectsEqual(ImageItem.CurrentRect, TempRect) then
         begin
@@ -1211,9 +1218,8 @@ begin
         // We only clear the FWasSelectedItem reference when the zoom-out animation
         // is definitively finished. This prevents the item from losing its
         // "special" status mid-animation, which causes a one-frame flicker.
-        if (ImageItem = FWasSelectedItem) and
-           (ImageItem.ZoomProgress <= 0.0001) and // Must be fully zoomed out
-           RectsEqual(ImageItem.CurrentRect, ImageItem.TargetRect) then // Must be at its final position
+        if (ImageItem = FWasSelectedItem) and (ImageItem.ZoomProgress <= 0.0001) and // Must be fully zoomed out
+          RectsEqual(ImageItem.CurrentRect, ImageItem.TargetRect) then // Must be at its final position
         begin
           FWasSelectedItem := nil;
         end;
@@ -1277,11 +1283,11 @@ begin
     end;
 
   // At the end of the method, ensure proper synchronization
-  if NeedRepaint or AnyAnimatingAfter then
-    ThreadSafeInvalidate;
+    if NeedRepaint or AnyAnimatingAfter then
+      ThreadSafeInvalidate;
 
-  if not AnyAnimatingAfter and not AllFinishedAtStart and Assigned(FOnAllAnimationsFinished) then
-    ThreadSafeFireAllAnimationsFinished;
+    if not AnyAnimatingAfter and not AllFinishedAtStart and Assigned(FOnAllAnimationsFinished) then
+      ThreadSafeFireAllAnimationsFinished;
 
   except
     on E: Exception do
@@ -1316,17 +1322,20 @@ begin
   end;
 end;
 
+
 procedure TFlowmotion.WMUser1(var Message: TMessage);
 begin
   if not FClearing then
     Invalidate;
 end;
 
+
 procedure TFlowmotion.WMUser2(var Message: TMessage);
 begin
   if Assigned(FOnAllAnimationsFinished) then
     FOnAllAnimationsFinished(Self);
 end;
+
 
 { Returns the bitmap at the specified index, or nil if index is invalid }
 function TFlowmotion.GetPicture(index: Integer): TBitmap;
@@ -1337,6 +1346,7 @@ begin
     Result := nil;
 end;
 
+
 { Creates window parameters with clipping enabled }
 procedure TFlowmotion.CreateParams(var Params: TCreateParams);
 begin
@@ -1344,17 +1354,20 @@ begin
   Params.Style := Params.Style or WS_CLIPCHILDREN;
 end;
 
+
 { Returns the number of currently visible images }
 function TFlowmotion.GetImageCount: Integer;
 begin
   Result := FImages.Count;
 end;
 
+
 { Returns the number of currently loading images }
 function TFlowmotion.GetLoadingCount: Integer;
 begin
   Result := FLoadingCount;
 end;
+
 
 { Called when an image loading thread finishes (thread-safe cleanup) }
 procedure TFlowmotion.ThreadFinished(Thread: TImageLoadThread);
@@ -1375,6 +1388,7 @@ begin
   end;
 end;
 
+
 { Fires the OnImageLoad event }
 procedure TFlowmotion.DoImageLoad(const FileName: string; Success: Boolean);
 begin
@@ -1387,6 +1401,7 @@ begin
     end;
   end;
 end;
+
 
 { Enable or disable breathing of selected image on mouseover }
 procedure TFlowmotion.SetBreathingEnabled(Value: Boolean);
@@ -1402,6 +1417,7 @@ begin
   Invalidate;
 end;
 
+
 { Enable or disable breathing of selected image on mouseover }
 procedure TFlowmotion.SetZoomSelectedtoCenter(Value: Boolean);
 begin
@@ -1412,12 +1428,14 @@ begin
   Invalidate;
 end;
 
+
 { Sets animation speed (1-100, higher = faster) }
 procedure TFlowmotion.SetAnimationSpeed(const Value: Integer);
 begin
   if (Value > 0) and (Value <= 100) then
     FAnimationSpeed := Value;
 end;
+
 
 { Sets spacing between images and recalculates layout }
 procedure TFlowmotion.SetSpacing(const Value: Integer);
@@ -1429,6 +1447,7 @@ begin
     Invalidate;
   end;
 end;
+
 
 { Loads and sets a background picture from file (supports JPG, PNG, BMP) }
 procedure TFlowmotion.SetBackgroundpicture(const Path: string);
@@ -1476,6 +1495,7 @@ begin
   Invalidate;
 end;
 
+
 { Enables or disables hot-track zoom effect }
 procedure TFlowmotion.SetHotTrackZoom(const Value: Boolean);
 begin
@@ -1485,6 +1505,7 @@ begin
     Invalidate;
   end;
 end;
+
 
 { Sets whether images should maintain aspect ratio when resized }
 procedure TFlowmotion.SetKeepAspectRatio(const Value: Boolean);
@@ -1497,6 +1518,7 @@ begin
   end;
 end;
 
+
 { Sets the background color }
 procedure TFlowmotion.SetBackgroundColor(const Value: TColor);
 begin
@@ -1508,6 +1530,7 @@ begin
     Invalidate;
   end;
 end;
+
 
 { Sets maximum number of columns in grid (0 = auto) }
 procedure TFlowmotion.SetMaxColumns(const Value: Integer);
@@ -1645,7 +1668,7 @@ begin
       NewItem.Path := APath;
       NewItem.Direction := GetEntryDirection;
       FImages.Add(NewItem);
-      CheckSynchronize(20);
+      CheckSynchronize(10);
       if Visible then
       begin
         CalculateLayout;
@@ -1663,6 +1686,7 @@ begin
     DoImageLoad(FileName, True);
   end;
 end;
+
 
 { Handles keyboard input for navigation }
 procedure TFlowmotion.KeyDown(var Key: Word; Shift: TShiftState);
@@ -1697,6 +1721,7 @@ begin
   inherited KeyDown(Key, Shift);
 end;
 
+
 { Adds a bitmap directly to the gallery }
 procedure TFlowmotion.AddImage(Bitmap: TBitmap);
 var
@@ -1715,6 +1740,7 @@ begin
   end;
   StartAnimationThread;
 end;
+
 
 { Scrolls to and selects an image by absolute index (switches page if needed) }
 procedure TFlowmotion.ScrollToIndex(Index: Integer; Animate: Boolean = True);
@@ -1777,6 +1803,7 @@ begin
   FLoadingThreads.Add(LoadThread);
   Inc(FLoadingCount);
 end;
+
 
 { Adds multiple images synchronously (waits for all to load) }
 procedure TFlowmotion.AddImages(const FileNames, Captions, Paths: TStringList);
@@ -1847,6 +1874,7 @@ begin
   end;
 end;
 
+
 { Sets whether to keep center space free for zoomed images }
 procedure TFlowmotion.SetKeepSpaceforZoomed(Value: Boolean);
 begin
@@ -1857,6 +1885,7 @@ begin
     Invalidate;
   end;
 end;
+
 
 { Sets whether selected image can be dragged (feature not fully implemented) }
 procedure TFlowmotion.SetSelectedMovable(Value: Boolean);
@@ -1897,8 +1926,7 @@ var
   AllOut: Boolean;
   ShrinkFactor: Real;
   R: TRect;
-  AnimSpeed,
-  NewW, NewH, CurCX, CurCY, CurW, CurH, TargetCX, TargetCY, MoveX, MoveY: Integer;
+  AnimSpeed, NewW, NewH, CurCX, CurCY, CurW, CurH, TargetCX, TargetCY, MoveX, MoveY: Integer;
   SelectedItem: TImageItem;
 begin
   if (FImages.Count = 0) or FClearing or FInFallAnimation then
@@ -2374,6 +2402,7 @@ begin
   end;
 end;
 
+
 { Inserts an image asynchronously using a background thread }
 procedure TFlowmotion.InsertImageAsync(const FileName, Caption: string);
 var
@@ -2385,6 +2414,7 @@ begin
   Inc(FLoadingCount);
 end;
 
+
 { Replaces the bitmap of an existing image }
 procedure TFlowmotion.SetImage(Index: Integer; Bitmap: TBitmap);
 begin
@@ -2395,6 +2425,7 @@ begin
     Invalidate;
   end;
 end;
+
 
 { Calculates optimal size for an image to fit within max dimensions while preserving aspect ratio }
 function TFlowmotion.GetOptimalSize(const OriginalWidth, OriginalHeight: Integer; const MaxWidth, MaxHeight: Integer): TSize;
@@ -2422,17 +2453,20 @@ begin
   end;
 end;
 
+
 { Returns the absolute index of the first image on the current page }
 function TFlowmotion.GetPageStartIndex: Integer;
 begin
   Result := FCurrentPage * FPageSize;
 end;
 
+
 { Returns the absolute index of the last image on the current page }
 function TFlowmotion.GetPageEndIndex: Integer;
 begin
   Result := Min((FCurrentPage + 1) * FPageSize, FAllFiles.Count) - 1;
 end;
+
 
 { Calculates the layout for all images based on current FlowLayout setting }
 procedure TFlowmotion.CalculateLayout;
@@ -2444,6 +2478,7 @@ begin
       CalculateLayoutSorted;
   end;
 end;
+
 
 { Placeholder for testing around }
 procedure TFlowmotion.CalculateLayoutPerfectSized;
@@ -2630,6 +2665,7 @@ begin
   end;
 end;
 
+
 { Checks if an area in the grid is free for placing an image }
 function TFlowmotion.IsAreaFree(const Grid: TBooleanGrid; Row, Col, SpanRows, SpanCols: Integer): Boolean;
 var
@@ -2668,6 +2704,7 @@ begin
   Result := True;
 end;
 
+
 { Marks an area in the grid as occupied }
 procedure TFlowmotion.MarkAreaOccupied(var Grid: TBooleanGrid; Row, Col, SpanRows, SpanCols: Integer);
 var
@@ -2678,6 +2715,7 @@ begin
       if (r >= 0) and (r < Length(Grid)) and (c >= 0) and (c < Length(Grid[0])) then
         Grid[r, c] := True;
 end;
+
 
 { Places an image in the grid at the specified position and calculates its target rectangle }
 procedure TFlowmotion.PlaceImage(ImageItem: TImageItem; var Grid: TBooleanGrid; Row, Col, SpanRows, SpanCols: Integer; BaseCellWidth, BaseCellHeight: Integer);
@@ -2719,6 +2757,7 @@ begin
     Result := nil;
 end;
 
+
 { Finds an image by its path (switches page if needed) }
 function TFlowmotion.FindImageByPath(const Path: string): TImageItem;
 var
@@ -2745,6 +2784,7 @@ begin
     end;
   end;
 end;
+
 
 { Finds an image by its caption (switches page if needed) }
 function TFlowmotion.FindImageByCaption(const Caption: string): TImageItem;
@@ -2939,6 +2979,7 @@ begin
     Cursor := crDefault;
 end;
 
+
 { Handles mouse button press events for selection, double-click and dragging }
 procedure TFlowmotion.MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
 var
@@ -3009,6 +3050,7 @@ begin
   end;
 end;
 
+
 { Sets up animation for a new image entering the gallery }
 procedure TFlowmotion.AnimateImage(ImageItem: TImageItem; EntryStyle: TImageEntryStyle);
 var
@@ -3016,9 +3058,9 @@ var
   Target: TRect;
   EffectiveStyle: TImageEntryStyle;
   CenterX, CenterY: Integer;
-  StartScale: Double;
 begin
-  if ImageItem = nil then Exit;
+  if ImageItem = nil then
+    Exit;
 
   Target := ImageItem.TargetRect;
   W := Target.Right - Target.Left;
@@ -3076,7 +3118,7 @@ begin
     iesFromCenter:
       begin
         CenterX := Target.Left + (Target.Right - Target.Left) div 2;
-        CenterY := Target.Top  + (Target.Bottom - Target.Top)  div 2;
+        CenterY := Target.Top + (Target.Bottom - Target.Top) div 2;
         StartX := CenterX;
         StartY := CenterY;
       end;
@@ -3095,38 +3137,34 @@ begin
   // --------------------------------------------------------------
   // All new images start tiny and grow to full size
   // --------------------------------------------------------------
-  StartScale := 0.06;                         // 6% – looks perfect (feels like real "pop-in")
+                        // 6% – looks perfect (feels like real "pop-in")
   // For center/point we start literally as a dot
   if EffectiveStyle in [iesFromCenter, iesFromPoint] then
   begin
-    ImageItem.StartRect  := Rect(StartX, StartY, StartX, StartY);     // single pixel
+    ImageItem.StartRect := Rect(StartX, StartY, StartX, StartY);     // single pixel
     ImageItem.CurrentRect := ImageItem.StartRect;
   end
   else
   begin
     // Start tiny but with correct aspect ratio
-    ImageItem.StartRect := Rect(
-      StartX + Round(W * (1 - StartScale) / 2),
-      StartY + Round(H * (1 - StartScale) / 2),
-      StartX + Round(W * StartScale) + Round(W * (1 - StartScale) / 2),
-      StartY + Round(H * StartScale) + Round(H * (1 - StartScale) / 2)
-    );
+    ImageItem.StartRect := Rect(StartX + Round(W * (1 - START_SCALE) / 2), StartY + Round(H * (1 - START_SCALE) / 2), StartX + Round(W * START_SCALE) + Round(W * (1 - START_SCALE) / 2), StartY + Round(H * START_SCALE) + Round(H * (1 - START_SCALE) / 2));
     ImageItem.CurrentRect := ImageItem.StartRect;
   end;
 
   // Force hot-zoom animation from tiny ? normal
-  ImageItem.FHotZoom       := StartScale;     // start tiny
+  ImageItem.FHotZoom := START_SCALE;     // start tiny
   ImageItem.FHotZoomTarget := 1.0;            // grow to normal size
 
   // Optional: tiny overshoot for extra juicy pop feel (uncomment if you want)
   // ImageItem.FHotZoomTarget := 1.15;
 
-  ImageItem.TargetRect      := Target;
+  ImageItem.TargetRect := Target;
   ImageItem.AnimationProgress := 0;
-  ImageItem.Animating       := True;
-  ImageItem.Alpha           := 255;
-  ImageItem.TargetAlpha     := 255;
+  ImageItem.Animating := True;
+  ImageItem.Alpha := 255;
+  ImageItem.TargetAlpha := 255;
 end;
+
 
 { Starts zoom animation for an image (zoom in or zoom out) }
 procedure TFlowmotion.StartZoomAnimation(ImageItem: TImageItem; ZoomIn: Boolean);
@@ -3189,6 +3227,7 @@ begin
   end;
 end;
 
+
 { Sets the selected image and starts zoom animations }
 procedure TFlowmotion.SetSelectedImage(ImageItem: TImageItem; Index: Integer);
 var
@@ -3210,7 +3249,8 @@ begin
   begin
     OldSelected.IsSelected := False;
     OldSelected.ZoomProgress := 0;
-    if OldSelected.FHotZoom >= 1 then OldSelected.FHotZoom := 1.1;
+    if OldSelected.FHotZoom >= 1 then
+      OldSelected.FHotZoom := 1.1;
   end;
 
   // Set new selection
@@ -3268,15 +3308,19 @@ var
   // --------------------------------------------------------------
   // Compare function: ascending HotZoom ? higher zoom = drawn later = on top
   // --------------------------------------------------------------
+
   function CompareHotZoom(Item1, Item2: Pointer): Integer;
   var
     Z1, Z2: Double;
   begin
     Z1 := TImageItem(Item1).FHotZoom;
     Z2 := TImageItem(Item2).FHotZoom;
-    if Z1 < Z2 then Result := -1
-    else if Z1 > Z2 then Result := 1
-    else Result := 0;
+    if Z1 < Z2 then
+      Result := -1
+    else if Z1 > Z2 then
+      Result := 1
+    else
+      Result := 0;
   end;
 
      {        //gr32 test too slow like that:
@@ -3321,28 +3365,25 @@ var
     BlendFunction: TBlendFunction;
     W, H: Integer;
   begin
-    if not Item.Visible or Item.Bitmap.Empty or (Item.Alpha <= 0) then Exit;
+    if not Item.Visible or Item.Bitmap.Empty or (Item.Alpha <= 0) then
+      Exit;
 
-    W := Item.CurrentRect.Right  - Item.CurrentRect.Left;
+    W := Item.CurrentRect.Right - Item.CurrentRect.Left;
     H := Item.CurrentRect.Bottom - Item.CurrentRect.Top;
 
     if Item.Alpha < 255 then
     begin
-      FTempBitmap.Width  := W;
+      FTempBitmap.Width := W;
       FTempBitmap.Height := H;
       //GR32Stretch(FTempBitmap.Canvas, Rect(0,0,W,H), Item.Bitmap);
-      FTempBitmap.Canvas.StretchDraw(Rect(0,0,W,H), Item.Bitmap);
+      FTempBitmap.Canvas.StretchDraw(Rect(0, 0, W, H), Item.Bitmap);
 
-      BlendFunction.BlendOp             := AC_SRC_OVER;
-      BlendFunction.BlendFlags          := 0;
+      BlendFunction.BlendOp := AC_SRC_OVER;
+      BlendFunction.BlendFlags := 0;
       BlendFunction.SourceConstantAlpha := Item.Alpha;
-      BlendFunction.AlphaFormat         := 0;
+      BlendFunction.AlphaFormat := 0;
 
-      AlphaBlend(Canvas.Handle,
-                 Item.CurrentRect.Left, Item.CurrentRect.Top,
-                 W, H,
-                 FTempBitmap.Canvas.Handle, 0, 0, W, H,
-                 BlendFunction);
+      AlphaBlend(Canvas.Handle, Item.CurrentRect.Left, Item.CurrentRect.Top, W, H, FTempBitmap.Canvas.Handle, 0, 0, W, H, BlendFunction);
     end
     else //GR32Stretch(Canvas, Item.CurrentRect, Item.Bitmap);
       Canvas.StretchDraw(Item.CurrentRect, Item.Bitmap);
@@ -3359,65 +3400,71 @@ var
     OffsetX, OffsetY: Integer;
     BF: TBlendFunction;
   begin
-    if not Item.Visible or Item.Bitmap.Empty then Exit;
+    if not Item.Visible or Item.Bitmap.Empty then
+      Exit;
 
     // Base size and center
-    if (Item.CurrentRect.Right > Item.CurrentRect.Left) and
-       (Item.CurrentRect.Bottom > Item.CurrentRect.Top) then
+    if (Item.CurrentRect.Right > Item.CurrentRect.Left) and (Item.CurrentRect.Bottom > Item.CurrentRect.Top) then
     begin
-      CenterX := Item.CurrentRect.Left + (Item.CurrentRect.Right  - Item.CurrentRect.Left) div 2;
-      CenterY := Item.CurrentRect.Top  + (Item.CurrentRect.Bottom - Item.CurrentRect.Top)  div 2;
-      BaseW   := Item.CurrentRect.Right  - Item.CurrentRect.Left;
-      BaseH   := Item.CurrentRect.Bottom - Item.CurrentRect.Top;
+      CenterX := Item.CurrentRect.Left + (Item.CurrentRect.Right - Item.CurrentRect.Left) div 2;
+      CenterY := Item.CurrentRect.Top + (Item.CurrentRect.Bottom - Item.CurrentRect.Top) div 2;
+      BaseW := Item.CurrentRect.Right - Item.CurrentRect.Left;
+      BaseH := Item.CurrentRect.Bottom - Item.CurrentRect.Top;
     end
     else
     begin
-      CenterX := Item.TargetRect.Left + (Item.TargetRect.Right  - Item.TargetRect.Left) div 2;
-      CenterY := Item.TargetRect.Top  + (Item.TargetRect.Bottom - Item.TargetRect.Top)  div 2;
-      BaseW   := Item.TargetRect.Right  - Item.TargetRect.Left;
-      BaseH   := Item.TargetRect.Bottom - Item.TargetRect.Top;
+      CenterX := Item.TargetRect.Left + (Item.TargetRect.Right - Item.TargetRect.Left) div 2;
+      CenterY := Item.TargetRect.Top + (Item.TargetRect.Bottom - Item.TargetRect.Top) div 2;
+      BaseW := Item.TargetRect.Right - Item.TargetRect.Left;
+      BaseH := Item.TargetRect.Bottom - Item.TargetRect.Top;
     end;
 
     ZoomFactor := Item.FHotZoom;
     NewW := Round(BaseW * ZoomFactor);
     NewH := Round(BaseH * ZoomFactor);
 
-    R := Rect(CenterX - NewW div 2, CenterY - NewH div 2,
-              CenterX + NewW div 2, CenterY + NewH div 2);
+    R := Rect(CenterX - NewW div 2, CenterY - NewH div 2, CenterX + NewW div 2, CenterY + NewH div 2);
 
     // Keep inside control (glow margin)
-    OffsetX := 0; OffsetY := 0;
-    if R.Left   < 0       then OffsetX := -R.Left   + FGlowWidth;
-    if R.Right  > Width   then OffsetX := Width  - R.Right - FGlowWidth;
-    if R.Top    < 0       then OffsetY := -R.Top    + FGlowWidth;
-    if R.Bottom > Height  then OffsetY := Height - R.Bottom - FGlowWidth;
+    OffsetX := 0;
+    OffsetY := 0;
+    if R.Left < 0 then
+      OffsetX := -R.Left + FGlowWidth;
+    if R.Right > Width then
+      OffsetX := Width - R.Right - FGlowWidth;
+    if R.Top < 0 then
+      OffsetY := -R.Top + FGlowWidth;
+    if R.Bottom > Height then
+      OffsetY := Height - R.Bottom - FGlowWidth;
     OffsetRect(R, OffsetX, OffsetY);
 
     // Draw with alpha if needed
     if Item.Alpha < 255 then
     begin
-      FTempBitmap.Width  := NewW;
+      FTempBitmap.Width := NewW;
       FTempBitmap.Height := NewH;
      // GR32Stretch(FTempBitmap.Canvas, Rect(0,0,NewW,NewH), Item.Bitmap);
-      FTempBitmap.Canvas.StretchDraw(Rect(0,0,NewW,NewH), Item.Bitmap);
+      FTempBitmap.Canvas.StretchDraw(Rect(0, 0, NewW, NewH), Item.Bitmap);
 
-      BF.BlendOp             := AC_SRC_OVER;
-      BF.BlendFlags          := 0;
+      BF.BlendOp := AC_SRC_OVER;
+      BF.BlendFlags := 0;
       BF.SourceConstantAlpha := Item.Alpha;
-      BF.AlphaFormat         := 0;
+      BF.AlphaFormat := 0;
 
-      AlphaBlend(Canvas.Handle, R.Left, R.Top, NewW, NewH,
-                 FTempBitmap.Canvas.Handle, 0, 0, NewW, NewH, BF);
+      AlphaBlend(Canvas.Handle, R.Left, R.Top, NewW, NewH, FTempBitmap.Canvas.Handle, 0, 0, NewW, NewH, BF);
     end
-    else begin
+    else
+    begin
     //  GR32Stretch(Canvas, R, Item.Bitmap);
       Canvas.StretchDraw(R, Item.Bitmap);
     end;
     // Glow / hot border
     if IsCurrentHot or Item.IsSelected then
     begin
-      if item.IsSelected then InflateRect(R, FGlowWidth, FGlowWidth)
-       else InflateRect(R, FHotTrackWidth, FHotTrackWidth);
+      if Item.IsSelected then
+        InflateRect(R, FGlowWidth, FGlowWidth)
+      else
+        InflateRect(R, FHotTrackWidth, FHotTrackWidth);
       Canvas.Pen.Width := ifThen(Item.IsSelected, FGlowWidth, FHotTrackWidth);
       Canvas.Pen.Color := ifThen(Item.IsSelected, FGlowColor, FHotTrackColor);
       Canvas.Brush.Style := bsClear;
@@ -3426,7 +3473,8 @@ var
   end;
 
 begin
-  if inPaintCycle or FClearing then Exit;
+  if inPaintCycle or FClearing then
+    Exit;
   inPaintCycle := True;
   Canvas.Lock;
   try
@@ -3435,9 +3483,9 @@ begin
     begin
       if not FBackgroundCacheValid or (FBackgroundCache.Width <> Width) or (FBackgroundCache.Height <> Height) then
       begin
-        FBackgroundCache.Width  := Width;
+        FBackgroundCache.Width := Width;
         FBackgroundCache.Height := Height;
-        FBackgroundCache.Canvas.StretchDraw(Rect(0,0,Width,Height), FBackgroundpicture);
+        FBackgroundCache.Canvas.StretchDraw(Rect(0, 0, Width, Height), FBackgroundpicture);
         FBackgroundCacheValid := True;
       end;
       Canvas.CopyRect(ClientRect, FBackgroundCache.Canvas, ClientRect);
@@ -3455,10 +3503,7 @@ begin
       begin
         ImageItem := TImageItem(FImages[i]);
         if //(ImageItem.FAnimationProgress < 1.0) or
-           (ImageItem.ZoomProgress > 0.01) or
-           (Abs(ImageItem.FHotZoom - ImageItem.FHotZoomTarget) > 0.01) or
-           (ImageItem.Alpha < 255) or
-           (ImageItem = FWasSelectedItem) then
+          (ImageItem.ZoomProgress > 0.01) or (Abs(ImageItem.FHotZoom - ImageItem.FHotZoomTarget) > 0.01) or (ImageItem.Alpha < 255) or (ImageItem = FWasSelectedItem) then
           AnimatingItems.Add(ImageItem);
       end;
 
@@ -3466,7 +3511,8 @@ begin
       for i := 0 to FImages.Count - 1 do
       begin
         ImageItem := TImageItem(FImages[i]);
-        if AnimatingItems.IndexOf(ImageItem) >= 0 then Continue;
+        if AnimatingItems.IndexOf(ImageItem) >= 0 then
+          Continue;
         DrawNormalItem(ImageItem);
       end;
 
@@ -3475,8 +3521,7 @@ begin
       begin
         AnimatingItems.Sort(@CompareHotZoom);
         for i := 0 to AnimatingItems.Count - 1 do
-          DrawHotZoomedItem(TImageItem(AnimatingItems[i]),
-                            TImageItem(AnimatingItems[i]) = FHotItem);
+          DrawHotZoomedItem(TImageItem(AnimatingItems[i]), TImageItem(AnimatingItems[i]) = FHotItem);
       end;
 
       // 5. Current hovered item on top (unless it's selected)
@@ -3492,7 +3537,8 @@ begin
         begin
           DrawNormalItem(FSelectedImage);
           DrawRect := FSelectedImage.CurrentRect;
-          if IsRectEmpty(DrawRect) then DrawRect := FSelectedImage.TargetRect;
+          if IsRectEmpty(DrawRect) then
+            DrawRect := FSelectedImage.TargetRect;
           InflateRect(DrawRect, 2, 2);
           Canvas.Pen.Color := FGlowColor;
           Canvas.Pen.Width := FGlowWidth;
@@ -3534,6 +3580,7 @@ begin
   Invalidate;
 end;
 
+
 { Sets the number of images per page and refreshes display }
 procedure TFlowmotion.SetPageSize(Value: Integer);
 begin
@@ -3543,6 +3590,7 @@ begin
     ShowPage(0);
   end;
 end;
+
 
 { Shows a specific page: loads and displays images for that page }
 procedure TFlowmotion.ShowPage(Page: Integer);
@@ -3629,6 +3677,7 @@ begin
   end;
 end;
 
+
 { Navigates to the next page }
 procedure TFlowmotion.NextPage;
 begin
@@ -3636,12 +3685,14 @@ begin
     ShowPage(FCurrentPage + 1);
 end;
 
+
 { Navigates to the previous page }
 procedure TFlowmotion.PrevPage;
 begin
   if FCurrentPage > 0 then
     ShowPage(FCurrentPage - 1);
 end;
+
 
 { Selects the next image, or moves to next page if at end }
 procedure TFlowmotion.SelectNextImage;
@@ -3657,6 +3708,7 @@ begin
       SetSelectedImage(TImageItem(FImages[0]), 0);
   end;
 end;
+
 
 { Selects the previous image, or moves to previous page if at start }
 procedure TFlowmotion.SelectPreviousImage;
@@ -3697,7 +3749,7 @@ begin
   while (FLoadingCount > 0) do
   begin
     Sleep(5);
-    CheckSynchronize(20);
+    CheckSynchronize(10);
   end;
 end;
 
@@ -3712,7 +3764,7 @@ begin
     if (GetTickCount - StartTick) >= THREAD_CLEANUP_TIMEOUT then
       Exit;
     Sleep(5);
-    CheckSynchronize(20);
+    CheckSynchronize(10);
   end;
 end;
 
