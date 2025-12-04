@@ -14,7 +14,7 @@ That beats almost everything in performance, and it's free for you to use!
   
   
       
-If you want to tip me a coffee for my unbelievably awesome work, I'd be grateful! :)  
+If you want to tip me a coffee for my unbelievable awesome work, I'd be grateful! :)  
 
 <p align="center">
   <a href="https://www.paypal.com/donate/?hosted_button_id=RX5KTTMXW497Q">
