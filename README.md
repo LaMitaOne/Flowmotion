@@ -53,7 +53,8 @@ Clear animated to direction or target, selected can go to other target, setting 
 DeselectZoomedImage, those i am using in my player already and no problems at all,   
 other functions may work, not work, or it explodes right into ur face :D nah...  
 I am working on getting more of it done :)  
-    
+
+970 views and 447 downloads in 6 days...mhm not bad for a dead language huh... :P Delphi lives!!!       
    
 ### Latest changes:  
    
@@ -67,7 +68,7 @@ I am working on getting more of it done :)
   no flicker, looks really awesome)    
 - pause animationthread each cycle 16ms to workdown messages, no problems with animations like smarteffects that way  
 - new HotTrackWidth property  
-- new inoming pics now start tiny sized  
+- new inoming pics now start tiny sized START_SCALE    
    
 **v 0.983**
 - Animations now Threaded, massive performance gain like 20 times faster and smoother
