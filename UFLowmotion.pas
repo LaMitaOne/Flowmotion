@@ -20,6 +20,7 @@
       no flicker)
     - pause animationthread each cycle 16ms to workdown messages, no more problems with animations like smarteffects that way
     - new HotTrackWidth property
+    - new inoming pics now start tiny sized
   v 0.983
     - Animations now Threaded, massive performance gain like 20 times faster
   v 0.983
@@ -3014,104 +3015,117 @@ var
   StartX, StartY, W, H: Integer;
   Target: TRect;
   EffectiveStyle: TImageEntryStyle;
+  CenterX, CenterY: Integer;
+  StartScale: Double;
 begin
-  if ImageItem = nil then
-    Exit;
+  if ImageItem = nil then Exit;
 
   Target := ImageItem.TargetRect;
   W := Target.Right - Target.Left;
   H := Target.Bottom - Target.Top;
 
-  // Use the passed style, but resolve Random here
+  // Resolve random direction once
   EffectiveStyle := EntryStyle;
   if EffectiveStyle = iesRandom then
-    EffectiveStyle := TImageEntryStyle(Random(8) + 1);  //random without iesFromCenter and iesFromPoint
+    EffectiveStyle := TImageEntryStyle(Random(8) + 1); // 1..8 = the eight side directions
 
+  // --------------------------------------------------------------
+  // Calculate starting position depending on entry style
+  // --------------------------------------------------------------
   case EffectiveStyle of
     iesFromLeft:
       begin
-        StartX := -W;
+        StartX := -W - 100;                                             // far outside left
         StartY := Target.Top + (Target.Bottom - Target.Top - H) div 2;
       end;
     iesFromRight:
       begin
-        StartX := Width;
+        StartX := Width + 100;                                          // far outside right
         StartY := Target.Top + (Target.Bottom - Target.Top - H) div 2;
       end;
     iesFromTop:
       begin
         StartX := Target.Left + (Target.Right - Target.Left - W) div 2;
-        StartY := -H;
+        StartY := -H - 100;                                             // far above
       end;
     iesFromBottom:
       begin
         StartX := Target.Left + (Target.Right - Target.Left - W) div 2;
-        StartY := Height;
+        StartY := Height + 100;                                         // far below
       end;
-
     iesFromTopLeft:
       begin
-        StartX := -W;
-        StartY := -H;
+        StartX := -W - 100;
+        StartY := -H - 100;
       end;
     iesFromTopRight:
       begin
-        StartX := Width;
-        StartY := -H;
+        StartX := Width + 100;
+        StartY := -H - 100;
       end;
     iesFromBottomLeft:
       begin
-        StartX := -W;
-        StartY := Height;
+        StartX := -W - 100;
+        StartY := Height + 100;
       end;
     iesFromBottomRight:
       begin
-        StartX := Width;
-        StartY := Height;
+        StartX := Width + 100;
+        StartY := Height + 100;
       end;
-
     iesFromCenter:
       begin
-        StartX := Target.Left + W div 2;
-        StartY := Target.Top + H div 2;
+        CenterX := Target.Left + (Target.Right - Target.Left) div 2;
+        CenterY := Target.Top  + (Target.Bottom - Target.Top)  div 2;
+        StartX := CenterX;
+        StartY := CenterY;
       end;
-
     iesFromPoint:
       begin
-        StartX := FEntryPoint.X - W div 2;
-        StartY := FEntryPoint.Y - H div 2;
+        CenterX := FEntryPoint.X;
+        CenterY := FEntryPoint.Y;
+        StartX := CenterX;
+        StartY := CenterY;
       end;
   else
     StartX := Target.Left;
     StartY := Target.Top;
   end;
 
-  // =================================================================
-  // StartRect: point only for center pop
-  // =================================================================
-  if EffectiveStyle = iesFromCenter then
-    ImageItem.StartRect := Rect(StartX, StartY, StartX, StartY)
-  else
-    ImageItem.StartRect := Rect(StartX, StartY, StartX + W, StartY + H);
-
-  ImageItem.CurrentRect := ImageItem.StartRect;
-  ImageItem.AnimationProgress := 0;
-  ImageItem.Animating := True;
- // if ImageItem.FHotZoom <= 1 then ImageItem.FHotZoom := 1.05;
-
-  // =================================================================
-  // Fade only for center pop
-  // =================================================================
-  if EffectiveStyle = iesFromCenter then
+  // --------------------------------------------------------------
+  // All new images start tiny and grow to full size
+  // --------------------------------------------------------------
+  StartScale := 0.06;                         // 6% – looks perfect (feels like real "pop-in")
+  // For center/point we start literally as a dot
+  if EffectiveStyle in [iesFromCenter, iesFromPoint] then
   begin
-    ImageItem.Alpha := 0;
-    ImageItem.TargetAlpha := 255;
+    ImageItem.StartRect  := Rect(StartX, StartY, StartX, StartY);     // single pixel
+    ImageItem.CurrentRect := ImageItem.StartRect;
   end
   else
   begin
-    ImageItem.Alpha := 255;
-    ImageItem.TargetAlpha := 255;
+    // Start tiny but with correct aspect ratio
+    ImageItem.StartRect := Rect(
+      StartX + Round(W * (1 - StartScale) / 2),
+      StartY + Round(H * (1 - StartScale) / 2),
+      StartX + Round(W * StartScale) + Round(W * (1 - StartScale) / 2),
+      StartY + Round(H * StartScale) + Round(H * (1 - StartScale) / 2)
+    );
+    ImageItem.CurrentRect := ImageItem.StartRect;
   end;
+
+  // Force hot-zoom animation from tiny ? normal
+  ImageItem.FHotZoom       := StartScale;     // start tiny
+  ImageItem.FHotZoomTarget := 1.0;            // grow to normal size
+
+  // Optional: tiny overshoot for extra juicy pop feel (uncomment if you want)
+  // ImageItem.FHotZoomTarget := 1.15;
+
+  ImageItem.TargetRect      := Target;
+  ImageItem.AnimationProgress := 0;
+  ImageItem.Animating       := True;
+  ImageItem.Alpha           := 255;
+  ImageItem.TargetAlpha     := 255;
 end;
 
 { Starts zoom animation for an image (zoom in or zoom out) }
