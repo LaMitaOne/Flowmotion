@@ -42,7 +42,7 @@ Low CPU usage, easy to integrate, and smooth visual effects even with large imag
 - HotTrack & HotZoom hover effects  
 - Threaded Animation  
 - Smooth transitions, similar in spirit to TMS GUIMotions but much lighter  
-- Works on Delphi 7 and Delphi 11.3  
+- Works on Delphi 7 and Delphi 11.3 here, so probably on any Delphi almost    
 
   Compiled exe included, play some with it :) you will like it   
   
