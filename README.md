@@ -37,7 +37,7 @@ Low CPU usage, easy to integrate, and smooth visual effects even with large imag
 ### Performance (compared to ImageEN MView Coverflow)  
 On my Asus Zenbook ux305ca (dual-core toy):  
 - ImageEn: 1/4 screen, 30 pics → 50 % CPU and almost unusable (even on big pc ^^)  
-- Flowmotion: Fullscreen, 80 pics → 25 % CPU usage, still perfectly smooth :)  
+- Flowmotion: Fullscreen, 80 pics → 25 % CPU usage(on big pc around 3-5%), still perfectly smooth :)  
    (since threading of animation its smooth like its running in some 3d engine)   
    
 Not finished completely yet, but already in use in **MEDIA Revolution X** (freeware):  
