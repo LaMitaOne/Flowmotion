@@ -8,10 +8,9 @@ Delphi Gallery Component – Lightweight Animated Coverflow / Masonry Viewer (Al
     
   <img width="2560" height="1440" alt="Unbenannt" src="https://github.com/user-attachments/assets/a1930022-e8a9-4bb5-9eb9-ba1dbd2108e0" />   
 That was around 830 pictures...2560x1440 screen resolution...no problem... 7% cpu usage...  :D        
-
-        
-Homepage https://lamita.jimdosite.com/  
-  
+                    
+    
+      
 If you want tip me a coffee for my unbelievable awesome and free for you work :)  
 
 <p align="center">
@@ -19,6 +18,10 @@ If you want tip me a coffee for my unbelievable awesome and free for you work :)
     <img src="https://www.paypalobjects.com/en_US/i/btn/btn_donate_LG.gif" alt="Donate with PayPal"/>
   </a>
 </p>
+    
+   
+Homepage https://lamita.jimdosite.com/  
+   
   
 A fast, lightweight, Coverflow-style gallery component for Delphi — fully animated without any 3D engine.  
 Low CPU usage, easy to integrate, and smooth visual effects even with large image sets.  
