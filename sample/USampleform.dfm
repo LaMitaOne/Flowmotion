@@ -44,10 +44,10 @@ object FSampleform: TFSampleform
     ExplicitHeight = 960
   end
   object Panel1: TPanel
-    Left = 24
-    Top = 19
+    Left = 0
+    Top = 0
     Width = 97
-    Height = 654
+    Height = 726
     Color = 855309
     ParentBackground = False
     TabOrder = 1
@@ -73,7 +73,7 @@ object FSampleform: TFSampleform
     end
     object Button2: TButton
       Left = 8
-      Top = 223
+      Top = 295
       Width = 75
       Height = 34
       Caption = 'Load piclist'
@@ -82,7 +82,7 @@ object FSampleform: TFSampleform
     end
     object Button3: TButton
       Left = 8
-      Top = 561
+      Top = 633
       Width = 75
       Height = 25
       Caption = 'Clear'
@@ -91,7 +91,7 @@ object FSampleform: TFSampleform
     end
     object Button8: TButton
       Left = 8
-      Top = 351
+      Top = 423
       Width = 75
       Height = 25
       Caption = 'Deselect'
@@ -100,7 +100,7 @@ object FSampleform: TFSampleform
     end
     object Button6: TButton
       Left = 8
-      Top = 311
+      Top = 383
       Width = 25
       Height = 25
       Caption = '<'
@@ -109,7 +109,7 @@ object FSampleform: TFSampleform
     end
     object Button7: TButton
       Left = 58
-      Top = 311
+      Top = 383
       Width = 25
       Height = 25
       Caption = '>'
@@ -118,7 +118,7 @@ object FSampleform: TFSampleform
     end
     object Button9: TButton
       Left = 8
-      Top = 396
+      Top = 468
       Width = 75
       Height = 66
       Caption = 'Load background pic'
@@ -128,7 +128,7 @@ object FSampleform: TFSampleform
     end
     object Button10: TButton
       Left = 8
-      Top = 476
+      Top = 548
       Width = 75
       Height = 66
       Caption = 'Clear background pic'
@@ -138,7 +138,7 @@ object FSampleform: TFSampleform
     end
     object Button4: TButton
       Left = 8
-      Top = 592
+      Top = 664
       Width = 75
       Height = 49
       Caption = 'Clear to pos'
@@ -163,17 +163,84 @@ object FSampleform: TFSampleform
       OnClick = Button11Click
     end
     object Button12: TButton
-      Left = 8
-      Top = 263
-      Width = 75
+      Left = 5
+      Top = 335
+      Width = 86
       Height = 34
       Caption = 'Add list async'
       TabOrder = 11
       OnClick = Button12Click
     end
+    object Button13: TButton
+      Left = 8
+      Top = 223
+      Width = 75
+      Height = 66
+      Caption = 'Add 1 pic opendialog'
+      TabOrder = 12
+      WordWrap = True
+      OnClick = Button13Click
+    end
+  end
+  object Panel2: TPanel
+    Left = 224
+    Top = 0
+    Width = 297
+    Height = 129
+    Color = 855309
+    ParentBackground = False
+    TabOrder = 2
+    object Label1: TLabel
+      Left = 168
+      Top = 8
+      Width = 87
+      Height = 15
+      Caption = 'Animationspeed'
+    end
+    object Panel3: TPanel
+      Left = 24
+      Top = 24
+      Width = 65
+      Height = 33
+      Caption = 'Glowcolor'
+      TabOrder = 0
+      OnClick = Panel3Click
+    end
+    object Panel4: TPanel
+      Left = 24
+      Top = 80
+      Width = 65
+      Height = 33
+      Caption = 'HotColor'
+      TabOrder = 1
+      OnClick = Panel4Click
+    end
+    object TrackBar1: TTrackBar
+      Left = 144
+      Top = 24
+      Width = 150
+      Height = 45
+      Max = 20
+      Position = 3
+      TabOrder = 2
+      OnChange = TrackBar1Change
+    end
+    object Button14: TButton
+      Left = 208
+      Top = 64
+      Width = 75
+      Height = 25
+      Caption = 'reset'
+      TabOrder = 3
+      OnClick = Button14Click
+    end
   end
   object OpenDialog1: TOpenDialog
-    Left = 88
-    Top = 328
+    Left = 144
+    Top = 32
+  end
+  object ColorDialog1: TColorDialog
+    Left = 144
+    Top = 112
   end
 end

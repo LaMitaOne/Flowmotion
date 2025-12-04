@@ -4,7 +4,8 @@ interface
 
 uses
   Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, Vcl.Graphics,
-  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, UFLowmotion, Vcl.ExtCtrls;
+  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, UFLowmotion, Vcl.ExtCtrls,
+  Vcl.ComCtrls;
 
 type
   TFSampleform = class(TForm)
@@ -23,9 +24,19 @@ type
     Button4: TButton;
     Button11: TButton;
     Button12: TButton;
+    Button13: TButton;
+    Panel2: TPanel;
+    Panel3: TPanel;
+    Panel4: TPanel;
+    ColorDialog1: TColorDialog;
+    TrackBar1: TTrackBar;
+    Label1: TLabel;
+    Button14: TButton;
     procedure Button10Click(Sender: TObject);
     procedure Button11Click(Sender: TObject);
     procedure Button12Click(Sender: TObject);
+    procedure Button13Click(Sender: TObject);
+    procedure Button14Click(Sender: TObject);
     procedure FormCreate(Sender: TObject);
     procedure Button1Click(Sender: TObject);
     procedure Button2Click(Sender: TObject);
@@ -46,6 +57,9 @@ type
     procedure Flowmotion1SelectedItemMouseDown(Sender: TObject; ImageItem:
         TImageItem; Index, X, Y: Integer; Button: TMouseButton; Shift: TShiftState);
     procedure FormShow(Sender: TObject);
+    procedure Panel3Click(Sender: TObject);
+    procedure Panel4Click(Sender: TObject);
+    procedure TrackBar1Change(Sender: TObject);
   private
     procedure WMMouseWheel(var Msg: TWMMouseWheel); message WM_MOUSEWHEEL;
   public
@@ -93,6 +107,20 @@ begin
    Pathlist.Free;
    Captionlist.Free;
   end;
+end;
+
+procedure TFSampleform.Button13Click(Sender: TObject);
+begin
+  if Opendialog1.Execute then  begin
+    Flowmotion1.ImageEntryStyle := iesFromPoint;
+    Flowmotion1.EntryPoint := TPoint.Create(Button5.Left, Button5.Top);
+    Flowmotion1.AddImageAsync(Opendialog1.FileName);
+  end;
+end;
+
+procedure TFSampleform.Button14Click(Sender: TObject);
+begin
+  Trackbar1.Position := 3;
 end;
 
 procedure TFSampleform.FormCreate(Sender: TObject);
@@ -235,6 +263,27 @@ end;
 procedure TFSampleform.FormShow(Sender: TObject);
 begin
    Button2Click(Self);
+end;
+
+procedure TFSampleform.Panel3Click(Sender: TObject);
+begin
+  if Colordialog1.Execute then begin
+    Flowmotion1.GlowColor := Colordialog1.Color;
+    Panel3.Color := Colordialog1.Color;
+  end;
+end;
+
+procedure TFSampleform.Panel4Click(Sender: TObject);
+begin
+  if Colordialog1.Execute then begin
+    Flowmotion1.HotTrackColor := Colordialog1.Color;
+    Panel4.Color := Colordialog1.Color;
+  end;
+end;
+
+procedure TFSampleform.TrackBar1Change(Sender: TObject);
+begin
+  Flowmotion1.AnimationSpeed := TrackBar1.Position;
 end;
 
 end.
