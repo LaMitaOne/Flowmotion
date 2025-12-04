@@ -21,6 +21,7 @@
     - pause animationthread each cycle 16ms to workdown messages, no more problems with animations like smarteffects that way
     - new HotTrackWidth property
     - new inoming pics now start tiny sized START_SCALE
+    - AddImagesAsync & AddImageAsync now working
   v 0.983
     - Animations now Threaded, massive performance gain like 20 times faster
   v 0.983
@@ -83,6 +84,8 @@ interface
 uses
   Windows, Messages, SysUtils, Classes, Graphics, Controls, Forms, JPEG, Math,
   Pngimage;
+
+   //, SynGdiPlus; //for test syngdiplus
    //, GR32, GR32_Image, GR32_Resamplers;  //for test gr32 draw
 
 const
@@ -673,7 +676,7 @@ end;
 procedure TImageLoadThread.Execute;
 var
   PNG: TPNGObject;
-  JPEGImage: TJPEGImage;
+  JPEGImage: JPEG.TJPEGImage;
   Ext: string;
 begin
   FSuccess := False;
@@ -688,7 +691,7 @@ begin
   try
     if (Ext = '.jpg') or (Ext = '.jpeg') then
     begin
-      JPEGImage := TJPEGImage.Create;
+      JPEGImage := JPEG.TJPEGImage.Create;
       try
         JPEGImage.LoadFromFile(FFileName);
         FBitmap.Assign(JPEGImage);
@@ -774,6 +777,7 @@ end;
 constructor TFlowmotion.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
+  //Gdip := TGDIPlus.Create('');
   FImages := TList.Create;
   FClearing := False;
   FBreathingPhase := 0.0;
@@ -879,6 +883,7 @@ begin
     FAllFiles.Free;
     FAllCaptions.Free;
     FAllPaths.Free;
+    //Gdip.Free;
   except
     // Ensure destructor completes even if errors occur
   end;
@@ -1453,7 +1458,7 @@ end;
 procedure TFlowmotion.SetBackgroundpicture(const Path: string);
 var
   PNG: TPNGObject;
-  JPEGImage: TJPEGImage;
+  JPEGImage: JPEG.TJPEGImage;
   Ext: string;
 begin
   try
@@ -1463,7 +1468,7 @@ begin
 
       if (Ext = '.jpg') or (Ext = '.jpeg') then
       begin
-        JPEGImage := TJPEGImage.Create;
+        JPEGImage := JPEG.TJPEGImage.Create;
         try
           JPEGImage.LoadFromFile(Path);
           FBackgroundpicture.Assign(JPEGImage);
@@ -1787,18 +1792,9 @@ var
   Index: Integer;
   Caption, Path: string;
 begin
-  // Check if file already exists in master list
-  Index := FAllFiles.IndexOf(FileName);
-  if Index >= 0 then
-  begin
-    Caption := FAllCaptions[Index];
-    Path := FAllPaths[Index];
-  end
-  else
-  begin
-    Caption := ACaption;
-    Path := APath;
-  end;
+  FAllFiles.Add(FileName);
+  FAllCaptions.Add(ACaption);
+  FAllPaths.Add(APath);
   LoadThread := TImageLoadThread.Create(FileName, Caption, Path, Self);
   FLoadingThreads.Add(LoadThread);
   Inc(FLoadingCount);
@@ -1833,11 +1829,7 @@ procedure TFlowmotion.AddImagesAsync(const FileNames, Captions, Paths: TStringLi
 var
   i: Integer;
   Thread: TImageLoadThread;
-  WasEmpty: Boolean;
 begin
-  WasEmpty := (FAllFiles.Count = 0);
-  if not WasEmpty then
-    WaitForAllLoads;
   FLoadingCount := 0;
 
   // Add all files to master list
@@ -1857,9 +1849,6 @@ begin
     FLoadingThreads.Add(Thread);
     Inc(FLoadingCount);
   end;
-
-  if WasEmpty then
-    ShowPage(FCurrentPage);
 end;
 
 
@@ -3357,6 +3346,100 @@ var
       end;
     end;
           }
+  {               /7syngdiplus test not worked
+  procedure SmartStretchDraw(DestCanvas: TCanvas; const DestRect: TRect; SrcBitmap: TBitmap; Alpha: Byte = 255);
+  var
+    SynPic: TSynPicture;
+    TempBitmap: TBitmap;
+  begin
+    if not Assigned(DestCanvas) or not Assigned(SrcBitmap) or SrcBitmap.Empty then
+      Exit;
+
+    if not Gdip.Exists then
+    begin
+      Exit;
+    end;
+
+    SynPic := TSynPicture.Create;
+    TempBitmap := TBitmap.Create;
+    try
+      TempBitmap.Width := SrcBitmap.Width;
+      TempBitmap.Height := SrcBitmap.Height;
+      TempBitmap.PixelFormat := pf32bit;
+      TempBitmap.Canvas.Draw(0, 0, SrcBitmap);
+      SynPic.Assign(TempBitmap);
+      SynPic.Draw(DestCanvas, DestRect);
+    finally
+      SynPic.Free;
+      TempBitmap.Free;
+    end;
+  end; }
+
+  // HALFTONE test
+  {  procedure SmartStretchDraw(DestCanvas: TCanvas; const DestRect: TRect; SrcBitmap: TBitmap; Alpha: Byte = 255);
+    var
+      OldStretchMode: Integer;
+      BlendFunction: TBlendFunction;
+      W, H: Integer;
+    begin
+      if not Assigned(DestCanvas) or not Assigned(SrcBitmap) or SrcBitmap.Empty then
+        Exit;
+
+      W := DestRect.Right - DestRect.Left;
+      H := DestRect.Bottom - DestRect.Top;
+
+      // --- Case 1: No transparency needed -> Fast HALFTONE method ---
+      // This is the fast path. It uses the highly optimized HALFTONE StretchBlt.
+      // We check for Alpha, the bitmap's Transparent property, and pixel format.
+      if (Alpha >= 255) and (not SrcBitmap.Transparent) and (SrcBitmap.PixelFormat <> pf32bit) then
+      begin
+        OldStretchMode := GetStretchBltMode(DestCanvas.Handle);
+        try
+          SetStretchBltMode(DestCanvas.Handle, HALFTONE);
+          // Reset brush origin after setting the mode
+          SetBrushOrgEx(DestCanvas.Handle, 0, 0, nil);
+          StretchBlt(DestCanvas.Handle, DestRect.Left, DestRect.Top, W, H,
+                     SrcBitmap.Canvas.Handle, 0, 0, SrcBitmap.Width, SrcBitmap.Height, SRCCOPY);
+        finally
+          // Always restore the original mode to avoid side effects
+          SetStretchBltMode(DestCanvas.Handle, OldStretchMode);
+        end;
+      end
+      // --- Case 2: Transparency is needed -> Slower, but correct Alpha method ---
+      else
+      begin
+        // Here we use your logic from DrawNormalItem.
+        // We need a temporary bitmap to scale first and then blend.
+        // FTempBitmap must be a TBitmap created elsewhere in your class.
+        FTempBitmap.Width := W;
+        FTempBitmap.Height := H;
+
+        // We can also use HALFTONE for scaling into the temp bitmap for better quality!
+        OldStretchMode := GetStretchBltMode(FTempBitmap.Canvas.Handle);
+        try
+          SetStretchBltMode(FTempBitmap.Canvas.Handle, HALFTONE);
+          SetBrushOrgEx(FTempBitmap.Canvas.Handle, 0, 0, nil);
+          StretchBlt(FTempBitmap.Canvas.Handle, 0, 0, W, H,
+                     SrcBitmap.Canvas.Handle, 0, 0, SrcBitmap.Width, SrcBitmap.Height, SRCCOPY);
+        finally
+          SetStretchBltMode(FTempBitmap.Canvas.Handle, OldStretchMode);
+        end;
+
+        // Now draw the result with Alpha onto the destination canvas
+        BlendFunction.BlendOp := AC_SRC_OVER;
+        BlendFunction.BlendFlags := 0;
+        BlendFunction.SourceConstantAlpha := Alpha;
+        // If SrcBitmap has a per-pixel alpha channel, you would set AC_SRC_ALPHA here
+        // and ensure the bitmap has the correct format (pf32bit).
+        // For simple global transparency, 0 is correct.
+        BlendFunction.AlphaFormat := 0;
+
+        AlphaBlend(DestCanvas.Handle, DestRect.Left, DestRect.Top, W, H,
+                   FTempBitmap.Canvas.Handle, 0, 0, W, H, BlendFunction);
+      end;
+    end;          }
+
+
   // --------------------------------------------------------------
   // Draw static item (no zoom, no animation)
   // --------------------------------------------------------------
@@ -3377,6 +3460,7 @@ var
       FTempBitmap.Height := H;
       //GR32Stretch(FTempBitmap.Canvas, Rect(0,0,W,H), Item.Bitmap);
       FTempBitmap.Canvas.StretchDraw(Rect(0, 0, W, H), Item.Bitmap);
+      //SmartStretchDraw(FTempBitmap.Canvas, Rect(0,0,W,H), Item.Bitmap, Item.FAlpha);
 
       BlendFunction.BlendOp := AC_SRC_OVER;
       BlendFunction.BlendFlags := 0;
@@ -3385,7 +3469,7 @@ var
 
       AlphaBlend(Canvas.Handle, Item.CurrentRect.Left, Item.CurrentRect.Top, W, H, FTempBitmap.Canvas.Handle, 0, 0, W, H, BlendFunction);
     end
-    else //GR32Stretch(Canvas, Item.CurrentRect, Item.Bitmap);
+    else //SmartStretchDraw(Canvas, Item.CurrentRect, Item.Bitmap, Item.FAlpha);//GR32Stretch(Canvas, Item.CurrentRect, Item.Bitmap);
       Canvas.StretchDraw(Item.CurrentRect, Item.Bitmap);
   end;
 
@@ -3443,6 +3527,7 @@ var
     begin
       FTempBitmap.Width := NewW;
       FTempBitmap.Height := NewH;
+      //SmartStretchDraw(FTempBitmap.Canvas, Rect(0,0,NewW,NewH), Item.Bitmap, Item.FAlpha);
      // GR32Stretch(FTempBitmap.Canvas, Rect(0,0,NewW,NewH), Item.Bitmap);
       FTempBitmap.Canvas.StretchDraw(Rect(0, 0, NewW, NewH), Item.Bitmap);
 
@@ -3456,6 +3541,7 @@ var
     else
     begin
     //  GR32Stretch(Canvas, R, Item.Bitmap);
+      //SmartStretchDraw(Canvas, R, Item.Bitmap, Item.FAlpha);
       Canvas.StretchDraw(R, Item.Bitmap);
     end;
     // Glow / hot border
@@ -3634,6 +3720,7 @@ begin
       Bitmap := TBitmap.Create;
       try
         Ext := LowerCase(ExtractFileExt(FAllFiles[i]));
+
         if (Ext = '.jpg') or (Ext = '.jpeg') then
         begin
           JPEGImage := TJPEGImage.Create;
@@ -3658,11 +3745,14 @@ begin
           Bitmap.LoadFromFile(FAllFiles[i]);
 
         AddImage(Bitmap);
+
         with TImageItem(FImages[FImages.Count - 1]) do
         begin
           Caption := FAllCaptions[i];
           Path := FAllPaths[i];
         end;
+
+
       finally
         Bitmap.Free;
       end;
