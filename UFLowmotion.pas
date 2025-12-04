@@ -3126,7 +3126,7 @@ begin
   // --------------------------------------------------------------
   // All new images start tiny and grow to full size
   // --------------------------------------------------------------
-                        // 6% – looks perfect (feels like real "pop-in")
+
   // For center/point we start literally as a dot
   if EffectiveStyle in [iesFromCenter, iesFromPoint] then
   begin
