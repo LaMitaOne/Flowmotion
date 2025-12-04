@@ -31,6 +31,8 @@ Low CPU usage, easy to integrate, and smooth visual effects even with large imag
 - Threaded Animation  
 - Smooth transitions, similar in spirit to TMS GUIMotions but much lighter  
 - Works on Delphi 7 and Delphi 11.3  
+
+  Compiled exe included, play some with it :) you will like it   
   
 ### Performance (compared to ImageEN MView Coverflow)  
 On my Asus Zenbook ux305ca (dual-core toy):  
