@@ -64,8 +64,11 @@ I am working on getting more of it done :)
 - fixed z-order of prev selected animating back from selectnext or prev pic function    
 - fixed that last flicker sometimes of just hotzoomed down, in line,     
   that moment before it gets static pic again. Now all...perfect smooth,   
-  no flicker, looks really awesome)   
-        
+  no flicker, looks really awesome)    
+- pause animationthread each cycle 16ms to workdown messages, no problems with animations like smarteffects that way  
+- new HotTrackWidth property  
+- new inoming pics now start tiny sized  
+   
 **v 0.983**
 - Animations now Threaded, massive performance gain like 20 times faster and smoother
       
