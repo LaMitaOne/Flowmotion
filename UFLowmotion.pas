@@ -1,7 +1,7 @@
 
 {------------------------------------------------------------------------------}
 {                                                                              }
-{ Flowmotion v0.985                                                            }
+{ Flowmotion v0.984                                                            }
 { by Lara Miriam Tamy Reschke                                                  }
 {                                                                              }
 { larate@gmx.net                                                               }
@@ -19,6 +19,7 @@
       that moment before it gets static pic again. Now all...perfect smooth,
       no flicker)
     - pause animationthread each cycle 16ms to workdown messages, no more problems with animations like smarteffects that way
+    - new HotTrackWidth property
   v 0.983
     - Animations now Threaded, massive performance gain like 20 times faster
   v 0.983
@@ -79,7 +80,7 @@ interface
 
 uses
   Windows, Messages, SysUtils, Classes, Graphics, Controls, ExtCtrls, Forms, JPEG, Math,
-  Pngimage;
+  Pngimage; //, GR32, GR32_Image, GR32_Resamplers;
 
 const
   // Animation constants
@@ -94,6 +95,7 @@ const
   // Spacing / Effects
   MIN_CELL_SIZE = 22;
   DEFAULT_GLOW_WIDTH = 2;
+  DEFAULT_HOTTRACK_WIDTH = 1;
   DEFAULT_MAX_ZOOM_SIZE = 300;
   HOT_ZOOM_MIN_FACTOR = 1.02;
   HOT_ZOOM_MAX_FACTOR = 1.4;
@@ -284,6 +286,7 @@ type
     FTempBitmap: TBitmap;
     FBackgroundCacheValid: Boolean;
     FHotTrackColor: TColor;
+    FHotTrackWidth: Integer;
     FHotTrackZoom: Boolean;
     FBreathingPhase: Double;
     FBreathingEnabled: Boolean;
@@ -378,6 +381,7 @@ type
     procedure SetHotTrackColor(Value: TColor);
     procedure SetGlowColor(Value: TColor);
     procedure SetGlowWidth(Value: Integer);
+    procedure SetHotTrackWidth(Value: Integer);
     procedure SetAnimationSpeed(const Value: Integer);
     procedure SetSpacing(const Value: Integer);
     procedure SetKeepAspectRatio(const Value: Boolean);
@@ -441,6 +445,7 @@ type
     property HotTrackColor: TColor read FHotTrackColor write SetHotTrackColor;
     property GlowColor: TColor read FGlowColor write SetGlowColor;
     property GlowWidth: Integer read FGlowWidth write SetGlowWidth;
+    property HotTrackWidth: Integer read FHotTrackWidth write SetHotTrackWidth;
     property PageCount: Integer read GetPageCount;
     property CurrentSelectedIndex: Integer read FCurrentSelectedIndex;
     property ImageCount: Integer read GetImageCount;
@@ -526,7 +531,7 @@ begin
   FLastTick := GetTickCount;
   FStopRequested := False;
   FEvent := CreateEvent(nil, True, False, nil);
-  Priority := tpLower;
+  Priority := (AOwner as TFlowmotion).FThreadPriority;  //tpNormal
 end;
 
 destructor TAnimationThread.Destroy;
@@ -774,7 +779,7 @@ begin
   FAnimationThread := nil;
   FImageEntryStyle := iesRandom;
   FEntryPoint := Point(-1000, -1000);
-  FFlowLayout := flSorted;
+  FFlowLayout := flPerfectSize; //flSorted;     flPerfectSize
   FKeepSpaceforZoomed := False;
   FLoadMode := lmLazy;
   FAnimationSpeed := DEFAULT_ANIMATION_SPEED;
@@ -792,6 +797,7 @@ begin
   FLoadingCount := 0;
   FGlowColor := clAqua;
   FGlowWidth := DEFAULT_GLOW_WIDTH;
+  FHotTrackWidth := DEFAULT_HOTTRACK_WIDTH;
   FSelectedImage := nil;
   FWasSelectedItem := nil;
   FZoomAnimationType := zatSlide;     // zatSlide, zatFade, zatZoom, zatBounce   not working atm
@@ -972,6 +978,18 @@ begin
   end;
 end;
 
+{ Sets the width of the hot border }
+procedure TFlowmotion.SetHotTrackWidth(Value: Integer);
+begin
+  if FHotTrackWidth <> Value then
+  begin
+    FHotTrackWidth := Value;
+    Invalidate;
+  end;
+end;
+
+
+
 { Enables or disables animations }
 procedure TFlowmotion.SetActive(Value: Boolean);
 begin
@@ -991,6 +1009,7 @@ end;
 procedure TFlowmotion.SetThreadPriority(Value: TThreadPriority);
 begin
   FThreadPriority := Value;
+  if Assigned(FAnimationThread) then FAnimationThread.Priority := Value;
 end;
 
 { Inserts a picture from TPicture with caption and path }
@@ -2095,7 +2114,7 @@ begin
     end;
 
     Invalidate;
-    if GetTickCount - StartTick > 30 then
+    if GetTickCount - StartTick > 50 then
     begin
       Application.ProcessMessages;
       if FClearing and (csDestroying in ComponentState) then
@@ -2103,7 +2122,7 @@ begin
       if GetAsyncKeyState(VK_ESCAPE) < 0 then
         Break;
     end;
-    Sleep(trunc(AnimSpeed / 3));
+    Sleep(AnimSpeed);
 
     if (GetTickCount - StartTick) > THREAD_CLEANUP_TIMEOUT then
       AllOut := True;
@@ -2331,7 +2350,7 @@ begin
 
       Invalidate;
       Application.ProcessMessages;
-      Sleep(2);
+      Sleep(FAnimationSpeed);
 
     until AllOut;
 
@@ -2425,12 +2444,12 @@ begin
   end;
 end;
 
-{ Calculates layout with perfect-sized algorithm (not yet implemented) }
+{ Placeholder for testing around }
 procedure TFlowmotion.CalculateLayoutPerfectSized;
 begin
-  // TODO: Implement perfect-sized layout algorithm
-  // This would optimize image sizes to fill available space more efficiently
+
 end;
+
 
 { Calculates layout using sorted algorithm: places images in grid based on aspect ratio }
 procedure TFlowmotion.CalculateLayoutSorted;
@@ -2928,6 +2947,9 @@ begin
   FLastMouseButton := Button;
   inherited MouseDown(Button, Shift, X, Y);
 
+  if (FImages.Count = 0) or FClearing or FInFallAnimation then
+    Exit;
+
   ImageItem := GetImageAtPoint(X, Y);
   Index := FImages.IndexOf(ImageItem);
 
@@ -3243,6 +3265,40 @@ var
     else Result := 0;
   end;
 
+     {        //gr32 test too slow like that:
+    procedure GR32Stretch(DestCanvas: TCanvas; const DestRect: TRect; SrcBitmap: TBitmap);
+    var
+      View: TCustomImgView32;
+      Temp32: TBitmap32;
+      TargetW, TargetH: Integer;
+    begin
+      if SrcBitmap.Empty then Exit;
+
+      TargetW := DestRect.Right - DestRect.Left;
+      TargetH := DestRect.Bottom - DestRect.Top;
+      if (TargetW <= 0) or (TargetH <= 0) then Exit;
+
+      View := TCustomImgView32.Create(nil);
+      Temp32 := TBitmap32.Create;
+      try
+        Temp32.SetSize(TargetW, TargetH);
+
+        View.ScaleMode := smResize;
+        View.Bitmap.Resampler := TKernelResampler.Create(View.Bitmap);
+        TKernelResampler(View.Bitmap.Resampler).Kernel := TLanczosKernel.Create;
+        // oder TMitchellKernel.Create;
+
+        View.Bitmap.Assign(SrcBitmap);
+
+        View.PaintTo(Temp32, Rect(0, 0, TargetW, TargetH));
+
+        Temp32.DrawTo(DestCanvas.Handle, DestRect.Left, DestRect.Top);
+      finally
+        Temp32.Free;
+        View.Free;
+      end;
+    end;
+          }
   // --------------------------------------------------------------
   // Draw static item (no zoom, no animation)
   // --------------------------------------------------------------
@@ -3260,6 +3316,7 @@ var
     begin
       FTempBitmap.Width  := W;
       FTempBitmap.Height := H;
+      //GR32Stretch(FTempBitmap.Canvas, Rect(0,0,W,H), Item.Bitmap);
       FTempBitmap.Canvas.StretchDraw(Rect(0,0,W,H), Item.Bitmap);
 
       BlendFunction.BlendOp             := AC_SRC_OVER;
@@ -3273,7 +3330,7 @@ var
                  FTempBitmap.Canvas.Handle, 0, 0, W, H,
                  BlendFunction);
     end
-    else
+    else //GR32Stretch(Canvas, Item.CurrentRect, Item.Bitmap);
       Canvas.StretchDraw(Item.CurrentRect, Item.Bitmap);
   end;
 
@@ -3327,6 +3384,7 @@ var
     begin
       FTempBitmap.Width  := NewW;
       FTempBitmap.Height := NewH;
+     // GR32Stretch(FTempBitmap.Canvas, Rect(0,0,NewW,NewH), Item.Bitmap);
       FTempBitmap.Canvas.StretchDraw(Rect(0,0,NewW,NewH), Item.Bitmap);
 
       BF.BlendOp             := AC_SRC_OVER;
@@ -3337,14 +3395,16 @@ var
       AlphaBlend(Canvas.Handle, R.Left, R.Top, NewW, NewH,
                  FTempBitmap.Canvas.Handle, 0, 0, NewW, NewH, BF);
     end
-    else
+    else begin
+    //  GR32Stretch(Canvas, R, Item.Bitmap);
       Canvas.StretchDraw(R, Item.Bitmap);
-
+    end;
     // Glow / hot border
     if IsCurrentHot or Item.IsSelected then
     begin
-      InflateRect(R, 2, 2);
-      Canvas.Pen.Width := FGlowWidth;
+      if item.IsSelected then InflateRect(R, FGlowWidth, FGlowWidth)
+       else InflateRect(R, FHotTrackWidth, FHotTrackWidth);
+      Canvas.Pen.Width := ifThen(Item.IsSelected, FGlowWidth, FHotTrackWidth);
       Canvas.Pen.Color := ifThen(Item.IsSelected, FGlowColor, FHotTrackColor);
       Canvas.Brush.Style := bsClear;
       Canvas.Rectangle(R.Left, R.Top, R.Right, R.Bottom);
