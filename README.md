@@ -7,7 +7,7 @@ Delphi Gallery Component – Lightweight Animated Coverflow / Masonry Viewer (Al
 [https://www.youtube.com/watch?v=38Dcwo1VNqQ](https://youtu.be/D5KmriyDTWk?si=yKdP_7NnGoMoiCrJ)  
     
   <img width="2560" height="1440" alt="Unbenannt" src="https://github.com/user-attachments/assets/a1930022-e8a9-4bb5-9eb9-ba1dbd2108e0" />   
-That was around 830 pictures...2560x1440 screen resolution...no problem... 7% cpu usage...  :D    
+That was around 830 pictures...2560x1440 screen resolution...no problem... 7% cpu usage(ryzen 7 5800x)...  :D    
   
 That beats almost everything in performance, and it's free for you to use!          
                     
