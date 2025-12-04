@@ -47,7 +47,7 @@ object FSampleform: TFSampleform
     Left = 24
     Top = 19
     Width = 97
-    Height = 550
+    Height = 654
     Color = 855309
     ParentBackground = False
     TabOrder = 1
@@ -73,16 +73,16 @@ object FSampleform: TFSampleform
     end
     object Button2: TButton
       Left = 8
-      Top = 151
+      Top = 223
       Width = 75
-      Height = 66
+      Height = 34
       Caption = 'Load piclist'
       TabOrder = 2
       OnClick = Button2Click
     end
     object Button3: TButton
       Left = 8
-      Top = 460
+      Top = 561
       Width = 75
       Height = 25
       Caption = 'Clear'
@@ -91,7 +91,7 @@ object FSampleform: TFSampleform
     end
     object Button8: TButton
       Left = 8
-      Top = 263
+      Top = 351
       Width = 75
       Height = 25
       Caption = 'Deselect'
@@ -100,7 +100,7 @@ object FSampleform: TFSampleform
     end
     object Button6: TButton
       Left = 8
-      Top = 223
+      Top = 311
       Width = 25
       Height = 25
       Caption = '<'
@@ -109,7 +109,7 @@ object FSampleform: TFSampleform
     end
     object Button7: TButton
       Left = 58
-      Top = 223
+      Top = 311
       Width = 25
       Height = 25
       Caption = '>'
@@ -118,7 +118,7 @@ object FSampleform: TFSampleform
     end
     object Button9: TButton
       Left = 8
-      Top = 316
+      Top = 396
       Width = 75
       Height = 66
       Caption = 'Load background pic'
@@ -128,7 +128,7 @@ object FSampleform: TFSampleform
     end
     object Button10: TButton
       Left = 8
-      Top = 388
+      Top = 476
       Width = 75
       Height = 66
       Caption = 'Clear background pic'
@@ -138,8 +138,8 @@ object FSampleform: TFSampleform
     end
     object Button4: TButton
       Left = 8
-      Top = 488
-      Width = 64
+      Top = 592
+      Width = 75
       Height = 49
       Caption = 'Clear to pos'
       Font.Charset = DEFAULT_CHARSET
@@ -151,6 +151,25 @@ object FSampleform: TFSampleform
       TabOrder = 9
       WordWrap = True
       OnClick = Button4Click
+    end
+    object Button11: TButton
+      Left = 8
+      Top = 151
+      Width = 75
+      Height = 66
+      Caption = 'Add 1 pic async'
+      TabOrder = 10
+      WordWrap = True
+      OnClick = Button11Click
+    end
+    object Button12: TButton
+      Left = 8
+      Top = 263
+      Width = 75
+      Height = 34
+      Caption = 'Add list async'
+      TabOrder = 11
+      OnClick = Button12Click
     end
   end
   object OpenDialog1: TOpenDialog

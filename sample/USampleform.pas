@@ -21,7 +21,11 @@ type
     Button9: TButton;
     Button10: TButton;
     Button4: TButton;
+    Button11: TButton;
+    Button12: TButton;
     procedure Button10Click(Sender: TObject);
+    procedure Button11Click(Sender: TObject);
+    procedure Button12Click(Sender: TObject);
     procedure FormCreate(Sender: TObject);
     procedure Button1Click(Sender: TObject);
     procedure Button2Click(Sender: TObject);
@@ -59,6 +63,36 @@ implementation
 procedure TFSampleform.Button10Click(Sender: TObject);
 begin
  Flowmotion1.SetBackgroundpicture('');
+end;
+
+procedure TFSampleform.Button11Click(Sender: TObject);
+begin
+  Flowmotion1.ImageEntryStyle := iesFromPoint;
+  Flowmotion1.EntryPoint := TPoint.Create(Button5.Left, Button5.Top);
+  Flowmotion1.AddImageAsync(Extractfilepath(Application.ExeName) + inttostr(random(11)+1) + '.jpg');
+end;
+
+procedure TFSampleform.Button12Click(Sender: TObject);
+var
+  IMList,Pathlist, Captionlist: TStringList;
+  i : Integer;
+begin
+  IMList:= TStringList.create;
+  Pathlist:= TStringList.create;
+  Captionlist:= TStringList.create;
+ try
+   for i := 1 to 12 do begin
+     IMList.add(Extractfilepath(Application.ExeName) + inttostr(i) + '.jpg');
+     Pathlist.add('Folder or whatever');
+     Captionlist.add('Caption');
+   end;
+   Flowmotion1.MaxZoomSize := trunc(Clientwidth / 3);
+   Flowmotion1.AddImagesAsync(IMList,Captionlist,Pathlist);
+  finally
+   IMList.Free;
+   Pathlist.Free;
+   Captionlist.Free;
+  end;
 end;
 
 procedure TFSampleform.FormCreate(Sender: TObject);
