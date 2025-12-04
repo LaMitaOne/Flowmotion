@@ -11,7 +11,7 @@ That was around 830 pictures...2560x1440 screen resolution...no problem... 7% cp
                     
     
       
-If you want tip me a coffee for my unbelievable awesome and free for you work :)  
+If you want to tip me a coffee for my unbelievably awesome work, I'd be grateful! :)  
 
 <p align="center">
   <a href="https://www.paypal.com/donate/?hosted_button_id=RX5KTTMXW497Q">
