@@ -8,21 +8,19 @@ uses
 
 type
   TFSampleform = class(TForm)
+    Flowmotion1: TFlowmotion;
+    OpenDialog1: TOpenDialog;
+    Panel1: TPanel;
     Button1: TButton;
+    Button5: TButton;
     Button2: TButton;
     Button3: TButton;
-    Button4: TButton;
-    Button5: TButton;
-    Flowmotion1: TFlowmotion;
+    Button8: TButton;
     Button6: TButton;
     Button7: TButton;
-    Button8: TButton;
     Button9: TButton;
-    OpenDialog1: TOpenDialog;
     Button10: TButton;
-    Label1: TLabel;
-    Panel1: TPanel;
-    Timer1: TTimer;
+    Button4: TButton;
     procedure Button10Click(Sender: TObject);
     procedure FormCreate(Sender: TObject);
     procedure Button1Click(Sender: TObject);
@@ -44,7 +42,6 @@ type
     procedure Flowmotion1SelectedItemMouseDown(Sender: TObject; ImageItem:
         TImageItem; Index, X, Y: Integer; Button: TMouseButton; Shift: TShiftState);
     procedure FormShow(Sender: TObject);
-    procedure Timer1Timer(Sender: TObject);
   private
     procedure WMMouseWheel(var Msg: TWMMouseWheel); message WM_MOUSEWHEEL;
   public
@@ -190,8 +187,7 @@ procedure TFSampleform.Flowmotion1SelectedImageDblClick(Sender: TObject;
     ImageItem: TImageItem; Index: Integer);
 begin
   //selected dblclicked
-  Panel1.Show;
-  Timer1.Enabled := True;
+
 end;
 
 procedure TFSampleform.Flowmotion1SelectedItemMouseDown(Sender: TObject;
@@ -205,12 +201,6 @@ end;
 procedure TFSampleform.FormShow(Sender: TObject);
 begin
    Button2Click(Self);
-end;
-
-procedure TFSampleform.Timer1Timer(Sender: TObject);
-begin
-  Timer1.Enabled := False;
-  Panel1.Hide;
 end;
 
 end.
