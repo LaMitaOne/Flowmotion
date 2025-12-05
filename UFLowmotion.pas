@@ -2907,7 +2907,9 @@ begin
 end;
 
 
-{ Returns the image item at the specified screen coordinates, or nil if none }
+{ Returns the image item at the specified screen coordinates, or nil if none.
+  This function's Z-order logic is synchronized with the Paint method to ensure
+  that the item returned is the one visually on top at the given point. }
 function TFlowmotion.GetImageAtPoint(X, Y: Integer): TImageItem;
 var
   i: Integer;
@@ -2916,6 +2918,13 @@ var
   CenterX, CenterY, BaseW, BaseH, DrawW, DrawH: Integer;
   DrawRect: TRect;
   ZoomFactor: Double;
+  BestCandidate: TImageItem;
+  BestCandidateZoom: Double;
+  BestCandidateArea: Integer;
+  CurrentZoom: Double;
+  CurrentArea: Integer;
+  CurrentRect: TRect;
+  BorderSize: Integer; // For D7 compatibility and consistent border sizing
 begin
   P := Point(X, Y);
   Result := nil;
@@ -2951,7 +2960,13 @@ begin
     DrawRect.Top := CenterY - DrawH div 2;
     DrawRect.Right := DrawRect.Left + DrawW;
     DrawRect.Bottom := DrawRect.Top + DrawH;
-    InflateRect(DrawRect, FGlowWidth, FGlowWidth);
+
+    // IMPORTANT: Inflate by the LARGER of the two borders to ensure the hot-track
+    // area of a selected image is also correctly detected.
+    // This prevents FHotItem from being incorrectly reset, which causes
+    // drawing inconsistencies and the "frame-only" flicker.
+    BorderSize := Max(FGlowWidth, FHotTrackWidth);
+    InflateRect(DrawRect, BorderSize, BorderSize);
 
     if PtInRect(DrawRect, P) then
     begin
@@ -2961,14 +2976,19 @@ begin
   end;
 
   // ==================================================================
-  // 2. All other images (back to front)
+  // 2. ALL OTHER IMAGES (find the one with highest Z-order)
   // ==================================================================
-  for i := FImages.Count - 1 downto 0 do
+  BestCandidate := nil;
+  BestCandidateZoom := -1.0; // Start with a very low value
+  BestCandidateArea := 0;
+
+  for i := 0 to FImages.Count - 1 do
   begin
     ImageItem := TImageItem(FImages[i]);
     if not ImageItem.Visible or (ImageItem = FSelectedImage) then
       Continue;
 
+    // Calculate the effective drawing rectangle for this item
     if (ImageItem.FHotZoom > 1.01) then
     begin
       ZoomFactor := ImageItem.FHotZoom;
@@ -2993,26 +3013,42 @@ begin
       DrawRect.Bottom := DrawRect.Top + DrawH;
 
       InflateRect(DrawRect, FHotTrackWidth, FHotTrackWidth);
-
-      if PtInRect(DrawRect, P) then
-      begin
-        Result := ImageItem;
-        Exit;
-      end;
     end
     else
     begin
-      // InflateRect um den Hot-Track-Rand
       DrawRect := ImageItem.CurrentRect;
       InflateRect(DrawRect, FHotTrackWidth, FHotTrackWidth);
+    end;
 
-      if PtInRect(DrawRect, P) then
-      begin
-        Result := ImageItem;
-        Exit;
-      end;
+    // Quick check: Is the point even over this item's potential area?
+    if not PtInRect(DrawRect, P) then
+      Continue; // No, skip to the next item.
+
+    // If we are here, the mouse is over this item. Now calculate its priority.
+    // This logic mirrors the CompareHotZoom function used in the Paint method.
+    CurrentZoom := ImageItem.FHotZoom;
+    if CurrentZoom < 1.0 then
+      CurrentZoom := 1.0; // Normalize non-hotzoomed items
+
+    // Calculate area (using TargetRect if CurrentRect is empty)
+    CurrentRect := ImageItem.CurrentRect;
+    if IsRectEmpty(CurrentRect) then
+      CurrentRect := ImageItem.TargetRect;
+    CurrentArea := (CurrentRect.Right - CurrentRect.Left) * (CurrentRect.Bottom - CurrentRect.Top);
+
+    // Compare with the best candidate found so far.
+    // The item with the higher zoom factor should be drawn last (on top).
+    // If zoom is equal, the item with the larger area should be on top.
+    if (CurrentZoom > BestCandidateZoom) or
+       ((CurrentZoom = BestCandidateZoom) and (CurrentArea > BestCandidateArea)) then
+    begin
+      BestCandidate := ImageItem;
+      BestCandidateZoom := CurrentZoom;
+      BestCandidateArea := CurrentArea;
     end;
   end;
+
+  Result := BestCandidate;
 end;
 
 
