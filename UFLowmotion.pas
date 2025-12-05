@@ -90,9 +90,9 @@ uses
 
 const
   // Animation constants
-  TARGET_FPS = 30;
+  TARGET_FPS = 35;
   MIN_FRAME_TIME = 1000 div TARGET_FPS;
-  DEFAULT_ANIMATION_SPEED = 6;
+  DEFAULT_ANIMATION_SPEED = 4;
   DEFAULT_ALPHA = 255;
   START_SCALE = 0.02;
 
@@ -3058,6 +3058,7 @@ begin
 
   NewHot := GetImageAtPoint(X, Y);
 
+
   if (NewHot = nil) and (FHotItem <> nil) then
   begin
     FHotItem.FHotZoomTarget := 1.0;
@@ -3068,7 +3069,7 @@ begin
   end
   else if (NewHot <> FHotItem) and (NewHot <> nil) then
   begin
-    if (FHotItem <> nil) and (FHotItem <> NewHot) then
+    if  (FHotItem <> nil) and (FHotItem <> NewHot) then
     begin
       FHotItem.FHotZoomTarget := 1.0;
     end;
@@ -3375,7 +3376,13 @@ begin
   // Set new selection
   FWasSelectedItem := FSelectedImage;
   if FWasSelectedItem <> nil then
+  begin
     FWasSelectedItem.FAnimating := True;
+    // If the old selected item was also the hot item, reset its hot-zoom
+    if FWasSelectedItem = FHotItem then
+      FWasSelectedItem.FHotZoomTarget := 1.0;
+  end;
+
   FSelectedImage := ImageItem;
   FCurrentSelectedIndex := Index;
 
@@ -3385,14 +3392,24 @@ begin
     ImageItem.ZoomProgress := 0;
     if ImageItem.FHotZoom < 1 then
       ImageItem.FHotZoom := 1;
-    ImageItem.FHotZoomTarget := 1;
+
+    // KEY FIX: If breathing is enabled, immediately set the new image as the hot item.
+    // This synchronizes the states and prevents the target from being reset to 1.0,
+    // which would cause a flicker when breathing kicks in.
+    if FBreathingEnabled then
+      FHotItem := ImageItem
+    else
+      ImageItem.FHotZoomTarget := 1.0; // Only reset if breathing is OFF
+
     ImageItem.AnimationProgress := 0;
     ImageItem.Animating := True;
-    // Clear hot item if it's the selected image to avoid drawing conflicts
-    if (FHotItem <> nil) and (FHotItem = ImageItem) then
-      FHotItem := nil;
   end
   else
+  begin
+    FCurrentSelectedIndex := -1;
+    // If we are deselecting, clear the hot item too
+    FHotItem := nil;
+  end;
     FCurrentSelectedIndex := -1;
 
   CalculateLayout;
@@ -3644,6 +3661,7 @@ var
     R: TRect;
     OffsetX, OffsetY: Integer;
     BF: TBlendFunction;
+    BorderWidth: Integer;
   begin
     if not Item.Visible or Item.Bitmap.Empty then
       Exit;
@@ -3670,21 +3688,23 @@ var
 
     R := Rect(CenterX - NewW div 2, CenterY - NewH div 2, CenterX + NewW div 2, CenterY + NewH div 2);
 
-    // Keep inside control (glow margin)
+   // Keep inside control (glow or hottrack margin)
+    BorderWidth := Max(FGlowWidth, FHotTrackWidth); // Use the larger border width
+
     OffsetX := 0;
     OffsetY := 0;
     if R.Left < 0 then
-      OffsetX := -R.Left + FGlowWidth;
+      OffsetX := -R.Left + BorderWidth;
     if R.Right > Width then
-      OffsetX := Width - R.Right - FGlowWidth;
+      OffsetX := Width - R.Right - BorderWidth;
     if R.Top < 0 then
-      OffsetY := -R.Top + FGlowWidth;
+      OffsetY := -R.Top + BorderWidth;
     if R.Bottom > Height then
-      OffsetY := Height - R.Bottom - FGlowWidth;
+      OffsetY := Height - R.Bottom - BorderWidth;
     OffsetRect(R, OffsetX, OffsetY);
 
     // Draw with alpha if needed
-    if Item.Alpha < 255 then
+ {   if Item.Alpha < 255 then
     begin
       FTempBitmap.Width := NewW;
       FTempBitmap.Height := NewH;
@@ -3704,7 +3724,10 @@ var
     //  GR32Stretch(Canvas, R, Item.Bitmap);
       //SmartStretchDraw(Canvas, R, Item.Bitmap, Item.FAlpha);
       Canvas.StretchDraw(R, Item.Bitmap);
-    end;
+    end;                  }
+
+    Canvas.StretchDraw(R, Item.Bitmap);
+
     // Glow / hot border
     if IsCurrentHot or Item.IsSelected then
     begin
@@ -3744,13 +3767,19 @@ begin
     end;
 
     AnimatingItems := TList.Create;
+
     try
+
+
       // 2. Collect every item that is still animating
       for i := 0 to FImages.Count - 1 do
       begin
         ImageItem := TImageItem(FImages[i]);
-        if //(ImageItem.FAnimationProgress < 1.0) or
-          (ImageItem.ZoomProgress > 0.01) or (Abs(ImageItem.FHotZoom - ImageItem.FHotZoomTarget) > 0.01) or (ImageItem.Alpha < 255) or (ImageItem = FWasSelectedItem) then
+        // IMPORTANT: Exclude the selected image from the general animating list.
+        // The selected image is always drawn last in Step 6 to ensure correct Z-order
+        if (ImageItem <> FSelectedImage) and
+           ((ImageItem.ZoomProgress > 0) or (Abs(ImageItem.FHotZoom - ImageItem.FHotZoomTarget) > 0)
+           or (ImageItem.Alpha <= 255) or (ImageItem = FWasSelectedItem)) then
           AnimatingItems.Add(ImageItem);
       end;
 
@@ -3768,11 +3797,17 @@ begin
       begin
         AnimatingItems.Sort(@CompareHotZoom);
         for i := 0 to AnimatingItems.Count - 1 do
+        begin
+          // IMPORTANT: Skip the selected image here as well. It's handled by Step 6.
+          if TImageItem(AnimatingItems[i]) = FSelectedImage then
+            Continue;
           DrawHotZoomedItem(TImageItem(AnimatingItems[i]), TImageItem(AnimatingItems[i]) = FHotItem);
+        end;
       end;
 
       // 5. Current hovered item on top (unless it's selected)
-      if (FHotItem <> nil) and (FHotItem <> FSelectedImage) then
+      if (FHotItem <> nil) and (FHotItem <> FSelectedImage)
+       then
         DrawHotZoomedItem(FHotItem, True);
 
       // 6. Selected item – ALWAYS absolute top
@@ -4035,4 +4070,3 @@ begin
 end;
 
 end.
-
