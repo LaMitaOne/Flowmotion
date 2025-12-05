@@ -2951,7 +2951,7 @@ begin
     DrawRect.Top := CenterY - DrawH div 2;
     DrawRect.Right := DrawRect.Left + DrawW;
     DrawRect.Bottom := DrawRect.Top + DrawH;
-    InflateRect(DrawRect, 4, 4);
+    InflateRect(DrawRect, FGlowWidth, FGlowWidth);
 
     if PtInRect(DrawRect, P) then
     begin
@@ -2992,16 +2992,25 @@ begin
       DrawRect.Right := DrawRect.Left + DrawW;
       DrawRect.Bottom := DrawRect.Top + DrawH;
 
+      InflateRect(DrawRect, FHotTrackWidth, FHotTrackWidth);
+
       if PtInRect(DrawRect, P) then
       begin
         Result := ImageItem;
         Exit;
       end;
     end
-    else if PtInRect(ImageItem.CurrentRect, P) then
+    else
     begin
-      Result := ImageItem;
-      Exit;
+      // InflateRect um den Hot-Track-Rand
+      DrawRect := ImageItem.CurrentRect;
+      InflateRect(DrawRect, FHotTrackWidth, FHotTrackWidth);
+
+      if PtInRect(DrawRect, P) then
+      begin
+        Result := ImageItem;
+        Exit;
+      end;
     end;
   end;
 end;
@@ -3777,7 +3786,7 @@ begin
           DrawRect := FSelectedImage.CurrentRect;
           if IsRectEmpty(DrawRect) then
             DrawRect := FSelectedImage.TargetRect;
-          InflateRect(DrawRect, 2, 2);
+          InflateRect(DrawRect, FGlowWidth, FGlowWidth);
           Canvas.Pen.Color := FGlowColor;
           Canvas.Pen.Width := FGlowWidth;
           Canvas.Brush.Style := bsClear;
@@ -4026,3 +4035,4 @@ begin
 end;
 
 end.
+
