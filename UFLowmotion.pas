@@ -21,6 +21,7 @@
       dragged around to reveal images underneath.
     - Moveimage now working
     - added more functions into Sample project
+    - Layout improved
   v 0.984
     - higher hotzoomed get painted above lower hotzoomed
       (think that way almost perfect z-order... as possible for me at least)
@@ -2495,19 +2496,26 @@ begin
 
 end;
 
+
 { Calculates layout using sorted algorithm: places images in grid based on aspect ratio }
 procedure TFlowmotion.CalculateLayoutSorted;
 var
-  i, Cols, Rows: Integer;
+  Cols, Rows,
+  i, c, r, BestCols, BestRows: Integer;
   ImageItem: TImageItem;
   BaseCellWidth, BaseCellHeight: Integer;
   VCount, Row, Col, AddforZoomed: Integer;
   Grid: TBooleanGrid;
   SpanCols, SpanRows: Integer;
   Placed: Boolean;
+  MaxCellWidth: Double;
   ImageAspectRatio: Double;
   VisibleImages: TList;
   SortList: TList;
+  MaxCellArea: Integer;
+  MinCols, MaxColsToTry: Integer;
+  PotentialCellWidth, PotentialCellHeight, CellArea: Double;
+  TotalCellEstimate: Integer;
 
   function CompareImageSize(A, B: Pointer): Integer;
   var
@@ -2535,9 +2543,8 @@ begin
   if FKeepSpaceforZoomed then
     if FSelectedImage <> nil then
       AddforZoomed := 2;
-  // Reserve space in center for zoomed image (later get needed size from layout)
 
-// Collect visible images
+  // Collect visible images
   VisibleImages := TList.Create;
   try
     for i := 0 to FImages.Count - 1 do
@@ -2551,7 +2558,6 @@ begin
 
     // Sort only when Sorted = False (by size)
     if not FSorted then
-      //this sorts picturesizes
     begin
       SortList := TList.Create;
       try
@@ -2568,39 +2574,89 @@ begin
     else
       VCount := VisibleImages.Count;
 
-    Cols := Max(3, Ceil(Sqrt(VCount * 2))) + AddforZoomed;
-    Rows := Max(3, Ceil(VCount / Cols) + 2) + AddforZoomed;
-
-    while (Cols * Rows < VCount * 2.0) do
+    // =================================================================
+    // KEY FIX: First, estimate the total number of cells needed
+    // =================================================================
+    TotalCellEstimate := 0;
+    for i := 0 to VisibleImages.Count - 1 do
     begin
-      Inc(Cols);
-      if Cols > 12 then
-      begin
-        Inc(Rows);
-        Cols := Max(3, Ceil(Sqrt(VCount * 2.0)));
-      end;
+      ImageItem := TImageItem(VisibleImages[i]);
+      if (ImageItem.Bitmap.Width = 0) or (ImageItem.Bitmap.Height = 0) then Continue;
+      ImageAspectRatio := ImageItem.Bitmap.Width / ImageItem.Bitmap.Height;
+
+      if ImageAspectRatio > 1.4 then
+        Inc(TotalCellEstimate, 2) // Wide image takes 2 cells
+      else if ImageAspectRatio < 0.75 then
+        Inc(TotalCellEstimate, 2) // Tall image takes 2 cells
+      else
+        Inc(TotalCellEstimate, 1); // Square image takes 1 cell
     end;
-    // mincellsize calc
+
+    // Ensure the grid is at least large enough for the number of images
+    if TotalCellEstimate < VCount then TotalCellEstimate := VCount;
+
+    // =================================================================
+    // NEW: Find the optimal number of columns for the best layout
+    // =================================================================
+      MaxCellWidth := 0;
+      BestCols := 0;
+      BestRows := 0;
+      MinCols := Max(3, Trunc(Sqrt(TotalCellEstimate)));
+      MaxColsToTry := TotalCellEstimate;
+
+      for c := MinCols to MaxColsToTry do
+      begin
+        r := Ceil(TotalCellEstimate / c);
+        if r < 3 then r := 3;
+
+        PotentialCellWidth := (Width - FSpacing * (c + 1)) / c;
+        PotentialCellHeight := (Height - FSpacing * (r + 1)) / r;
+
+        // If cell size is too small, no point in trying this configuration
+        if (PotentialCellWidth < MIN_CELL_SIZE) or (PotentialCellHeight < MIN_CELL_SIZE) then
+          Continue;
+
+        // KEY FIX: Prioritize cell width over area.
+        // This ensures the layout uses the full horizontal space.
+        if PotentialCellWidth > MaxCellWidth then
+        begin
+          MaxCellWidth := PotentialCellWidth;
+          BestCols := c;
+          BestRows := r;
+        end;
+      end;
+
+      // Fallback if the loop didn't find a good layout
+      if BestCols = 0 then
+      begin
+          BestCols := Max(3, Ceil(Sqrt(TotalCellEstimate)));
+          BestRows := Max(3, Ceil(TotalCellEstimate / BestCols));
+      end;
+
+      Cols := BestCols;
+      Rows := BestRows;
+
+    // =================================================================
+    // END OF NEW SECTION
+    // =================================================================
+
     BaseCellWidth := Max(MIN_CELL_SIZE, (Width - FSpacing * (Cols + 1)) div Cols);
     BaseCellHeight := Max(MIN_CELL_SIZE, (Height - FSpacing * (Rows + 1)) div Rows);
 
-    // Initialize grid
     SetLength(Grid, Rows, Cols);
     for Row := 0 to Rows - 1 do
       for Col := 0 to Cols - 1 do
         Grid[Row, Col] := False;
 
-    // Place images from top-left to bottom-right
-    Row := 0;
-    Col := 0;
+    // The robust placement logic from the previous answer is correct and should be used here.
+    // It will now work because the grid is guaranteed to be large enough.
     for i := 0 to VisibleImages.Count - 1 do
     begin
       ImageItem := TImageItem(VisibleImages[i]);
-      if (ImageItem.Bitmap.Width = 0) or (ImageItem.Bitmap.Height = 0) then
-        Continue;
+      if (ImageItem.Bitmap.Width = 0) or (ImageItem.Bitmap.Height = 0) then Continue;
+
       ImageAspectRatio := ImageItem.Bitmap.Width / ImageItem.Bitmap.Height;
 
-      // Determine spanning
       if ImageAspectRatio > 1.4 then
       begin
         SpanCols := 2;
@@ -2617,54 +2673,38 @@ begin
         SpanRows := 1;
       end;
 
-      // Find next free spot
       Placed := False;
-      while (Row <= Rows - SpanRows) and (Col <= Cols - SpanCols) do
-      begin
-        if IsAreaFree(Grid, Row, Col, SpanRows, SpanCols) then
-        begin
-          PlaceImage(ImageItem, Grid, Row, Col, SpanRows, SpanCols, BaseCellWidth, BaseCellHeight);
-          Placed := True;
-          Break;
-        end;
-        Inc(Col);
-        if Col > Cols - SpanCols then
-        begin
-          Col := 0;
-          Inc(Row);
-        end;
-      end;
 
-      // Fallback: force 1x1 if nothing fits
-      if not Placed then
+      // Exhaustive search for a free spot
+      for r := 0 to Rows - SpanRows do
       begin
-        Row := 0;
-        Col := 0;
-        while (Row < Rows) and (Col < Cols) do
+        for c := 0 to Cols - SpanCols do
         begin
-          if IsAreaFree(Grid, Row, Col, 1, 1) then
+          if IsAreaFree(Grid, r, c, SpanRows, SpanCols) then
           begin
-            PlaceImage(ImageItem, Grid, Row, Col, 1, 1, BaseCellWidth, BaseCellHeight);
+            PlaceImage(ImageItem, Grid, r, c, SpanRows, SpanCols, BaseCellWidth, BaseCellHeight);
             Placed := True;
             Break;
           end;
-          Inc(Col);
-          if Col >= Cols then
-          begin
-            Col := 0;
-            Inc(Row);
-          end;
         end;
+        if Placed then Break;
       end;
 
-      // Next image
-      if Placed then
+      // Fallback: If the image didn't fit with its span, try to force it as 1x1
+      if not Placed then
       begin
-        Inc(Col, SpanCols);
-        if Col >= Cols then
+        for r := 0 to Rows - 1 do
         begin
-          Col := 0;
-          Inc(Row);
+          for c := 0 to Cols - 1 do
+          begin
+            if IsAreaFree(Grid, r, c, 1, 1) then
+            begin
+              PlaceImage(ImageItem, Grid, r, c, 1, 1, BaseCellWidth, BaseCellHeight);
+              Placed := True;
+              Break;
+            end;
+          end;
+          if Placed then Break;
         end;
       end;
     end;
@@ -3687,7 +3727,7 @@ begin
   inPaintCycle := True;
   Canvas.Lock;
   try
-    // 1. Background (unchanged)
+    // 1. Background
     if not FBackgroundpicture.Empty then
     begin
       if not FBackgroundCacheValid or (FBackgroundCache.Width <> Width) or (FBackgroundCache.Height <> Height) then
@@ -3706,7 +3746,7 @@ begin
     end;
 
     AnimatingItems := TList.Create;
-    // CHANGE: Create the new list for entering images
+    // Create the new list for entering images
     EnteringItems := TList.Create;
 
     try
@@ -3715,13 +3755,13 @@ begin
       begin
         ImageItem := TImageItem(FImages[i]);
 
-        // CHANGE: A new image is "entering" if its animation progress is very low.
+        // A new image is "entering" if its animation progress is very low.
         // These get top priority and are added to their own special list.
         if (ImageItem.AnimationProgress < 0.99) and (ImageItem.FHotZoom < 0.99) and (ImageItem <> FSelectedImage) then
         begin
           EnteringItems.Add(ImageItem);
         end
-        // CHANGE: Other animating items (like hot-zoomed ones) go into the regular list.
+        // Other animating items (like hot-zoomed ones) go into the regular list.
         // We exclude items already in the EnteringItems list.
         else if (ImageItem <> FSelectedImage) and ((ImageItem.ZoomProgress > 0) or (Abs(ImageItem.FHotZoom - ImageItem.FHotZoomTarget) > HOT_ZOOM_EPSILON) or (ImageItem = FWasSelectedItem)) then
         begin
@@ -3729,7 +3769,7 @@ begin
         end;
       end;
 
-      // 3. Draw completely static items (unchanged)
+      // 3. Draw completely static items
       for i := 0 to FImages.Count - 1 do
       begin
         ImageItem := TImageItem(FImages[i]);
@@ -3771,7 +3811,7 @@ begin
         end;
       end;
 
-      // CHANGE: 7. Draw entering items on the very top
+      // 7. Draw entering items on the very top
       for i := 0 to EnteringItems.Count - 1 do
       begin
         DrawHotZoomedItem(TImageItem(EnteringItems[i]), TImageItem(EnteringItems[i]) = FHotItem);
@@ -3779,7 +3819,7 @@ begin
 
     finally
       AnimatingItems.Free;
-      // CHANGE: Free the new list
+      // Free the new list
       EnteringItems.Free;
     end;
 
