@@ -5,7 +5,7 @@ interface
 uses
   Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, Vcl.Graphics,
   Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, UFLowmotion, Vcl.ExtCtrls,
-  Vcl.ComCtrls;
+  Vcl.ComCtrls, Vcl.Samples.Spin;
 
 type
   TFSampleform = class(TForm)
@@ -29,11 +29,17 @@ type
     Panel3: TPanel;
     Panel4: TPanel;
     ColorDialog1: TColorDialog;
-    TrackBar1: TTrackBar;
     Label1: TLabel;
     Button14: TButton;
     Button15: TButton;
     Button16: TButton;
+    CheckBox1: TCheckBox;
+    CheckBox2: TCheckBox;
+    SpinEdit1: TSpinEdit;
+    Label2: TLabel;
+    SpinEdit2: TSpinEdit;
+    Label3: TLabel;
+    SpinEdit3: TSpinEdit;
     procedure Button10Click(Sender: TObject);
     procedure Button11Click(Sender: TObject);
     procedure Button12Click(Sender: TObject);
@@ -51,6 +57,8 @@ type
     procedure Button7Click(Sender: TObject);
     procedure Button8Click(Sender: TObject);
     procedure Button9Click(Sender: TObject);
+    procedure CheckBox1Click(Sender: TObject);
+    procedure CheckBox2Click(Sender: TObject);
     procedure Flowmotion1AllAnimationsFinished(Sender: TObject);
     procedure Flowmotion1ImageLoad(Sender: TObject; const FileName: string;
         Success: Boolean);
@@ -63,7 +71,9 @@ type
     procedure FormShow(Sender: TObject);
     procedure Panel3Click(Sender: TObject);
     procedure Panel4Click(Sender: TObject);
-    procedure TrackBar1Change(Sender: TObject);
+    procedure SpinEdit1Change(Sender: TObject);
+    procedure SpinEdit2Change(Sender: TObject);
+    procedure SpinEdit3Change(Sender: TObject);
   private
     procedure WMMouseWheel(var Msg: TWMMouseWheel); message WM_MOUSEWHEEL;
   public
@@ -124,7 +134,7 @@ end;
 
 procedure TFSampleform.Button14Click(Sender: TObject);
 begin
-  Trackbar1.Position := 3;
+  SpinEdit1.Value := 3;
 end;
 
 procedure TFSampleform.Button15Click(Sender: TObject);
@@ -242,6 +252,16 @@ begin
   if Opendialog1.Execute then Flowmotion1.SetBackgroundpicture(Opendialog1.FileName);
 end;
 
+procedure TFSampleform.CheckBox1Click(Sender: TObject);
+begin
+  Flowmotion1.BreathingEnabled := CheckBox1.Checked;
+end;
+
+procedure TFSampleform.CheckBox2Click(Sender: TObject);
+begin
+  Flowmotion1.HotTrackZoom := CheckBox1.Checked;
+end;
+
 procedure TFSampleform.Flowmotion1AllAnimationsFinished(Sender: TObject);
 begin
   //stopped animations, idle
@@ -298,9 +318,19 @@ begin
   end;
 end;
 
-procedure TFSampleform.TrackBar1Change(Sender: TObject);
+procedure TFSampleform.SpinEdit1Change(Sender: TObject);
 begin
-  Flowmotion1.AnimationSpeed := TrackBar1.Position;
+   Flowmotion1.AnimationSpeed := SpinEdit1.Value;
+end;
+
+procedure TFSampleform.SpinEdit2Change(Sender: TObject);
+begin
+  Flowmotion1.GlowWidth := SpinEdit2.Value;
+end;
+
+procedure TFSampleform.SpinEdit3Change(Sender: TObject);
+begin
+  Flowmotion1.HotTrackWidth := SpinEdit3.Value;
 end;
 
 end.

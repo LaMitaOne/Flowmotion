@@ -16,6 +16,9 @@ object FSampleform: TFSampleform
   WindowState = wsMaximized
   OnCreate = FormCreate
   OnShow = FormShow
+  DesignSize = (
+    1434
+    953)
   TextHeight = 15
   object Flowmotion1: TFlowmotion
     Left = 0
@@ -203,23 +206,63 @@ object FSampleform: TFSampleform
     end
   end
   object Panel2: TPanel
-    Left = 224
+    Left = 1217
     Top = 0
-    Width = 297
-    Height = 129
+    Width = 217
+    Height = 289
+    Anchors = [akTop, akRight]
     Color = 855309
+    Font.Charset = DEFAULT_CHARSET
+    Font.Color = clWindowText
+    Font.Height = -12
+    Font.Name = 'Segoe UI'
+    Font.Style = []
     ParentBackground = False
+    ParentFont = False
     TabOrder = 2
+    StyleElements = [seClient, seBorder]
     object Label1: TLabel
-      Left = 168
-      Top = 8
+      Left = 16
+      Top = 11
       Width = 87
       Height = 15
       Caption = 'Animationspeed'
+      Font.Charset = DEFAULT_CHARSET
+      Font.Color = clWhite
+      Font.Height = -12
+      Font.Name = 'Segoe UI'
+      Font.Style = []
+      ParentFont = False
+    end
+    object Label2: TLabel
+      Left = 16
+      Top = 50
+      Width = 57
+      Height = 15
+      Caption = 'Glowwidth'
+      Font.Charset = DEFAULT_CHARSET
+      Font.Color = clWhite
+      Font.Height = -12
+      Font.Name = 'Segoe UI'
+      Font.Style = []
+      ParentFont = False
+    end
+    object Label3: TLabel
+      Left = 16
+      Top = 91
+      Width = 76
+      Height = 15
+      Caption = 'Hottrackwidth'
+      Font.Charset = DEFAULT_CHARSET
+      Font.Color = clWhite
+      Font.Height = -12
+      Font.Name = 'Segoe UI'
+      Font.Style = []
+      ParentFont = False
     end
     object Panel3: TPanel
-      Left = 24
-      Top = 24
+      Left = 16
+      Top = 194
       Width = 65
       Height = 33
       Caption = 'Glowcolor'
@@ -229,8 +272,8 @@ object FSampleform: TFSampleform
       OnClick = Panel3Click
     end
     object Panel4: TPanel
-      Left = 24
-      Top = 80
+      Left = 16
+      Top = 233
       Width = 65
       Height = 33
       Caption = 'HotColor'
@@ -239,24 +282,83 @@ object FSampleform: TFSampleform
       TabOrder = 1
       OnClick = Panel4Click
     end
-    object TrackBar1: TTrackBar
-      Left = 144
-      Top = 24
-      Width = 150
-      Height = 45
-      Max = 20
-      Position = 3
-      TabOrder = 2
-      OnChange = TrackBar1Change
-    end
     object Button14: TButton
-      Left = 208
-      Top = 64
-      Width = 75
+      Left = 172
+      Top = 7
+      Width = 39
       Height = 25
       Caption = 'reset'
-      TabOrder = 3
+      TabOrder = 2
       OnClick = Button14Click
+    end
+    object CheckBox1: TCheckBox
+      Left = 16
+      Top = 122
+      Width = 121
+      Height = 17
+      Caption = 'selected Breathing'
+      Color = 855309
+      Font.Charset = DEFAULT_CHARSET
+      Font.Color = clRed
+      Font.Height = -12
+      Font.Name = 'Segoe UI'
+      Font.Style = []
+      ParentColor = False
+      ParentFont = False
+      TabOrder = 3
+      StyleElements = [seClient, seBorder]
+      OnClick = CheckBox1Click
+    end
+    object CheckBox2: TCheckBox
+      Left = 16
+      Top = 145
+      Width = 121
+      Height = 17
+      Caption = 'Hotzoom enabled'
+      Color = 855309
+      Font.Charset = DEFAULT_CHARSET
+      Font.Color = clRed
+      Font.Height = -12
+      Font.Name = 'Segoe UI'
+      Font.Style = []
+      ParentColor = False
+      ParentFont = False
+      TabOrder = 4
+      StyleElements = [seClient, seBorder]
+      OnClick = CheckBox2Click
+    end
+    object SpinEdit1: TSpinEdit
+      Left = 109
+      Top = 8
+      Width = 57
+      Height = 24
+      MaxValue = 20
+      MinValue = 0
+      TabOrder = 5
+      Value = 3
+      OnChange = SpinEdit1Change
+    end
+    object SpinEdit2: TSpinEdit
+      Left = 109
+      Top = 47
+      Width = 57
+      Height = 24
+      MaxValue = 20
+      MinValue = 0
+      TabOrder = 6
+      Value = 2
+      OnChange = SpinEdit2Change
+    end
+    object SpinEdit3: TSpinEdit
+      Left = 109
+      Top = 88
+      Width = 57
+      Height = 24
+      MaxValue = 20
+      MinValue = 0
+      TabOrder = 7
+      Value = 1
+      OnChange = SpinEdit3Change
     end
   end
   object OpenDialog1: TOpenDialog
