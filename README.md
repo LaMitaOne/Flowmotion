@@ -62,14 +62,26 @@ Still tweaking and some things are not perfect yet, some not fully implemented,
 but it’s already basically stable and looks really nice in my player!   
   
 !!! --- NOT FINISHED - Partly stable, parts not working so far.  
-Stable atm: Addimages, SelectNextImage, SelectPreviousImage, Animations, hotzoom, breathing at all stable,  
+Stable atm: Addimages, SelectNextImage, SelectPreviousImage, Moveimage, SelectedMovable, Animations, hotzoom, breathing at all stable,   
 Clear animated to direction or target, selected can go to other target, setting Background color/pic, Glow and all that,   
 DeselectZoomedImage, those i am using in my player already and no problems at all,   
 other functions may work, not work, or it explodes right into ur face :D nah...  
 I am working on getting more of it done :)  
     
 ### Latest changes:  
-   
+
+**v 0.985**   
+- Improved Z-ordering for animated and static images.   
+  The paint routine now sorts items by a combination of their hot-zoom factor    
+  and actual on-screen area. This ensures that actively zooming images are    
+  always drawn on top, preventing visual glitches during layout changes.    
+- Introduced CPU thread affinity for better performance on multi-core systems.    
+- Added basic dragging functionality for the selected image.    
+  When `SelectedMovable` is True, the centered selected image can be    
+  dragged around to reveal images underneath.    
+- Moveimage now working    
+- added more functions into Sample project    
+     
 **v 0.984**   
 - higher hotzoomed get painted above lower hotzoomed   
   (think that way almost perfect z-order... for now)  
