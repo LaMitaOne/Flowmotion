@@ -1,7 +1,7 @@
 
 {------------------------------------------------------------------------------}
 {                                                                              }
-{ Flowmotion v0.984                                                            }
+{ Flowmotion v0.985                                                            }
 { by Lara Miriam Tamy Reschke                                                  }
 {                                                                              }
 { larate@gmx.net                                                               }
@@ -10,6 +10,17 @@
 {------------------------------------------------------------------------------}
 {
  ----Latest Changes
+  v 0.985
+    - Improved Z-ordering for animated and static images.
+      The paint routine now sorts items by a combination of their hot-zoom factor
+      and actual on-screen area. This ensures that actively zooming images are
+      always drawn on top, preventing visual glitches during layout changes.
+    - Introduced CPU thread affinity for better performance on multi-core systems.
+    - Added basic dragging functionality for the selected image.
+      When `SelectedMovable` is True, the centered selected image can be
+      dragged around to reveal images underneath.
+    - Moveimage now working
+    - added more functions into Sample project
   v 0.984
     - higher hotzoomed get painted above lower hotzoomed
       (think that way almost perfect z-order... as possible for me at least)
@@ -63,17 +74,6 @@
     - Keep space under zoomed setting added
     - DeselectZoomedImage proc added
     - some bugfixes
-  v 0.93
-    - Bug fixed at single picture add
-  v 0.92
-    - Some stability and performance improvements
-    - Some code cleanup
-  v 0.91
-    - Fixed performance problem with background pic
-  v 0.90
-    - Fixed sometimes not working dblclick
-    - Layout changed
-    - Improved performance
 }
 
 
@@ -115,6 +115,12 @@ const
   THREAD_CLEANUP_TIMEOUT = 3000;
 
 type
+  {$IFDEF WIN64}
+  DWORD_PTR = UInt64; // 64-bit: Pointer is 8 bytes
+  {$ELSE}
+  DWORD_PTR = Cardinal; // 32-bit: Pointer is 4 bytes
+  {$ENDIF}
+
   TFlowLayout = (flPerfectSize, flSorted);
 
   TImageLoadEvent = procedure(Sender: TObject; const FileName: string; Success: Boolean) of object;
@@ -214,7 +220,7 @@ type
   protected
     procedure Execute; override;
   public
-    constructor Create(const AFileName, ACaption, APath: string; AOwner: TObject);
+    constructor Create(const AFileName, ACaption, APath: string; AOwner: TObject; TargetCoreIndex: Integer);
     destructor Destroy; override;
   end;
 
@@ -259,6 +265,7 @@ type
     FAllPaths: TStringList; // All paths
 
     // Threading
+    FNextLoaderCoreIndex: Integer;
     FAnimationThread: TAnimationThread;
     FLoadingThreads: TList; // Active loading threads
     FLoadingCount: Integer; // Number of loading threads
@@ -271,10 +278,8 @@ type
     FInFallAnimation: Boolean; // Currently in fall animation
     FFallingOut: Boolean; // Page change fall animation
     FPageOutProgress: Double; // 0.0 to 1.0
-    FLastPaintTick: Cardinal; // For FPS limiting
     FImageEntryStyle: TImageEntryStyle;
     FEntryPoint: TPoint; // only used with iesFromPoint
-    FLastHotTrackCalc: Cardinal;
 
     // Layout
     FFlowLayout: TFlowLayout;
@@ -284,6 +289,7 @@ type
     FMaxColumns: Integer; // 0 = auto
     FMaxRows: Integer; // 0 = auto
     FSorted: Boolean; // True = load order, False = size order
+    FDragOffset: TPoint;
 
     // Visual
     FBackgroundColor: TColor;
@@ -319,9 +325,7 @@ type
 
     // State
     FActive: Boolean;
-    FAutoActiveOnMouseMove: Boolean;
     FThreadPriority: TThreadPriority;
-    FLastMouseButton: TMouseButton;
 
     // Events
     FOnImageLoad: TImageLoadEvent;
@@ -332,7 +336,7 @@ type
 
     // Internal methods - Animation
     procedure WMUser1(var Message: TMessage); message WM_USER + 1;
-    procedure WMUser2(var Message: TMessage);
+    procedure WMUser2(var Message: TMessage);  //yea it says never used, but it is, here: PostMessage(Handle, WM_USER + 2, 0, 0);
     procedure StopAnimationThread;
     procedure StartAnimationThread;
     procedure ThreadSafeFireAllAnimationsFinished;
@@ -374,6 +378,7 @@ type
     function GetImageCount: Integer;
     function GetLoadingCount: Integer;
     procedure SetSelectedImage(ImageItem: TImageItem; Index: Integer);
+    procedure LoadImageFromFile(const AFileName: string; ABitmap: TBitmap);
 
     // Property setters
     procedure SetLoadMode(Value: TFlowmotionLoadMode);
@@ -382,7 +387,6 @@ type
     procedure SetSelectedMovable(Value: Boolean);
     procedure SetSorted(Value: Boolean);
     procedure SetKeepSpaceforZoomed(Value: Boolean);
-    procedure SetAutoActiveOnMouseMove(Value: Boolean);
     procedure SetThreadPriority(Value: TThreadPriority);
     procedure SetHotTrackColor(Value: TColor);
     procedure SetGlowColor(Value: TColor);
@@ -419,14 +423,14 @@ type
     procedure AddImageAsync(const FileName: string; const ACaption: string = ''; const APath: string = '');
     procedure AddImages(const FileNames, Captions, Paths: TStringList);
     procedure AddImagesAsync(const FileNames, Captions, Paths: TStringList);
-    procedure InsertPicture(Pic: TBitmap; const XCaption, XPath: string);
-    procedure InsertImageAsync(const FileName, Caption: string);
+    procedure InsertImage(Pic: TBitmap; const XFileName, XCaption, XPath: string);
+    procedure InsertImageAsync(const FileName, Caption, Path: string);
     procedure SetImage(Index: Integer; Bitmap: TBitmap);
     procedure RemoveImage(Index: Integer; animated: Boolean = True); overload;
     procedure RemoveImage(Index: Integer; Animated: Boolean; FallingTargetPos: TRect; FallingStyle: TImageEntryStyle); overload;
     procedure Clear(animated: Boolean; ZoominSelected: Boolean; SelectedTargetPos, FallingTargetPos: TRect; FallingStyle: TImageEntryStyle = iesFromBottom); overload;
     procedure Clear(animated: Boolean; ZoominSelected: Boolean = false); overload;
-    procedure MoveImageToPos(IndexFrom, IndexTo: Integer);
+    procedure MoveImageToPos(RelIndexFrom, RelIndexTo: Integer);
 
     // Navigation
     procedure SelectNextImage;
@@ -464,7 +468,7 @@ type
     property LoadMode: TFlowmotionLoadMode read FLoadMode write SetLoadMode;
     property FlowLayout: TFlowLayout read FFlowLayout write SetFlowLayout;
     property AnimationSpeed: Integer read FAnimationSpeed write SetAnimationSpeed default DEFAULT_ANIMATION_SPEED;
-    property SelectedMovable: Boolean read FSelectedMovable write SetSelectedMovable default False;
+    property SelectedMovable: Boolean read FSelectedMovable write SetSelectedMovable default true;
     property Sorted: Boolean read FSorted write SetSorted default True;
     property KeepSpaceforZoomed: Boolean read FKeepSpaceforZoomed write SetKeepSpaceforZoomed default false;
     property Spacing: Integer read FSpacing write SetSpacing default 0;
@@ -479,7 +483,6 @@ type
     property OnImageLoad: TImageLoadEvent read FOnImageLoad write FOnImageLoad;
     property OnItemSelected: TImageSelectEvent read FOnItemSelected write FOnItemSelected;
     property Active: Boolean read FActive write SetActive default True;
-    property AutoActiveOnMouseMove: Boolean read FAutoActiveOnMouseMove write SetAutoActiveOnMouseMove default False;
     property ThreadPriority: TThreadPriority read FThreadPriority write SetThreadPriority;
     property OnSelectedItemMouseDown: TOnSelectedItemMouseDown read FOnSelectedItemMouseDown write FOnSelectedItemMouseDown;
     property OnAllAnimationsFinished: TOnAllAnimationsFinished read FOnAllAnimationsFinished write FOnAllAnimationsFinished;
@@ -527,8 +530,10 @@ end;
 
 
 { TAnimationThread }
-
 constructor TAnimationThread.Create(AOwner: TCustomControl);
+var
+  SystemInfo: TSystemInfo;
+  AffinityMask: DWORD_PTR;
 begin
   inherited Create(False);
   FreeOnTerminate := False;
@@ -536,7 +541,16 @@ begin
   FLastTick := GetTickCount;
   FStopRequested := False;
   FEvent := CreateEvent(nil, True, False, nil);
-  Priority := (AOwner as TFlowmotion).FThreadPriority;  //tpNormal
+  Priority := (AOwner as TFlowmotion).FThreadPriority;
+
+  // Set thread affinity to the second logical processor (index 1), if available
+  GetSystemInfo(SystemInfo);
+  if SystemInfo.dwNumberOfProcessors > 1 then
+  begin
+    // Create a mask for the second processor (bit 1 is set)
+    AffinityMask := 1 shl 1; // Equivalent to 2
+    SetThreadAffinityMask(GetCurrentThread, AffinityMask);
+  end;
 end;
 
 
@@ -649,7 +663,10 @@ end;
 { TImageLoadThread }
 
 { Creates a new image loading thread }
-constructor TImageLoadThread.Create(const AFileName, ACaption, APath: string; AOwner: TObject);
+constructor TImageLoadThread.Create(const AFileName, ACaption, APath: string; AOwner: TObject; TargetCoreIndex: Integer);
+var
+  SystemInfo: TSystemInfo;
+  AffinityMask: DWORD_PTR;
 begin
   inherited Create(False);
   FreeOnTerminate := True;
@@ -660,6 +677,14 @@ begin
   FBitmap := TBitmap.Create;
   FSuccess := False;
   Priority := TFlowmotion(FOwner).FThreadPriority;
+
+  // Set thread affinity to the specified core, if it's a valid index
+  GetSystemInfo(SystemInfo);
+  if (TargetCoreIndex >= 0) and (TargetCoreIndex < SystemInfo.dwNumberOfProcessors) then
+  begin
+    AffinityMask := 1 shl TargetCoreIndex;
+    SetThreadAffinityMask(GetCurrentThread, AffinityMask);
+  end;
 end;
 
 
@@ -674,49 +699,14 @@ end;
 
 { Main thread execution: loads image from file }
 procedure TImageLoadThread.Execute;
-var
-  PNG: TPNGObject;
-  JPEGImage: JPEG.TJPEGImage;
-  Ext: string;
 begin
   FSuccess := False;
-  if not FileExists(FFileName) then
-  begin
-    if not Terminated then
-      Synchronize(SyncAddImage);
-    Exit;
-  end;
-  Ext := LowerCase(ExtractFileExt(FFileName));
-
   try
-    if (Ext = '.jpg') or (Ext = '.jpeg') then
-    begin
-      JPEGImage := JPEG.TJPEGImage.Create;
-      try
-        JPEGImage.LoadFromFile(FFileName);
-        FBitmap.Assign(JPEGImage);
-        FSuccess := True;
-      finally
-        JPEGImage.Free;
-      end;
-    end
-    else if Ext = '.png' then
-    begin
-      PNG := TPNGObject.Create;
-      try
-        PNG.LoadFromFile(FFileName);
-        FBitmap.Assign(PNG);
-        FSuccess := True;
-      finally
-        PNG.Free;
-      end;
-    end
-    else
-    begin
-      FBitmap.LoadFromFile(FFileName);
-      FSuccess := True;
-    end;
+    // Call the centralized loading function
+    TFlowmotion(FOwner).LoadImageFromFile(FFileName, FBitmap);
+    FSuccess := True;
   except
+    // FSuccess remains False if an exception occurs
     on E: Exception do
       FSuccess := False;
   end;
@@ -779,6 +769,7 @@ begin
   inherited Create(AOwner);
   //Gdip := TGDIPlus.Create('');
   FImages := TList.Create;
+  FNextLoaderCoreIndex := 0;
   FClearing := False;
   FBreathingPhase := 0.0;
   FLoadingThreads := TList.Create;
@@ -788,7 +779,6 @@ begin
   FBackgroundpicture := TBitmap.Create;
   FBackgroundCache := TBitmap.Create;
   FTempBitmap := TBitmap.Create;
-  FLastHotTrackCalc := 0;
   FAnimationThread := nil;
   FImageEntryStyle := iesRandom;
   FEntryPoint := Point(-1000, -1000);
@@ -803,8 +793,9 @@ begin
   HotTrackZoom := True;
   FMaxColumns := 0;
   FMaxRows := 0;
-  FSelectedMovable := False;   // Feature not fully implemented yet
+  FSelectedMovable := True;
   FDraggingSelected := False;
+  FDragOffset := Point(0, 0);
   FSorted := True;
   FAnimationEasing := True;
   FLoadingCount := 0;
@@ -818,9 +809,7 @@ begin
   FPageSize := 100;
   FCurrentPage := 0;
   FCurrentSelectedIndex := -1;
-  FLastPaintTick := 0;
   FActive := True;
-  FAutoActiveOnMouseMove := False;
   FThreadPriority := tpNormal;
   DoubleBuffered := True;
   TabStop := True;
@@ -1025,11 +1014,6 @@ begin
   end;
 end;
 
-{ Sets whether component should auto-activate on mouse move }
-procedure TFlowmotion.SetAutoActiveOnMouseMove(Value: Boolean);
-begin
-  FAutoActiveOnMouseMove := Value;
-end;
 
 
 { Sets the priority for image loading threads }
@@ -1042,7 +1026,7 @@ end;
 
 
 { Inserts a picture from TPicture with caption and path }
-procedure TFlowmotion.InsertPicture(Pic: TBitmap; const XCaption, XPath: string);
+procedure TFlowmotion.InsertImage(Pic: TBitmap; const XFileName, XCaption, XPath: string);
 begin
   if Pic = nil then
     Exit;
@@ -1051,6 +1035,7 @@ begin
     if FImages.Count > 0 then
       with TImageItem(FImages[FImages.Count - 1]) do
       begin
+        Filename := FileName;
         Caption := XCaption;
         Path := XPath;
       end;
@@ -1060,11 +1045,55 @@ begin
 end;
 
 
+{ Centralized function to load an image file (JPG, PNG, BMP) into a TBitmap }
+procedure TFlowmotion.LoadImageFromFile(const AFileName: string; ABitmap: TBitmap);
+var
+  PNG: TPNGObject;
+  JPEGImage: TJPEGImage;
+  Ext: string;
+begin
+  if not FileExists(AFileName) or (ABitmap = nil) then
+    raise Exception.CreateFmt('File not found or target bitmap is nil: %s', [AFileName]);
+
+  Ext := LowerCase(ExtractFileExt(AFileName));
+
+  try
+    if (Ext = '.jpg') or (Ext = '.jpeg') then
+    begin
+      JPEGImage := TJPEGImage.Create;
+      try
+        JPEGImage.LoadFromFile(AFileName);
+        ABitmap.Assign(JPEGImage);
+      finally
+        JPEGImage.Free;
+      end;
+    end
+    else if Ext = '.png' then
+    begin
+      PNG := TPNGObject.Create;
+      try
+        PNG.LoadFromFile(AFileName);
+        ABitmap.Assign(PNG);
+      finally
+        PNG.Free;
+      end;
+    end
+    else
+    begin
+      ABitmap.LoadFromFile(AFileName);
+    end;
+  except
+    on E: Exception do
+      // Re-raise with more context or handle silently if preferred
+    //  raise Exception.CreateFmt('Failed to load image "%s". Error: %s', [AFileName, E.Message]);
+  end;
+end;
+
+
 procedure TFlowmotion.PerformAnimationUpdate(DeltaMS: Cardinal);
 var
   i: Integer;
   DeltaTime: Double;
-  XNow: Cardinal;
   ImageItem: TImageItem;
   Progress, Eased, Speed: Double;
   AnyAnimating, AnyAnimatingAfter, AllFinishedAtStart, NeedRepaint: Boolean;
@@ -1107,9 +1136,6 @@ begin
   DeltaTime := DeltaMS / 1000.0;
   if DeltaTime <= 0 then
     DeltaTime := 0.016; // fallback ~60 fps
-
-  XNow := GetTickCount;
-  FLastHotTrackCalc := XNow;
 
   // -----------------------------------------------------------------------
   // Determine initial animation state
@@ -1231,6 +1257,24 @@ begin
       end;
     end;
 
+
+    // ----- Alpha (for Fade effects) -----
+    if ImageItem.Alpha <> ImageItem.TargetAlpha then
+    begin
+      TempAlpha := ImageItem.Alpha;
+      if ImageItem.IsSelected then
+        TempAlpha := Min(255, ImageItem.Alpha + FAnimationSpeed)
+      else if ImageItem.Alpha > 0 then
+        TempAlpha := Max(0, ImageItem.Alpha - FAnimationSpeed);
+
+      if Abs(ImageItem.Alpha - TempAlpha) > 0.5 then
+      begin
+        ImageItem.Alpha := Round(TempAlpha);
+        NeedRepaint := True;
+      end;
+    end;
+
+
     // ===================================================================
     // PHASE 2.5: Hot-track zoom + Breathing animation
     // ===================================================================
@@ -1304,6 +1348,7 @@ begin
 end;
 
 
+{ not remove, needed for animationthread }
 procedure TFlowmotion.ThreadSafeInvalidate;
 begin
   if not FClearing then
@@ -1316,6 +1361,7 @@ begin
 end;
 
 
+{ not remove, needed for animationthread }
 procedure TFlowmotion.ThreadSafeFireAllAnimationsFinished;
 begin
   if Assigned(FOnAllAnimationsFinished) then
@@ -1327,14 +1373,14 @@ begin
   end;
 end;
 
-
+{ not remove, needed for animationthread ^}
 procedure TFlowmotion.WMUser1(var Message: TMessage);
 begin
   if not FClearing then
     Invalidate;
 end;
 
-
+{ not remove, needed for animationthread ^}
 procedure TFlowmotion.WMUser2(var Message: TMessage);
 begin
   if Assigned(FOnAllAnimationsFinished) then
@@ -1457,41 +1503,22 @@ end;
 { Loads and sets a background picture from file (supports JPG, PNG, BMP) }
 procedure TFlowmotion.SetBackgroundpicture(const Path: string);
 var
-  PNG: TPNGObject;
-  JPEGImage: JPEG.TJPEGImage;
-  Ext: string;
+  TempBitmap: TBitmap;
 begin
   try
     if FileExists(Path) then
     begin
-      Ext := LowerCase(ExtractFileExt(Path));
-
-      if (Ext = '.jpg') or (Ext = '.jpeg') then
-      begin
-        JPEGImage := JPEG.TJPEGImage.Create;
-        try
-          JPEGImage.LoadFromFile(Path);
-          FBackgroundpicture.Assign(JPEGImage);
-        finally
-          JPEGImage.Free;
-        end;
-      end
-      else if Ext = '.png' then
-      begin
-        PNG := TPNGObject.Create;
-        try
-          PNG.LoadFromFile(Path);
-          FBackgroundpicture.Assign(PNG);
-        finally
-          PNG.Free;
-        end;
-      end
-      else
-        FBackgroundpicture.LoadFromFile(Path);
+      TempBitmap := TBitmap.Create;
+      try
+        // Call the centralized loading function
+        LoadImageFromFile(Path, TempBitmap);
+        FBackgroundpicture.Assign(TempBitmap);
+      finally
+        TempBitmap.Free;
+      end;
     end
     else
       FBackgroundpicture.Assign(nil);
-
   except
     on E: Exception do
       FBackgroundpicture.Assign(nil);
@@ -1499,6 +1526,7 @@ begin
   FBackgroundCacheValid := False;
   Invalidate;
 end;
+
 
 
 { Enables or disables hot-track zoom effect }
@@ -1578,19 +1606,63 @@ begin
 end;
 
 
-{ Moves an image from one position to another within the current page }
-procedure TFlowmotion.MoveImageToPos(IndexFrom, IndexTo: Integer);
+{
+  Moves an image from one position to another within the current page.
+  The indices are relative to the FImages list (0-based).
+  The change is permanent and updates all internal lists.
+}
+procedure TFlowmotion.MoveImageToPos(RelIndexFrom, RelIndexTo: Integer);
 var
-  PageStart, PageEnd: Integer;
-  Item: Pointer;
+  PageStart: Integer;
+  AbsIndexFrom, AbsIndexTo: Integer;
+  Item: TImageItem;
+  Filename, Caption, Path: string;
 begin
-  PageStart := GetPageStartIndex;
-  PageEnd := GetPageEndIndex;
-  if (IndexFrom < PageStart) or (IndexFrom > PageEnd) or (IndexTo < PageStart) or (IndexTo > PageEnd) or (IndexFrom = IndexTo) then
+  // --- 1. Safety Checks ---
+  // Prevent moving items during animations or page changes to avoid conflicts
+  if FInFallAnimation or FPageChangeInProgress or AnimationsRunning then
     Exit;
-  Item := FImages[IndexFrom];
-  FImages.Delete(IndexFrom);
-  FImages.Insert(IndexTo, Item);
+
+  // --- 2. Index Validation (relative to FImages) ---
+  if (RelIndexFrom < 0) or (RelIndexFrom >= FImages.Count) or
+     (RelIndexTo < 0) or (RelIndexTo >= FImages.Count) or
+     (RelIndexFrom = RelIndexTo) then
+    Exit;
+
+  // --- 3. Move item in the visible list (FImages) ---
+  Item := TImageItem(FImages[RelIndexFrom]);
+  FImages.Delete(RelIndexFrom);
+  FImages.Insert(RelIndexTo, Item);
+
+  // --- 4. Move item in the master lists to make the change permanent ---
+  PageStart := GetPageStartIndex();
+  AbsIndexFrom := PageStart + RelIndexFrom;
+  AbsIndexTo := PageStart + RelIndexTo;
+
+  // Move in FAllFiles
+  Filename := FAllFiles[AbsIndexFrom];
+  FAllFiles.Delete(AbsIndexFrom);
+  FAllFiles.Insert(AbsIndexTo, Filename);
+
+  // Move in FAllCaptions
+  Caption := FAllCaptions[AbsIndexFrom];
+  FAllCaptions.Delete(AbsIndexFrom);
+  FAllCaptions.Insert(AbsIndexTo, Caption);
+
+  // Move in FAllPaths
+  Path := FAllPaths[AbsIndexFrom];
+  FAllPaths.Delete(AbsIndexFrom);
+  FAllPaths.Insert(AbsIndexTo, Path);
+
+  // --- 5. Update Selection Index ---
+  if FCurrentSelectedIndex = RelIndexFrom then
+    FCurrentSelectedIndex := RelIndexTo
+  else if (FCurrentSelectedIndex > RelIndexFrom) and (FCurrentSelectedIndex <= RelIndexTo) then
+    Dec(FCurrentSelectedIndex)
+  else if (FCurrentSelectedIndex >= RelIndexTo) and (FCurrentSelectedIndex < RelIndexFrom) then
+    Inc(FCurrentSelectedIndex);
+
+  // --- 6. Refresh ---
   CalculateLayout;
   Invalidate;
 end;
@@ -1607,12 +1679,9 @@ end;
 procedure TFlowmotion.AddImage(const FileName, ACaption, APath: string);
 var
   Bitmap: TBitmap;
-  JPEGImage: TJPEGImage;
-  Ext: string;
   IsLastPage: Boolean;
   IsSpaceOnPage: Boolean;
   WasEmpty: Boolean;
-  PNG: TPNGObject;
   NewItem: TImageItem;
 begin
   WasEmpty := (FAllFiles.Count = 0);
@@ -1631,8 +1700,7 @@ begin
 
   IsLastPage := (FCurrentPage = GetPageCount - 1);
   IsSpaceOnPage := (FImages.Count < FPageSize);
-  if WasEmpty or (FLoadMode = lmLoadAll) then
-    ShowPage(FCurrentPage);
+
   // Only load image if on last page and there's space
   if IsLastPage and IsSpaceOnPage then
   begin
@@ -1643,34 +1711,13 @@ begin
     end;
     Bitmap := TBitmap.Create;
     try
-      Ext := LowerCase(ExtractFileExt(FileName));
-      if (Ext = '.jpg') or (Ext = '.jpeg') then
-      begin
-        JPEGImage := TJPEGImage.Create;
-        try
-          JPEGImage.LoadFromFile(FileName);
-          Bitmap.Assign(JPEGImage);
-        finally
-          JPEGImage.Free;
-        end;
-      end
-      else if Ext = '.png' then
-      begin
-        PNG := TPNGObject.Create;
-        try
-          PNG.LoadFromFile(FileName);
-          Bitmap.Assign(PNG);
-        finally
-          PNG.Free;
-        end;
-      end
-      else
-        Bitmap.LoadFromFile(FileName);
+      LoadImageFromFile(FileName, Bitmap);
 
       NewItem := TImageItem.Create;
       NewItem.Bitmap.Assign(Bitmap);
       NewItem.Caption := ACaption;
       NewItem.Path := APath;
+      NewItem.FileName := FileName;
       NewItem.Direction := GetEntryDirection;
       FImages.Add(NewItem);
       CheckSynchronize(10);
@@ -1789,13 +1836,20 @@ end;
 procedure TFlowmotion.AddImageAsync(const FileName: string; const ACaption: string = ''; const APath: string = '');
 var
   LoadThread: TImageLoadThread;
-  Index: Integer;
-  Caption, Path: string;
+  SystemInfo: TSystemInfo;
+  CoreToUse: Integer;
 begin
   FAllFiles.Add(FileName);
   FAllCaptions.Add(ACaption);
   FAllPaths.Add(APath);
-  LoadThread := TImageLoadThread.Create(FileName, Caption, Path, Self);
+
+  GetSystemInfo(SystemInfo);
+  // Use Round-Robin to distribute across all available cores
+  CoreToUse := FNextLoaderCoreIndex mod SystemInfo.dwNumberOfProcessors;
+  Inc(FNextLoaderCoreIndex);
+
+  LoadThread := TImageLoadThread.Create(FileName, ACaption, APath, Self, CoreToUse);
+  LoadThread.Priority := FThreadPriority;
   FLoadingThreads.Add(LoadThread);
   Inc(FLoadingCount);
 end;
@@ -1829,9 +1883,11 @@ procedure TFlowmotion.AddImagesAsync(const FileNames, Captions, Paths: TStringLi
 var
   i: Integer;
   Thread: TImageLoadThread;
+  SystemInfo: TSystemInfo;
+  CoreToUse: Integer;
 begin
   FLoadingCount := 0;
-
+  GetSystemInfo(SystemInfo);
   // Add all files to master list
   for i := 0 to FileNames.Count - 1 do
   begin
@@ -1845,7 +1901,9 @@ begin
   // Start loading threads
   for i := 0 to FileNames.Count - 1 do
   begin
-    Thread := TImageLoadThread.Create(FileNames[i], Captions[i], Paths[i], Self);
+    CoreToUse := FNextLoaderCoreIndex mod SystemInfo.dwNumberOfProcessors;
+    Inc(FNextLoaderCoreIndex);
+    Thread := TImageLoadThread.Create(FileNames[i], Captions[i], Paths[i], Self, CoreToUse);
     FLoadingThreads.Add(Thread);
     Inc(FLoadingCount);
   end;
@@ -1878,13 +1936,32 @@ end;
 
 { Sets whether selected image can be dragged (feature not fully implemented) }
 procedure TFlowmotion.SetSelectedMovable(Value: Boolean);
+var
+  CurrentSelectedItem: TImageItem;
+  CurrentSelectedIndex: Integer;
 begin
+  // If dragging is being disabled, and an item is currently selected...
+  if (not Value) and FSelectedMovable and (FSelectedImage <> nil) then
+  begin
+    // ...store the current selection
+    CurrentSelectedItem := FSelectedImage;
+    CurrentSelectedIndex := FCurrentSelectedIndex;
+
+    // ...deselect it. This will stop any ongoing dragging state.
+    SetSelectedImage(nil, -1);
+
+    // ...immediately re-select it. This forces it to snap back to its centered position.
+    SetSelectedImage(CurrentSelectedItem, CurrentSelectedIndex);
+  end;
+
+  // Finally, set the new value for the property.
   if FSelectedMovable <> Value then
   begin
     FSelectedMovable := Value;
     Invalidate;
   end;
 end;
+
 
 { Clears all images with optional animation and zoom effect }
 procedure TFlowmotion.Clear(animated: Boolean; ZoominSelected: Boolean = false);
@@ -2393,15 +2470,28 @@ end;
 
 
 { Inserts an image asynchronously using a background thread }
-procedure TFlowmotion.InsertImageAsync(const FileName, Caption: string);
+procedure TFlowmotion.InsertImageAsync(const FileName, Caption, Path: string);
 var
-  Thread: TImageLoadThread;
+  LoadThread: TImageLoadThread;
+  SystemInfo: TSystemInfo;
+  CoreToUse: Integer;
 begin
-  Thread := TImageLoadThread.Create(FileName, Caption, FileName, Self);
-  Thread.Priority := FThreadPriority;
-  FLoadingThreads.Add(Thread);
+  FAllFiles.Add(FileName);
+  FAllCaptions.Add(Caption);
+  FAllPaths.Add(Path);
+
+  GetSystemInfo(SystemInfo);
+  // Use Round-Robin to distribute across all available cores
+  CoreToUse := FNextLoaderCoreIndex mod SystemInfo.dwNumberOfProcessors;
+  Inc(FNextLoaderCoreIndex);
+
+  LoadThread := TImageLoadThread.Create(FileName, Caption, Path, Self, CoreToUse);
+  LoadThread.Priority := FThreadPriority;
+  FLoadingThreads.Add(LoadThread);
   Inc(FLoadingCount);
 end;
+
+
 
 
 { Replaces the bitmap of an existing image }
@@ -2927,7 +3017,6 @@ begin
     FDraggingSelected := False;
     MouseCapture := False;
   end;
-  FLastMouseButton := Button;
   inherited MouseUp(Button, Shift, X, Y);
 end;
 
@@ -2935,9 +3024,28 @@ end;
 procedure TFlowmotion.MouseMove(Shift: TShiftState; X, Y: Integer);
 var
   NewHot: TImageItem;
+  NewCenterX, NewCenterY: Integer;
 begin
   if FClearing then
     Exit;
+
+  // Handle dragging
+  if FDraggingSelected and (FSelectedImage <> nil) then
+  begin
+    NewCenterX := X - FDragOffset.X;
+    NewCenterY := Y - FDragOffset.Y;
+
+    // Update the target rect of the selected image
+    FSelectedImage.TargetRect := Rect(
+      NewCenterX - (FSelectedImage.TargetRect.Right - FSelectedImage.TargetRect.Left) div 2,
+      NewCenterY - (FSelectedImage.TargetRect.Bottom - FSelectedImage.TargetRect.Top) div 2,
+      NewCenterX + (FSelectedImage.TargetRect.Right - FSelectedImage.TargetRect.Left) div 2,
+      NewCenterY + (FSelectedImage.TargetRect.Bottom - FSelectedImage.TargetRect.Top) div 2
+    );
+    // Start animation thread to smoothly move the image
+    StartAnimationThread;
+    Exit; // Skip hot-tracking while dragging
+  end;
 
   NewHot := GetImageAtPoint(X, Y);
 
@@ -2975,7 +3083,6 @@ var
   ImageItem: TImageItem;
   Index: Integer;
 begin
-  FLastMouseButton := Button;
   inherited MouseDown(Button, Shift, X, Y);
 
   if (FImages.Count = 0) or FClearing or FInFallAnimation then
@@ -3021,6 +3128,16 @@ begin
     // External handler (e.g. for dragging support)
     if Assigned(FOnSelectedItemMouseDown) then
       FOnSelectedItemMouseDown(Self, ImageItem, Index, X, Y, Button, Shift);
+
+    // Check for dragging start
+    if FSelectedMovable and (ImageItem = FSelectedImage) then
+    begin
+      FDraggingSelected := True;
+      // Calculate offset from mouse to center of the image
+      FDragOffset.X := X - ((ImageItem.CurrentRect.Left + ImageItem.CurrentRect.Right) div 2);
+      FDragOffset.Y := Y - ((ImageItem.CurrentRect.Top + ImageItem.CurrentRect.Bottom) div 2);
+      MouseCapture := True; // Capture mouse events even if it leaves the control
+    end;
 
     // Select new image (if not already selected)
     if FSelectedImage <> ImageItem then
@@ -3167,8 +3284,7 @@ begin
   ImageItem.Animating := True;
   ImageItem.StartRect := ImageItem.CurrentRect;
 
-  {                          // todo
-  case FZoomAnimationType of
+ case FZoomAnimationType of
     zatSlide:
       ImageItem.StartRect := ImageItem.CurrentRect;
     zatFade:
@@ -3177,7 +3293,12 @@ begin
         begin
           ImageItem.StartRect := ImageItem.CurrentRect;
           ImageItem.Alpha := 0;
-          ImageItem.TargetAlpha := 220;
+          ImageItem.TargetAlpha := 255;
+        end
+        else
+        begin
+          ImageItem.Alpha := 255;
+          ImageItem.TargetAlpha := 0;
         end;
       end;
     zatZoom:
@@ -3205,7 +3326,7 @@ begin
         ImageItem.TargetAlpha := 255;
       end;
   end;
-     }
+
   if ZoomIn then
   begin
     ImageSize := GetOptimalSize(ImageItem.Bitmap.Width, ImageItem.Bitmap.Height, Min(FMaxZoomSize, Self.Width div 2), Min(FMaxZoomSize, Self.Height div 2));
@@ -3295,21 +3416,52 @@ var
   AnimatingItems: TList;
 
   // --------------------------------------------------------------
-  // Compare function: ascending HotZoom ? higher zoom = drawn later = on top
+  // Compare function for correct Z-ordering during animations.
+  // It uses a two-level sort:
+  // 1. Primary: Sort by HotZoom factor (descending). More zoomed items have priority.
+  // 2. Secondary: If HotZoom is equal, sort by on-screen area (descending).
+  // This ensures actively zooming items appear on top of static ones.
   // --------------------------------------------------------------
-
   function CompareHotZoom(Item1, Item2: Pointer): Integer;
   var
-    Z1, Z2: Double;
+    Zoom1, Zoom2: Double;
+    Area1, Area2: Integer;
+    Rect1, Rect2: TRect;
   begin
-    Z1 := TImageItem(Item1).FHotZoom;
-    Z2 := TImageItem(Item2).FHotZoom;
-    if Z1 < Z2 then
-      Result := -1
-    else if Z1 > Z2 then
+    Zoom1 := TImageItem(Item1).FHotZoom;
+    Zoom2 := TImageItem(Item2).FHotZoom;
+
+    // --- Primary Sort: HotZoom Factor ---
+    // The item with the higher zoom factor should be drawn last (on top).
+    if Zoom1 > Zoom2 then
       Result := 1
+    else if Zoom1 < Zoom2 then
+      Result := -1
     else
-      Result := 0;
+    begin
+      // --- Secondary Sort: On-Screen Area (if HotZoom is equal) ---
+      // Get the current display rectangle for both items
+      Rect1 := TImageItem(Item1).CurrentRect;
+      Rect2 := TImageItem(Item2).CurrentRect;
+
+      // Fallback to TargetRect if CurrentRect is empty
+      if IsRectEmpty(Rect1) then
+        Rect1 := TImageItem(Item1).TargetRect;
+      if IsRectEmpty(Rect2) then
+        Rect2 := TImageItem(Item2).TargetRect;
+
+      // Calculate the actual on-screen area
+      Area1 := (Rect1.Right - Rect1.Left) * (Rect1.Bottom - Rect1.Top);
+      Area2 := (Rect2.Right - Rect2.Left) * (Rect2.Bottom - Rect2.Top);
+
+      // The item with the larger area should be drawn last (on top).
+      if Area1 > Area2 then
+        Result := 1
+      else if Area1 < Area2 then
+        Result := -1
+      else
+        Result := 0; // If both zoom and area are equal, order doesn't matter
+    end;
   end;
 
      {        //gr32 test too slow like that:
@@ -3678,84 +3830,99 @@ begin
 end;
 
 
-{ Shows a specific page: loads and displays images for that page }
+{ Shows a specific page: intelligently loads and displays images for that page }
 procedure TFlowmotion.ShowPage(Page: Integer);
 var
-  i, StartIdx, EndIdx: Integer;
+  ItemIndex, i, StartIdx, EndIdx: Integer;
   Bitmap: TBitmap;
-  JPEGImage: TJPEGImage;
-  PNG: TPNGObject;
-  Ext: string;
+  FileName : String;
+  ImageItem: TImageItem;
+
+  LoadedItemsMap: TStringList; // Maps filename to TImageItem for fast lookup
 begin
   if not visible then
     Exit;
-  if FClearing then
+  if FClearing or FPageChangeInProgress then
     Exit;
-  if FPageChangeInProgress then
-    Exit;
+
   FPageChangeInProgress := True;
   try
+    // Wait for any ongoing operations before we start modifying the list
     WaitForAllLoads;
     WaitForAllAnimations;
 
+    // Stop all pending loading threads that are now obsolete
     for i := 0 to FLoadingThreads.Count - 1 do
       TImageLoadThread(FLoadingThreads[i]).Terminate;
     FLoadingThreads.Clear;
     FLoadingCount := 0;
 
-    if (Page <> FCurrentPage) and (FImages.Count > 0) then
-      clear(true, true);
-
-    for i := FImages.Count - 1 downto 0 do
-      TImageItem(FImages[i]).Free;
-    FImages.Clear;
-
     StartIdx := Page * FPageSize;
     EndIdx := Min(StartIdx + FPageSize, FAllFiles.Count) - 1;
 
-    for i := StartIdx to EndIdx do
-    begin
-      if not FileExists(FAllFiles[i]) then
-        Continue;
-      Bitmap := TBitmap.Create;
-      try
-        Ext := LowerCase(ExtractFileExt(FAllFiles[i]));
+    LoadedItemsMap := TStringList.Create;
+    try
+      LoadedItemsMap.Sorted := True; // Enable fast binary search lookups
+      LoadedItemsMap.Duplicates := dupIgnore;
 
-        if (Ext = '.jpg') or (Ext = '.jpeg') then
+      // 1. Move all currently loaded items into the map for quick lookup.
+      // This effectively removes them from the active FImages list.
+      for i := FImages.Count - 1 downto 0 do
+      begin
+        ImageItem := TImageItem(FImages[i]);
+        LoadedItemsMap.AddObject(ImageItem.FileName, ImageItem);
+        FImages.Delete(i);
+      end;
+
+      // 2. Populate FImages with items for the new page, loading only what's necessary.
+      for i := StartIdx to EndIdx do
+      begin
+        FileName := FAllFiles[i];
+        ItemIndex := LoadedItemsMap.IndexOf(FileName);
+
+        if ItemIndex <> -1 then
         begin
-          JPEGImage := TJPEGImage.Create;
-          try
-            JPEGImage.LoadFromFile(FAllFiles[i]);
-            Bitmap.Assign(JPEGImage);
-          finally
-            JPEGImage.Free;
-          end;
-        end
-        else if Ext = '.png' then
-        begin
-          PNG := TPNGObject.Create;
-          try
-            PNG.LoadFromFile(FAllFiles[i]);
-            Bitmap.Assign(PNG);
-          finally
-            PNG.Free;
-          end;
+          // Item is already loaded. Get it from the map and add it to our active list.
+          ImageItem := TImageItem(LoadedItemsMap.Objects[ItemIndex]);
+          FImages.Add(ImageItem);
+          // Remove from map so it's not freed later. It's now "active" again.
+          LoadedItemsMap.Delete(ItemIndex);
         end
         else
-          Bitmap.LoadFromFile(FAllFiles[i]);
-
-        AddImage(Bitmap);
-
-        with TImageItem(FImages[FImages.Count - 1]) do
         begin
-          Caption := FAllCaptions[i];
-          Path := FAllPaths[i];
+          // Item is not loaded. Load it from file.
+          if not FileExists(FileName) then
+            Continue;
+
+          Bitmap := TBitmap.Create;
+          try
+            // Use our centralized loading function
+            LoadImageFromFile(FileName, Bitmap);
+
+            ImageItem := TImageItem.Create;
+            ImageItem.Bitmap.Assign(Bitmap);
+            ImageItem.Caption := FAllCaptions[i];
+            ImageItem.Path := FAllPaths[i];
+            ImageItem.FileName := FileName;
+            ImageItem.Direction := GetEntryDirection;
+            FImages.Add(ImageItem);
+
+            if Visible then
+              AnimateImage(ImageItem, ImageItem.Direction);
+          finally
+            Bitmap.Free;
+          end;
         end;
-
-
-      finally
-        Bitmap.Free;
       end;
+
+      // 3. Free any items left in the map (they were from the old page and are no longer needed).
+      for i := 0 to LoadedItemsMap.Count - 1 do
+      begin
+        TImageItem(LoadedItemsMap.Objects[i]).Free;
+      end;
+
+    finally
+      LoadedItemsMap.Free;
     end;
 
     FCurrentPage := Page;
