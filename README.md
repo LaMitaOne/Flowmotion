@@ -39,7 +39,8 @@ Low CPU usage, easy to integrate, and smooth visual effects even with large imag
 - Pinterest-like masonry layout  
 - Animated appearance (slide-in, “falling” effect on clear/page change)  
 - Select / focus item and move or zoom it into a target rect   
-- HotTrack & HotZoom hover effects  
+- HotTrack & HotZoom hover effects   
+- Dragging selected  
 - Threaded Animation  
 - Smooth transitions, similar in spirit to TMS GUIMotions but much lighter  
 - Works on Delphi 7 and Delphi 11.3 here, so probably on any Delphi almost    
