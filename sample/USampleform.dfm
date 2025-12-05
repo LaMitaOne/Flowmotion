@@ -47,7 +47,7 @@ object FSampleform: TFSampleform
     Left = 0
     Top = 0
     Width = 97
-    Height = 726
+    Height = 881
     Color = 855309
     ParentBackground = False
     TabOrder = 1
@@ -81,8 +81,8 @@ object FSampleform: TFSampleform
       OnClick = Button2Click
     end
     object Button3: TButton
-      Left = 8
-      Top = 633
+      Left = 5
+      Top = 774
       Width = 75
       Height = 25
       Caption = 'Clear'
@@ -137,8 +137,8 @@ object FSampleform: TFSampleform
       OnClick = Button10Click
     end
     object Button4: TButton
-      Left = 8
-      Top = 664
+      Left = 5
+      Top = 816
       Width = 75
       Height = 49
       Caption = 'Clear to pos'
@@ -181,6 +181,26 @@ object FSampleform: TFSampleform
       WordWrap = True
       OnClick = Button13Click
     end
+    object Button15: TButton
+      Left = 5
+      Top = 631
+      Width = 75
+      Height = 48
+      Caption = 'Move last image to 0'
+      TabOrder = 13
+      WordWrap = True
+      OnClick = Button15Click
+    end
+    object Button16: TButton
+      Left = 5
+      Top = 695
+      Width = 75
+      Height = 50
+      Caption = 'Drag selected on'
+      TabOrder = 14
+      WordWrap = True
+      OnClick = Button16Click
+    end
   end
   object Panel2: TPanel
     Left = 224
@@ -203,6 +223,8 @@ object FSampleform: TFSampleform
       Width = 65
       Height = 33
       Caption = 'Glowcolor'
+      Color = clAqua
+      ParentBackground = False
       TabOrder = 0
       OnClick = Panel3Click
     end
@@ -212,6 +234,8 @@ object FSampleform: TFSampleform
       Width = 65
       Height = 33
       Caption = 'HotColor'
+      Color = clTeal
+      ParentBackground = False
       TabOrder = 1
       OnClick = Panel4Click
     end

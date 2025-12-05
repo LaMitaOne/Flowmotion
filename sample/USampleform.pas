@@ -32,11 +32,15 @@ type
     TrackBar1: TTrackBar;
     Label1: TLabel;
     Button14: TButton;
+    Button15: TButton;
+    Button16: TButton;
     procedure Button10Click(Sender: TObject);
     procedure Button11Click(Sender: TObject);
     procedure Button12Click(Sender: TObject);
     procedure Button13Click(Sender: TObject);
     procedure Button14Click(Sender: TObject);
+    procedure Button15Click(Sender: TObject);
+    procedure Button16Click(Sender: TObject);
     procedure FormCreate(Sender: TObject);
     procedure Button1Click(Sender: TObject);
     procedure Button2Click(Sender: TObject);
@@ -121,6 +125,19 @@ end;
 procedure TFSampleform.Button14Click(Sender: TObject);
 begin
   Trackbar1.Position := 3;
+end;
+
+procedure TFSampleform.Button15Click(Sender: TObject);
+begin
+  Flowmotion1.MoveImageToPos(Flowmotion1.ImageCount-1, 0);
+end;
+
+procedure TFSampleform.Button16Click(Sender: TObject);
+begin
+  Flowmotion1.SelectedMovable := not Flowmotion1.SelectedMovable;
+  if Flowmotion1.SelectedMovable then Button16.Caption := 'Drag selected on'
+   else Button16.Caption := 'Drag selected off';
+
 end;
 
 procedure TFSampleform.FormCreate(Sender: TObject);
