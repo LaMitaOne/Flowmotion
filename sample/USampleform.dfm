@@ -221,6 +221,7 @@ object FSampleform: TFSampleform
     ParentFont = False
     TabOrder = 2
     StyleElements = [seClient, seBorder]
+    ExplicitLeft = 1221
     object Label1: TLabel
       Left = 16
       Top = 11
@@ -297,6 +298,7 @@ object FSampleform: TFSampleform
       Width = 121
       Height = 17
       Caption = 'selected Breathing'
+      Checked = True
       Color = 855309
       Font.Charset = DEFAULT_CHARSET
       Font.Color = clRed
@@ -305,6 +307,7 @@ object FSampleform: TFSampleform
       Font.Style = []
       ParentColor = False
       ParentFont = False
+      State = cbChecked
       TabOrder = 3
       StyleElements = [seClient, seBorder]
       OnClick = CheckBox1Click
@@ -315,6 +318,7 @@ object FSampleform: TFSampleform
       Width = 121
       Height = 17
       Caption = 'Hotzoom enabled'
+      Checked = True
       Color = 855309
       Font.Charset = DEFAULT_CHARSET
       Font.Color = clRed
@@ -323,6 +327,7 @@ object FSampleform: TFSampleform
       Font.Style = []
       ParentColor = False
       ParentFont = False
+      State = cbChecked
       TabOrder = 4
       StyleElements = [seClient, seBorder]
       OnClick = CheckBox2Click
