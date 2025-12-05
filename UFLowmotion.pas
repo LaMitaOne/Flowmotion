@@ -21,7 +21,6 @@
       dragged around to reveal images underneath.
     - Moveimage now working
     - added more functions into Sample project
-    - Layout improved
   v 0.984
     - higher hotzoomed get painted above lower hotzoomed
       (think that way almost perfect z-order... as possible for me at least)
@@ -607,7 +606,7 @@ begin
       //20 min..that way only we get enough free time for problematic same time running animations like from smart effects
     end;
 
-    // --- FIX: The 'cooperative' waiting that gives the main thread time to breathe ---
+    // The 'cooperative' waiting that gives the main thread time to breathe ---
     // When we wait here, we use the calculated sleep time. This is much more efficient
     // than a fixed Sleep() duration because it allows the thread to wake up immediately
     // if a stop is requested.
@@ -2575,7 +2574,7 @@ begin
       VCount := VisibleImages.Count;
 
     // =================================================================
-    // KEY FIX: First, estimate the total number of cells needed
+    // First, estimate the total number of cells needed
     // =================================================================
     TotalCellEstimate := 0;
     for i := 0 to VisibleImages.Count - 1 do
@@ -2616,7 +2615,7 @@ begin
         if (PotentialCellWidth < MIN_CELL_SIZE) or (PotentialCellHeight < MIN_CELL_SIZE) then
           Continue;
 
-        // KEY FIX: Prioritize cell width over area.
+        // Prioritize cell width over area.
         // This ensures the layout uses the full horizontal space.
         if PotentialCellWidth > MaxCellWidth then
         begin
@@ -3378,7 +3377,7 @@ begin
     if ImageItem.FHotZoom < 1 then
       ImageItem.FHotZoom := 1;
 
-    // KEY FIX: If breathing is enabled, immediately set the new image as the hot item.
+    // If breathing is enabled, immediately set the new image as the hot item.
     // This synchronizes the states and prevents the target from being reset to 1.0,
     // which would cause a flicker when breathing kicks in.
     if FBreathingEnabled then
@@ -3939,9 +3938,9 @@ begin
             ImageItem.Path := FAllPaths[i];
             ImageItem.FileName := FileName;
             ImageItem.Direction := GetEntryDirection;
-            ImageItem.Visible := False; // --- FIX: Initially set new items to be invisible ---
+            ImageItem.Visible := False; // Initially set new items to be invisible ---
             FImages.Add(ImageItem);
-            NewItems.Add(ImageItem); // --- FIX: Add the new item to our temporary list ---
+            NewItems.Add(ImageItem); // Add the new item to our temporary list ---
           finally
             Bitmap.Free;
           end;
@@ -3960,7 +3959,7 @@ begin
 
     FCurrentPage := Page;
 
-    // --- FIX: Prepare animations for all new items while they are still invisible ---
+    // --- Prepare animations for all new items while they are still invisible ---
     CalculateLayout; // Calculate the final destination (TargetRect) for all images
     for i := 0 to NewItems.Count - 1 do
     begin
@@ -4073,3 +4072,4 @@ begin
 end;
 
 end.
+
