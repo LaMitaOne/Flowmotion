@@ -154,6 +154,7 @@ procedure TFSampleform.FormCreate(Sender: TObject);
 begin
   Doublebuffered := True;
   Flowmotion1.DoubleBuffered := True;
+  Flowmotion1.SetBackgroundpicture(Extractfilepath(Application.ExeName) + 'back.jpg');
 end;
 
 procedure TFSampleform.WMMouseWheel(var Msg: TWMMouseWheel);
