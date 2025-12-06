@@ -261,9 +261,22 @@ object FSampleform: TFSampleform
       Font.Style = []
       ParentFont = False
     end
+    object Label4: TLabel
+      Left = 8
+      Top = 223
+      Width = 39
+      Height = 15
+      Caption = 'Layout:'
+      Font.Charset = DEFAULT_CHARSET
+      Font.Color = clWhite
+      Font.Height = -12
+      Font.Name = 'Segoe UI'
+      Font.Style = []
+      ParentFont = False
+    end
     object Panel3: TPanel
-      Left = 16
-      Top = 194
+      Left = 8
+      Top = 168
       Width = 65
       Height = 33
       Caption = 'Glowcolor'
@@ -273,8 +286,8 @@ object FSampleform: TFSampleform
       OnClick = Panel3Click
     end
     object Panel4: TPanel
-      Left = 16
-      Top = 233
+      Left = 79
+      Top = 168
       Width = 65
       Height = 33
       Caption = 'HotColor'
@@ -365,6 +378,20 @@ object FSampleform: TFSampleform
       Value = 1
       OnChange = SpinEdit3Change
     end
+    object ComboBox1: TComboBox
+      Left = 7
+      Top = 251
+      Width = 98
+      Height = 23
+      Style = csDropDownList
+      ItemIndex = 0
+      TabOrder = 8
+      Text = 'normal'
+      OnChange = ComboBox1Change
+      Items.Strings = (
+        'normal'
+        'free float')
+    end
   end
   object Panel5: TPanel
     Left = 312
@@ -389,5 +416,12 @@ object FSampleform: TFSampleform
   object ColorDialog1: TColorDialog
     Left = 144
     Top = 112
+  end
+  object Timer1: TTimer
+    Enabled = False
+    Interval = 50
+    OnTimer = Timer1Timer
+    Left = 280
+    Top = 40
   end
 end

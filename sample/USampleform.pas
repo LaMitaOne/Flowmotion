@@ -42,6 +42,9 @@ type
     SpinEdit3: TSpinEdit;
     Panel5: TPanel;
     Panel6: TPanel;
+    Timer1: TTimer;
+    ComboBox1: TComboBox;
+    Label4: TLabel;
     procedure Button10Click(Sender: TObject);
     procedure Button11Click(Sender: TObject);
     procedure Button12Click(Sender: TObject);
@@ -61,6 +64,7 @@ type
     procedure Button9Click(Sender: TObject);
     procedure CheckBox1Click(Sender: TObject);
     procedure CheckBox2Click(Sender: TObject);
+    procedure ComboBox1Change(Sender: TObject);
     procedure Flowmotion1AllAnimationsFinished(Sender: TObject);
     procedure Flowmotion1ImageLoad(Sender: TObject; const FileName: string;
         Success: Boolean);
@@ -76,6 +80,7 @@ type
     procedure SpinEdit1Change(Sender: TObject);
     procedure SpinEdit2Change(Sender: TObject);
     procedure SpinEdit3Change(Sender: TObject);
+    procedure Timer1Timer(Sender: TObject);
   private
     procedure WMMouseWheel(var Msg: TWMMouseWheel); message WM_MOUSEWHEEL;
     procedure Flowmotion1SelectedImageEnterZone(Sender: TObject; ImageItem: TImageItem; const ZoneName: string);
@@ -278,6 +283,14 @@ begin
   Flowmotion1.HotTrackZoom := CheckBox2.Checked;
 end;
 
+procedure TFSampleform.ComboBox1Change(Sender: TObject);
+begin
+   case Combobox1.ItemIndex of
+     0: Flowmotion1.SetFlowLayout(flSorted);
+     1: Flowmotion1.SetFlowLayout(flFreeFloat);
+   end;
+end;
+
 procedure TFSampleform.Flowmotion1AllAnimationsFinished(Sender: TObject);
 begin
   //stopped animations, idle
@@ -315,7 +328,7 @@ end;
 
 procedure TFSampleform.FormShow(Sender: TObject);
 begin
-   Button2Click(Self);
+  Timer1.Enabled := True;
 end;
 
 procedure TFSampleform.Panel3Click(Sender: TObject);
@@ -347,6 +360,12 @@ end;
 procedure TFSampleform.SpinEdit3Change(Sender: TObject);
 begin
   Flowmotion1.HotTrackWidth := SpinEdit3.Value;
+end;
+
+procedure TFSampleform.Timer1Timer(Sender: TObject);
+begin
+  Timer1.Enabled := false;
+  Button2Click(Self);
 end;
 
 end.
