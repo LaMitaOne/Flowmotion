@@ -1763,6 +1763,11 @@ var
   WasEmpty: Boolean;
   NewItem: TImageItem;
   DefaultWidth, DefaultHeight, ColCount, RowCount: Integer;
+  NewX, NewY: Integer;
+  MaxAttempts: Integer;
+  FoundPosition: Boolean;
+  ExistingRect: TRect;
+  i, j: Integer;
 begin
   WasEmpty := (FAllFiles.Count = 0);
   // Add to master list if not already present
@@ -1811,8 +1816,66 @@ begin
           ColCount := Max(1, Width div (DefaultWidth + 20));
           RowCount := Max(1, Height div (DefaultHeight + 20));
 
-          // Position for new pic
-          NewItem.TargetRect := Rect(20 + ((FImages.Count - 1) mod ColCount) * (DefaultWidth + 20), 20 + ((FImages.Count - 1) div ColCount) * (DefaultHeight + 20), 20 + ((FImages.Count - 1) mod ColCount) * (DefaultWidth + 20) + DefaultWidth, 20 + ((FImages.Count - 1) div ColCount) * (DefaultHeight + 20) + DefaultHeight);
+          // Try to find a valid position for the new pic
+          MaxAttempts := 100;
+          FoundPosition := False;
+
+          // First try the default grid position
+          NewX := 20 + ((FImages.Count - 1) mod ColCount) * (DefaultWidth + 20);
+          NewY := 20 + ((FImages.Count - 1) div ColCount) * (DefaultHeight + 20);
+
+          // Check if this position is within bounds
+          if (NewX + DefaultWidth <= Width - 20) and (NewY + DefaultHeight <= Height - 20) then
+          begin
+            // Check for overlap with existing images
+            FoundPosition := True;
+            NewItem.TargetRect := Rect(NewX, NewY, NewX + DefaultWidth, NewY + DefaultHeight);
+
+            for i := 0 to FImages.Count - 2 do // -2 because we haven't added the current image yet
+            begin
+              ExistingRect := TImageItem(FImages[i]).TargetRect;
+              if IntersectRect(ExistingRect, ExistingRect, NewItem.TargetRect) then
+              begin
+                FoundPosition := False;
+                Break;
+              end;
+            end;
+          end;
+
+          // If default position doesn't work, try random positions
+          if not FoundPosition then
+          begin
+            for i := 1 to MaxAttempts do
+            begin
+              NewX := 20 + Random(Width - DefaultWidth - 40);
+              NewY := 20 + Random(Height - DefaultHeight - 40);
+
+              NewItem.TargetRect := Rect(NewX, NewY, NewX + DefaultWidth, NewY + DefaultHeight);
+
+              // Check for overlap with existing images
+              FoundPosition := True;
+              for j := 0 to FImages.Count - 2 do
+              begin
+                ExistingRect := TImageItem(FImages[j]).TargetRect;
+                if IntersectRect(ExistingRect, ExistingRect, NewItem.TargetRect) then
+                begin
+                  FoundPosition := False;
+                  Break;
+                end;
+              end;
+
+              if FoundPosition then
+                Break;
+            end;
+
+            // If we still couldn't find a good position, just place it at a random position
+            if not FoundPosition then
+            begin
+              NewX := 20 + Random(Width - DefaultWidth - 40);
+              NewY := 20 + Random(Height - DefaultHeight - 40);
+              NewItem.TargetRect := Rect(NewX, NewY, NewX + DefaultWidth, NewY + DefaultHeight);
+            end;
+          end;
 
           // Animation for new pic
           AnimateImage(NewItem, NewItem.Direction);
@@ -2656,6 +2719,9 @@ var
   MinCols, MaxColsToTry: Integer;
   PotentialCellWidth, PotentialCellHeight, CellArea: Double;
   TotalCellEstimate: Integer;
+  X, Y: Integer;
+  ImageSize: TSize;
+  CellWidth, CellHeight: Integer;
 
   function CompareImageSize(A, B: Pointer): Integer;
   var
@@ -2678,9 +2744,6 @@ begin
     Exit;
   if FInFallAnimation then
     Exit;
-
-  // Use the same grid layout algorithm as CalculateLayoutSorted
-  // This ensures proper positioning in free float mode
 
   AddforZoomed := 0;
   if FKeepSpaceforZoomed then
@@ -2829,7 +2892,34 @@ begin
         begin
           if IsAreaFree(Grid, r, c, SpanRows, SpanCols) then
           begin
-            PlaceImage(ImageItem, Grid, r, c, SpanRows, SpanCols, BaseCellWidth, BaseCellHeight);
+            // Calculate cell position and size
+            X := FSpacing + c * BaseCellWidth + c * FSpacing;
+            Y := r * (BaseCellHeight + FSpacing);
+
+            // Available size for the image
+            CellWidth := (SpanCols * BaseCellWidth) + ((SpanCols - 1) * FSpacing);
+            CellHeight := (SpanRows * BaseCellHeight) + ((SpanRows - 1) * FSpacing);
+
+            // Optimal image size preserving aspect ratio
+            ImageSize := GetOptimalSize(ImageItem.Bitmap.Width, ImageItem.Bitmap.Height, CellWidth, CellHeight);
+
+            // Center image in cell
+            X := X + (CellWidth - ImageSize.cx) div 2;
+            Y := Y + (CellHeight - ImageSize.cy) div 2;
+
+            // Ensure the image stays within component bounds
+            if X < 0 then X := 0;
+            if Y < 0 then Y := 0;
+            if X + ImageSize.cx > Width then X := Width - ImageSize.cx;
+            if Y + ImageSize.cy > Height then Y := Height - ImageSize.cy;
+
+            ImageItem.TargetRect := Rect(X, Y, X + ImageSize.cx, Y + ImageSize.cy);
+            ImageItem.StartRect := ImageItem.CurrentRect;
+
+            ImageItem.AnimationProgress := 0;
+            ImageItem.Animating := True;
+
+            MarkAreaOccupied(Grid, r, c, SpanRows, SpanCols);
             Placed := True;
             Break;
           end;
@@ -2847,7 +2937,34 @@ begin
           begin
             if IsAreaFree(Grid, r, c, 1, 1) then
             begin
-              PlaceImage(ImageItem, Grid, r, c, 1, 1, BaseCellWidth, BaseCellHeight);
+              // Calculate cell position and size
+              X := FSpacing + c * BaseCellWidth + c * FSpacing;
+              Y := r * (BaseCellHeight + FSpacing);
+
+              // Available size for the image
+              CellWidth := BaseCellWidth;
+              CellHeight := BaseCellHeight;
+
+              // Optimal image size preserving aspect ratio
+              ImageSize := GetOptimalSize(ImageItem.Bitmap.Width, ImageItem.Bitmap.Height, CellWidth, CellHeight);
+
+              // Center image in cell
+              X := X + (CellWidth - ImageSize.cx) div 2;
+              Y := Y + (CellHeight - ImageSize.cy) div 2;
+
+              // Ensure the image stays within component bounds
+              if X < 0 then X := 0;
+              if Y < 0 then Y := 0;
+              if X + ImageSize.cx > Width then X := Width - ImageSize.cx;
+              if Y + ImageSize.cy > Height then Y := Height - ImageSize.cy;
+
+              ImageItem.TargetRect := Rect(X, Y, X + ImageSize.cx, Y + ImageSize.cy);
+              ImageItem.StartRect := ImageItem.CurrentRect;
+
+              ImageItem.AnimationProgress := 0;
+              ImageItem.Animating := True;
+
+              MarkAreaOccupied(Grid, r, c, 1, 1);
               Placed := True;
               Break;
             end;
