@@ -744,40 +744,36 @@ end;
 
 { Synchronized method: adds loaded image to the component (called from main thread) }
 procedure TImageLoadThread.SyncAddImage;
+var
+  NewItem: TImageItem;
 begin
   try
     if Assigned(FOwner) and (FOwner is TFlowmotion) then
     begin
       if FSuccess then
       begin
-        try
-          TFlowmotion(FOwner).AddImage(FBitmap);
-          with TFlowmotion(FOwner) do
+        with TFlowmotion(FOwner) do
+        begin
+          // Create the image item directly
+          NewItem := TImageItem.Create;
+          NewItem.Bitmap.Assign(FBitmap);
+          NewItem.Caption := FCaption;
+          NewItem.Path := FPath;
+          NewItem.FileName := FFileName;
+          NewItem.Direction := GetEntryDirection;
+          NewItem.Visible := False;
+          FImages.Add(NewItem);
+
+          CheckSynchronize(10);
+          if Visible then
           begin
-            if FImages.Count > 0 then
-            begin
-              if FCaption <> '' then
-                TImageItem(FImages[FImages.Count - 1]).Caption := FCaption
-              else
-                TImageItem(FImages[FImages.Count - 1]).Caption := ExtractFileName(FFileName);
-              if FPath <> '' then
-                TImageItem(FImages[FImages.Count - 1]).Path := FPath
-              else
-                TImageItem(FImages[FImages.Count - 1]).Path := FFileName;
-              Items[FImages.Count - 1].Visible := False;
-            end;
+            // Calculate the layout for all images
+            CalculateLayout;
+
+            // Set up animation for the new image
+            AnimateImage(NewItem, NewItem.Direction);
+            NewItem.Visible := True;
           end;
-        finally
-          with TFlowmotion(FOwner) do
-          begin
-            if FImages.Count > 0 then
-            begin
-              CalculateLayout;
-              AnimateImage(Items[FImages.Count - 1], Items[FImages.Count - 1].Direction);
-              Items[FImages.Count - 1].Visible := True;
-            end;
-          end;
-          TFlowmotion(FOwner).Visible := True;
         end;
       end;
       TFlowmotion(FOwner).DoImageLoad(FFileName, FSuccess);
@@ -1147,6 +1143,7 @@ begin
     on E: Exception do
       // Re-raise with more context or handle silently if preferred
     //  raise Exception.CreateFmt('Failed to load image "%s". Error: %s', [AFileName, E.Message]);
+
 
 
 
@@ -1765,15 +1762,14 @@ var
   IsSpaceOnPage: Boolean;
   WasEmpty: Boolean;
   NewItem: TImageItem;
+  DefaultWidth, DefaultHeight, ColCount, RowCount: Integer;
 begin
   WasEmpty := (FAllFiles.Count = 0);
   // Add to master list if not already present
- // if FAllFiles.IndexOf(FileName) = -1 then      //forbid duplicates
-  begin
-    FAllFiles.Add(FileName);
-    FAllCaptions.Add(ACaption);
-    FAllPaths.Add(APath);
-  end;
+  FAllFiles.Add(FileName);
+  FAllCaptions.Add(ACaption);
+  FAllPaths.Add(APath);
+
   if WasEmpty or (FLoadMode = lmLoadAll) then
   begin
     ShowPage(FCurrentPage);
@@ -1806,8 +1802,27 @@ begin
       CheckSynchronize(10);
       if Visible then
       begin
-        CalculateLayout;
-        AnimateImage(NewItem, NewItem.Direction);
+        // In FreeFloat-Modus only calc pic pos, not full layout
+        if FFlowLayout = flFreeFloat then
+        begin
+          // std size for new pic
+          DefaultWidth := Max(150, Width div 6);
+          DefaultHeight := Max(150, Height div 6);
+          ColCount := Max(1, Width div (DefaultWidth + 20));
+          RowCount := Max(1, Height div (DefaultHeight + 20));
+
+          // Position for new pic
+          NewItem.TargetRect := Rect(20 + ((FImages.Count - 1) mod ColCount) * (DefaultWidth + 20), 20 + ((FImages.Count - 1) div ColCount) * (DefaultHeight + 20), 20 + ((FImages.Count - 1) mod ColCount) * (DefaultWidth + 20) + DefaultWidth, 20 + ((FImages.Count - 1) div ColCount) * (DefaultHeight + 20) + DefaultHeight);
+
+          // Animation for new pic
+          AnimateImage(NewItem, NewItem.Direction);
+        end
+        else
+        begin
+          CalculateLayout;
+          AnimateImage(NewItem, NewItem.Direction);
+        end;
+
         NewItem.Visible := True;
       end;
 
@@ -1865,12 +1880,15 @@ begin
     Exit;
   ImageItem := TImageItem.Create;
   ImageItem.Bitmap.Assign(Bitmap);
-  ImageItem.Direction := GetEntryDirection;
+  ImageItem.Direction := GetEntryDirection; // Set entry direction
   FImages.Add(ImageItem);
   if Visible then
   begin
     CalculateLayout;
+
+    // Set up the entry animation AFTER layout calculation
     AnimateImage(ImageItem, ImageItem.Direction);
+
     ImageItem.Visible := True;
   end;
   StartAnimationThread;
@@ -2623,66 +2641,224 @@ end;
 { CalculateLayoutFreeFloat - Implements free float positioning for images }
 procedure TFlowmotion.CalculateLayoutFreeFloat;
 var
-  i: Integer;
+  Cols, Rows, i, c, r, BestCols, BestRows: Integer;
   ImageItem: TImageItem;
-  DefaultWidth, DefaultHeight: Integer;
-  ColCount, RowCount: Integer;
-  NeedsInitialLayout: Boolean;
+  BaseCellWidth, BaseCellHeight: Integer;
+  VCount, Row, Col, AddforZoomed: Integer;
+  Grid: TBooleanGrid;
+  SpanCols, SpanRows: Integer;
+  Placed: Boolean;
+  MaxCellWidth: Double;
+  ImageAspectRatio: Double;
+  VisibleImages: TList;
+  SortList: TList;
+  MaxCellArea: Integer;
+  MinCols, MaxColsToTry: Integer;
+  PotentialCellWidth, PotentialCellHeight, CellArea: Double;
+  TotalCellEstimate: Integer;
+
+  function CompareImageSize(A, B: Pointer): Integer;
+  var
+    AreaA, AreaB: Int64;
+  begin
+    with TImageItem(A).Bitmap do
+      AreaA := Int64(Width) * Height;
+    with TImageItem(B).Bitmap do
+      AreaB := Int64(Width) * Height;
+    if AreaA > AreaB then
+      Result := -1
+    else if AreaA < AreaB then
+      Result := 1
+    else
+      Result := 0;
+  end;
+
 begin
-  // Check if we need to do an initial sorted layout first
-  NeedsInitialLayout := False;
-  for i := 0 to FImages.Count - 1 do
-  begin
-    ImageItem := TImageItem(FImages[i]);
-    // If any image doesn't have a position, we need initial layout
-    if IsRectEmpty(ImageItem.TargetRect) then
-    begin
-      NeedsInitialLayout := True;
-      Break;
-    end;
-  end;
-
-  // If we need initial layout, do sorted layout first
-  if NeedsInitialLayout then
-  begin
-    // Temporarily switch to sorted mode to calculate proper layout
-    FFlowLayout := flSorted;
-    try
-      CalculateLayoutSorted;
-    finally
-      FFlowLayout := flFreeFloat;
-    end;
+  if FImages.Count = 0 then
     Exit;
-  end;
+  if FInFallAnimation then
+    Exit;
 
-  // In free float mode, we don't recalculate positions for existing images
-  // Images stay where they were placed by user
-  // Only handle newly added images that don't have a position yet
+  // Use the same grid layout algorithm as CalculateLayoutSorted
+  // This ensures proper positioning in free float mode
 
-  // Set default size for new images - use a reasonable default size
-  DefaultWidth := Max(150, Width div 6); // At least 150px or 1/6 of width
-  DefaultHeight := Max(150, Height div 6); // At least 150px or 1/6 of height
-  ColCount := Max(1, Width div (DefaultWidth + 20)); // 20px spacing
-  RowCount := Max(1, Height div (DefaultHeight + 20)); // 20px spacing
+  AddforZoomed := 0;
+  if FKeepSpaceforZoomed then
+    if FSelectedImage <> nil then
+      AddforZoomed := 2;
 
-  for i := 0 to FImages.Count - 1 do
-  begin
-    ImageItem := TImageItem(FImages[i]);
-
-    // IMPORTANT: Skip the selected image in free float mode - it stays where it is
-    if (FFlowLayout = flFreeFloat) and (ImageItem = FSelectedImage) then
-      Continue;
-
-    // If this is a new image without a position, place it at a default location
-    if IsRectEmpty(ImageItem.TargetRect) then
+  // Collect visible images
+  VisibleImages := TList.Create;
+  try
+    for i := 0 to FImages.Count - 1 do
     begin
-      // Place new images in a simple grid initially
-      ImageItem.TargetRect := Rect(20 + (i mod ColCount) * (DefaultWidth + 20), 20 + (i div ColCount) * (DefaultHeight + 20), 20 + (i mod ColCount) * (DefaultWidth + 20) + DefaultWidth, 20 + (i div ColCount) * (DefaultHeight + 20) + DefaultHeight);
-
-      // For new images, set StartRect to TargetRect to avoid animation
-      ImageItem.StartRect := ImageItem.TargetRect;
-      ImageItem.CurrentRect := ImageItem.TargetRect;
+      ImageItem := TImageItem(FImages[i]);
+      if (not ImageItem.IsSelected) or (not FZoomSelectedtoCenter) then
+        VisibleImages.Add(ImageItem);
     end;
+    if VisibleImages.Count = 0 then
+      Exit;
+
+    // Sort only when Sorted = False (by size)
+    if not FSorted then
+    begin
+      SortList := TList.Create;
+      try
+        SortList.Assign(VisibleImages);
+        SortList.Sort(@CompareImageSize);
+        VisibleImages.Assign(SortList);
+      finally
+        SortList.Free;
+      end;
+    end;
+
+    if FZoomSelectedtoCenter and (FSelectedImage <> nil) then
+      VCount := VisibleImages.Count + 1
+    else
+      VCount := VisibleImages.Count;
+
+    // =================================================================
+    // First, estimate the total number of cells needed
+    // =================================================================
+    TotalCellEstimate := 0;
+    for i := 0 to VisibleImages.Count - 1 do
+    begin
+      ImageItem := TImageItem(VisibleImages[i]);
+      if (ImageItem.Bitmap.Width = 0) or (ImageItem.Bitmap.Height = 0) then
+        Continue;
+      ImageAspectRatio := ImageItem.Bitmap.Width / ImageItem.Bitmap.Height;
+
+      if ImageAspectRatio > 1.4 then
+        Inc(TotalCellEstimate, 2) // Wide image takes 2 cells
+      else if ImageAspectRatio < 0.75 then
+        Inc(TotalCellEstimate, 2) // Tall image takes 2 cells
+      else
+        Inc(TotalCellEstimate, 1); // Square image takes 1 cell
+    end;
+
+    // Ensure the grid is at least large enough for the number of images
+    if TotalCellEstimate < VCount then
+      TotalCellEstimate := VCount;
+
+    // =================================================================
+    // Find the optimal number of columns for the best layout
+    // =================================================================
+    MaxCellWidth := 0;
+    BestCols := 0;
+    BestRows := 0;
+    MinCols := Max(3, Trunc(Sqrt(TotalCellEstimate)));
+    MaxColsToTry := TotalCellEstimate;
+
+    for c := MinCols to MaxColsToTry do
+    begin
+      r := Ceil(TotalCellEstimate / c);
+      if r < 3 then
+        r := 3;
+
+      PotentialCellWidth := (Width - FSpacing * (c + 1)) / c;
+      PotentialCellHeight := (Height - FSpacing * (r + 1)) / r;
+
+        // If cell size is too small, no point in trying this configuration
+      if (PotentialCellWidth < MIN_CELL_SIZE) or (PotentialCellHeight < MIN_CELL_SIZE) then
+        Continue;
+
+        // Prioritize cell width over area.
+        // This ensures the layout uses the full horizontal space.
+      if PotentialCellWidth > MaxCellWidth then
+      begin
+        MaxCellWidth := PotentialCellWidth;
+        BestCols := c;
+        BestRows := r;
+      end;
+    end;
+
+      // Fallback if the loop didn't find a good layout
+    if BestCols = 0 then
+    begin
+      BestCols := Max(3, Ceil(Sqrt(TotalCellEstimate)));
+      BestRows := Max(3, Ceil(TotalCellEstimate / BestCols));
+    end;
+
+    Cols := BestCols;
+    Rows := BestRows;
+
+    // =================================================================
+    // END OF NEW SECTION
+    // =================================================================
+
+    BaseCellWidth := Max(MIN_CELL_SIZE, (Width - FSpacing * (Cols + 1)) div Cols);
+    BaseCellHeight := Max(MIN_CELL_SIZE, (Height - FSpacing * (Rows + 1)) div Rows);
+
+    SetLength(Grid, Rows, Cols);
+    for Row := 0 to Rows - 1 do
+      for Col := 0 to Cols - 1 do
+        Grid[Row, Col] := False;
+
+    // The robust placement logic from the previous answer is correct and should be used here.
+    // It will now work because the grid is guaranteed to be large enough.
+    for i := 0 to VisibleImages.Count - 1 do
+    begin
+      ImageItem := TImageItem(VisibleImages[i]);
+      if (ImageItem.Bitmap.Width = 0) or (ImageItem.Bitmap.Height = 0) then
+        Continue;
+
+      ImageAspectRatio := ImageItem.Bitmap.Width / ImageItem.Bitmap.Height;
+
+      if ImageAspectRatio > 1.4 then
+      begin
+        SpanCols := 2;
+        SpanRows := 1;
+      end
+      else if ImageAspectRatio < 0.75 then
+      begin
+        SpanCols := 1;
+        SpanRows := 2;
+      end
+      else
+      begin
+        SpanCols := 1;
+        SpanRows := 1;
+      end;
+
+      Placed := False;
+
+      // Exhaustive search for a free spot
+      for r := 0 to Rows - SpanRows do
+      begin
+        for c := 0 to Cols - SpanCols do
+        begin
+          if IsAreaFree(Grid, r, c, SpanRows, SpanCols) then
+          begin
+            PlaceImage(ImageItem, Grid, r, c, SpanRows, SpanCols, BaseCellWidth, BaseCellHeight);
+            Placed := True;
+            Break;
+          end;
+        end;
+        if Placed then
+          Break;
+      end;
+
+      // Fallback: If the image didn't fit with its span, try to force it as 1x1
+      if not Placed then
+      begin
+        for r := 0 to Rows - 1 do
+        begin
+          for c := 0 to Cols - 1 do
+          begin
+            if IsAreaFree(Grid, r, c, 1, 1) then
+            begin
+              PlaceImage(ImageItem, Grid, r, c, 1, 1, BaseCellWidth, BaseCellHeight);
+              Placed := True;
+              Break;
+            end;
+          end;
+          if Placed then
+            Break;
+        end;
+      end;
+    end;
+  finally
+    VisibleImages.Free;
   end;
 end;
 
@@ -3221,7 +3397,14 @@ begin
     if FDraggingImage then
     begin
       FDraggingImage := False;
-      FDraggedImage := nil;
+
+      // Reset zoom when dragging ends
+      if FDraggedImage <> nil then
+      begin
+        FDraggedImage.FHotZoomTarget := 1.0;
+        FDraggedImage := nil;
+      end;
+
       MouseCapture := False;
 
       if FlowLayout = flFreeFloat then
@@ -3241,6 +3424,11 @@ begin
     begin
       FDraggingSelected := False;
       FIsPotentialDrag := False;
+
+      // Reset zoom when dragging ends
+      if FSelectedImage <> nil then
+        FSelectedImage.FHotZoomTarget := 1.0;
+
       MouseCapture := False;
 
       ImageUnderCursor := GetImageAtPoint(X, Y);
@@ -3263,8 +3451,13 @@ var
   ImageCenter: TPoint;
   CurrentZoneName: string;
   i: Integer;
+  ScaleFactor: Double;
+  NearestZoneDistance: Double;
+  ZoneRect: TRect;
 const
   DRAG_THRESHOLD = 20;
+  MIN_SCALE_WHILE_DRAGGING = 0.7;
+  SCALE_DISTANCE = 150; // Distance at which scaling starts to take effect
 begin
   if FClearing or FInFallAnimation then
     Exit;
@@ -3285,7 +3478,73 @@ begin
     NewCenterX := X - FDragOffset.X;
     NewCenterY := Y - FDragOffset.Y;
 
+    // Calculate the new target rect without clipping when activation zones are present
     FSelectedImage.TargetRect := Rect(NewCenterX - (FSelectedImage.TargetRect.Right - FSelectedImage.TargetRect.Left) div 2, NewCenterY - (FSelectedImage.TargetRect.Bottom - FSelectedImage.TargetRect.Top) div 2, NewCenterX + (FSelectedImage.TargetRect.Right - FSelectedImage.TargetRect.Left) div 2, NewCenterY + (FSelectedImage.TargetRect.Bottom - FSelectedImage.TargetRect.Top) div 2);
+
+    // Only apply clipping if there are no activation zones
+    if Length(FActivationZones) = 0 then
+    begin
+      // Keep inside control (glow or hottrack margin)
+      var BorderWidth: Integer;
+      var OffsetX: Integer;
+      var OffsetY: Integer;
+      var R: TRect;
+
+      BorderWidth := Max(FGlowWidth, FHotTrackWidth);
+      OffsetX := 0;
+      OffsetY := 0;
+
+      R := FSelectedImage.TargetRect;
+
+      if R.Left < 0 then
+        OffsetX := -R.Left + BorderWidth;
+      if R.Right > Width then
+        OffsetX := Width - R.Right - BorderWidth;
+      if R.Top < 0 then
+        OffsetY := -R.Top + BorderWidth;
+      if R.Bottom > Height then
+        OffsetY := Height - R.Bottom - BorderWidth;
+
+      OffsetRect(R, OffsetX, OffsetY);
+      FSelectedImage.TargetRect := R;
+    end
+    else
+    begin
+      // Apply scaling effect based on proximity to activation zones
+      if Length(FActivationZones) > 0 then
+      begin
+        ImageCenter.X := FSelectedImage.TargetRect.Left + (FSelectedImage.TargetRect.Right - FSelectedImage.TargetRect.Left) div 2;
+        ImageCenter.Y := FSelectedImage.TargetRect.Top + (FSelectedImage.TargetRect.Bottom - FSelectedImage.TargetRect.Top) div 2;
+
+        // Find the nearest activation zone
+        NearestZoneDistance := MaxDouble;
+        for i := Low(FActivationZones) to High(FActivationZones) do
+        begin
+          ZoneRect := FActivationZones[i].Rect;
+          // Calculate distance to the center of the zone
+          var ZoneCenterX: Integer := ZoneRect.Left + (ZoneRect.Right - ZoneRect.Left) div 2;
+          var ZoneCenterY: Integer := ZoneRect.Top + (ZoneRect.Bottom - ZoneRect.Top) div 2;
+          var Distance: Double := Sqrt(Sqr(ImageCenter.X - ZoneCenterX) + Sqr(ImageCenter.Y - ZoneCenterY));
+
+          if Distance < NearestZoneDistance then
+            NearestZoneDistance := Distance;
+        end;
+
+        // Apply scaling based on distance
+        if NearestZoneDistance < SCALE_DISTANCE then
+        begin
+          // Scale down as we get closer to the zone
+          ScaleFactor := MIN_SCALE_WHILE_DRAGGING + (1.0 - MIN_SCALE_WHILE_DRAGGING) * (NearestZoneDistance / SCALE_DISTANCE);
+          FSelectedImage.FHotZoom := ScaleFactor;
+          FSelectedImage.FHotZoomTarget := ScaleFactor;
+        end
+        else
+        begin
+          // Return to normal size when far from zones
+          FSelectedImage.FHotZoomTarget := 1.0;
+        end;
+      end;
+    end;
 
     // Check activation zones
     ImageCenter.X := FSelectedImage.TargetRect.Left + (FSelectedImage.TargetRect.Right - FSelectedImage.TargetRect.Left) div 2;
@@ -3322,8 +3581,73 @@ begin
     NewCenterX := X - FDragOffset.X;
     NewCenterY := Y - FDragOffset.Y;
 
-    // Calculate new position based on mouse position and offset
+    // Calculate the new target rect without clipping when activation zones are present
     FDraggedImage.TargetRect := Rect(NewCenterX - (FDraggedImage.TargetRect.Right - FDraggedImage.TargetRect.Left) div 2, NewCenterY - (FDraggedImage.TargetRect.Bottom - FDraggedImage.TargetRect.Top) div 2, NewCenterX + (FDraggedImage.TargetRect.Right - FDraggedImage.TargetRect.Left) div 2, NewCenterY + (FDraggedImage.TargetRect.Bottom - FDraggedImage.TargetRect.Top) div 2);
+
+    // Only apply clipping if there are no activation zones
+    if Length(FActivationZones) = 0 then
+    begin
+      // Keep inside control (glow or hottrack margin)
+      var BorderWidth: Integer;
+      var OffsetX: Integer;
+      var OffsetY: Integer;
+      var R: TRect;
+
+      BorderWidth := Max(FGlowWidth, FHotTrackWidth);
+      OffsetX := 0;
+      OffsetY := 0;
+
+      R := FDraggedImage.TargetRect;
+
+      if R.Left < 0 then
+        OffsetX := -R.Left + BorderWidth;
+      if R.Right > Width then
+        OffsetX := Width - R.Right - BorderWidth;
+      if R.Top < 0 then
+        OffsetY := -R.Top + BorderWidth;
+      if R.Bottom > Height then
+        OffsetY := Height - R.Bottom - BorderWidth;
+
+      OffsetRect(R, OffsetX, OffsetY);
+      FDraggedImage.TargetRect := R;
+    end
+    else
+    begin
+      // Apply scaling effect based on proximity to activation zones
+      if Length(FActivationZones) > 0 then
+      begin
+        ImageCenter.X := FDraggedImage.TargetRect.Left + (FDraggedImage.TargetRect.Right - FDraggedImage.TargetRect.Left) div 2;
+        ImageCenter.Y := FDraggedImage.TargetRect.Top + (FDraggedImage.TargetRect.Bottom - FDraggedImage.TargetRect.Top) div 2;
+
+        // Find the nearest activation zone
+        NearestZoneDistance := MaxDouble;
+        for i := Low(FActivationZones) to High(FActivationZones) do
+        begin
+          ZoneRect := FActivationZones[i].Rect;
+          // Calculate distance to the center of the zone
+          var ZoneCenterX: Integer := ZoneRect.Left + (ZoneRect.Right - ZoneRect.Left) div 2;
+          var ZoneCenterY: Integer := ZoneRect.Top + (ZoneRect.Bottom - ZoneRect.Top) div 2;
+          var Distance: Double := Sqrt(Sqr(ImageCenter.X - ZoneCenterX) + Sqr(ImageCenter.Y - ZoneCenterY));
+
+          if Distance < NearestZoneDistance then
+            NearestZoneDistance := Distance;
+        end;
+
+        // Apply scaling based on distance
+        if NearestZoneDistance < SCALE_DISTANCE then
+        begin
+          // Scale down as we get closer to the zone
+          ScaleFactor := MIN_SCALE_WHILE_DRAGGING + (1.0 - MIN_SCALE_WHILE_DRAGGING) * (NearestZoneDistance / SCALE_DISTANCE);
+          FDraggedImage.FHotZoom := ScaleFactor;
+          FDraggedImage.FHotZoomTarget := ScaleFactor;
+        end
+        else
+        begin
+          // Return to normal size when far from zones
+          FDraggedImage.FHotZoomTarget := 1.0;
+        end;
+      end;
+    end;
 
     // Update current position immediately for responsive dragging
     FDraggedImage.CurrentRect := FDraggedImage.TargetRect;
@@ -3595,30 +3919,21 @@ begin
   // --------------------------------------------------------------
   // For center/point we start literally as a dot
 
-  if FFlowLayout = flFreeFloat then
+  if (EffectiveStyle in [iesFromCenter, iesFromPoint]) then
   begin
-    ImageItem.FHotZoom := 1.0; // Start at normal size
-    ImageItem.FHotZoomTarget := 1.0; // No zoom to normal size
+    ImageItem.StartRect := Rect(StartX, StartY, StartX, StartY); // single pixel
+    ImageItem.CurrentRect := ImageItem.StartRect;
   end
   else
   begin
-    if (EffectiveStyle in [iesFromCenter, iesFromPoint]) then
-    begin
-      ImageItem.StartRect := Rect(StartX, StartY, StartX, StartY); // single pixel
-      ImageItem.CurrentRect := ImageItem.StartRect;
-    end
-    else
-    begin
-      // Start tiny but with correct aspect ratio
-      ImageItem.StartRect := Rect(StartX + Round(W * (1 - START_SCALE) / 2), StartY + Round(H * (1 - START_SCALE) / 2), StartX + Round(W * START_SCALE) + Round(W * (1 - START_SCALE) / 2), StartY + Round(H * START_SCALE) + Round(H * (1 - START_SCALE) / 2));
-      ImageItem.CurrentRect := ImageItem.StartRect;
-    end;
-
-    // Force hot-zoom animation from tiny ? normal
-    ImageItem.FHotZoom := START_SCALE; // start tiny
-    ImageItem.FHotZoomTarget := 1.0; // grow to normal size
-
+    // Start tiny but with correct aspect ratio
+    ImageItem.StartRect := Rect(StartX + Round(W * (1 - START_SCALE) / 2), StartY + Round(H * (1 - START_SCALE) / 2), StartX + Round(W * START_SCALE) + Round(W * (1 - START_SCALE) / 2), StartY + Round(H * START_SCALE) + Round(H * (1 - START_SCALE) / 2));
+    ImageItem.CurrentRect := ImageItem.StartRect;
   end;
+
+  // Force hot-zoom animation from tiny to normal
+  ImageItem.FHotZoom := START_SCALE; // start tiny
+  ImageItem.FHotZoomTarget := 1.0; // grow to normal size
 
   ImageItem.TargetRect := Target;
   ImageItem.AnimationProgress := 0;
