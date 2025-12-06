@@ -72,9 +72,12 @@ Clear animated to direction or target, selected can go to other target, setting 
 DeselectZoomedImage, those i am using in my player already and no problems at all,   
 other functions may work, not work, or it explodes right into ur face :D nah...  
 I am working on getting more of it done :)  
+      
+### Latest changes:    
     
-### Latest changes:  
-
+**v 0.987**  
+- New flFreeFloat Layout added, no zoomselected to center and all pictures free draggable   
+    
 **v 0.986**   
 - Added new ActivationZones for the selected image if `SelectedMovable` is True   
 - New `AddActivationZone(const AName: string; const ARect: TRect)` and `ClearActivationZones` methods   
