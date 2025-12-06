@@ -37,7 +37,8 @@ Pure Delphi 7 compatible code, no special components.
 Low CPU usage, easy to integrate, and smooth visual effects even with large image sets.   
   
 ### Features:  
-- Pinterest-like masonry layout / freefloat Layout 
+- Pinterest-like masonry layout
+- freefloat Layout with save/load positions
 - Animated appearance (slide-in, “falling” effect on clear/page change)  
 - Select / move or zoom it into a target rect   
 - HotTrack & HotZoom hover effects   
@@ -78,7 +79,11 @@ I am working on getting more of it done :)
     
 **v 0.987**  
 - New flFreeFloat Layout added, no zoomselected to center and all pictures free draggable (like a nonstatic grid)     
-    
+- New SavePositionsToFile() / LoadPositionsFromFile() for persisting free float layouts    
+- AddImagesWithPositions() allows precise image placement with saved coordinates    
+- Automatic position validation ensures layouts work across different screen resolutions    
+- Sample project demonstrates save/load functionality with customizable button arrangements     
+      
 **v 0.986**   
 - Added new ActivationZones for the selected image if `SelectedMovable` is True   
 - New `AddActivationZone(const AName: string; const ARect: TRect)` and `ClearActivationZones` methods   
