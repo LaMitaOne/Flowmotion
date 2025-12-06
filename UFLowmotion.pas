@@ -1108,6 +1108,8 @@ begin
       // Re-raise with more context or handle silently if preferred
     //  raise Exception.CreateFmt('Failed to load image "%s". Error: %s', [AFileName, E.Message]);
 
+
+
   end;
 end;
 
@@ -1302,22 +1304,18 @@ begin
     begin
       ImageItem := TImageItem(FImages[i]);
 
-
-    if (not FHotTrackZoom) and (ImageItem <> FSelectedImage)
-     or (FDraggingSelected and (ImageItem = FSelectedImage))
-     then
-    begin
-      if ImageItem.FHotZoom <> 1.0 then
+      if (not FHotTrackZoom) and (ImageItem <> FSelectedImage) or (FDraggingSelected and (ImageItem = FSelectedImage)) then
       begin
-        if not (FDraggingSelected and (ImageItem = FSelectedImage)) then
-        ImageItem.FHotZoom := 1.0;
-        ImageItem.FHotZoomTarget := 1.0;
-        NeedRepaint := True;
-      end;
+        if ImageItem.FHotZoom <> 1.0 then
+        begin
+          if not (FDraggingSelected and (ImageItem = FSelectedImage)) then
+            ImageItem.FHotZoom := 1.0;
+          ImageItem.FHotZoomTarget := 1.0;
+          NeedRepaint := True;
+        end;
       // Skip the rest of the hot-zoom logic for this item.
-      Continue;
-    end;
-
+        Continue;
+      end;
 
       if not (ImageItem.Visible and HotTrackZoom) then
         Continue;
@@ -1340,8 +1338,10 @@ begin
 
       // Smooth approach
       ImageItem.FHotZoom := ImageItem.FHotZoom + (TargetZoom - ImageItem.FHotZoom) * Speed * DeltaTime;
-      if HotTrackZoom then ImageItem.FHotZoomTarget := TargetZoom // for ItemFinished check
-       else  ImageItem.FHotZoomTarget := 1.0;
+      if HotTrackZoom then
+        ImageItem.FHotZoomTarget := TargetZoom // for ItemFinished check
+      else
+        ImageItem.FHotZoomTarget := 1.0;
 
       // Clamp non-breathing hotzoom
       if (ImageItem <> FSelectedImage) and (ImageItem.FHotZoom > HOT_ZOOM_MAX_FACTOR) then
@@ -2592,8 +2592,7 @@ end;
 { Calculates layout using sorted algorithm: places images in grid based on aspect ratio }
 procedure TFlowmotion.CalculateLayoutSorted;
 var
-  Cols, Rows,
-  i, c, r, BestCols, BestRows: Integer;
+  Cols, Rows, i, c, r, BestCols, BestRows: Integer;
   ImageItem: TImageItem;
   BaseCellWidth, BaseCellHeight: Integer;
   VCount, Row, Col, AddforZoomed: Integer;
@@ -2673,7 +2672,8 @@ begin
     for i := 0 to VisibleImages.Count - 1 do
     begin
       ImageItem := TImageItem(VisibleImages[i]);
-      if (ImageItem.Bitmap.Width = 0) or (ImageItem.Bitmap.Height = 0) then Continue;
+      if (ImageItem.Bitmap.Width = 0) or (ImageItem.Bitmap.Height = 0) then
+        Continue;
       ImageAspectRatio := ImageItem.Bitmap.Width / ImageItem.Bitmap.Height;
 
       if ImageAspectRatio > 1.4 then
@@ -2685,48 +2685,50 @@ begin
     end;
 
     // Ensure the grid is at least large enough for the number of images
-    if TotalCellEstimate < VCount then TotalCellEstimate := VCount;
+    if TotalCellEstimate < VCount then
+      TotalCellEstimate := VCount;
 
     // =================================================================
     // NEW: Find the optimal number of columns for the best layout
     // =================================================================
-      MaxCellWidth := 0;
-      BestCols := 0;
-      BestRows := 0;
-      MinCols := Max(3, Trunc(Sqrt(TotalCellEstimate)));
-      MaxColsToTry := TotalCellEstimate;
+    MaxCellWidth := 0;
+    BestCols := 0;
+    BestRows := 0;
+    MinCols := Max(3, Trunc(Sqrt(TotalCellEstimate)));
+    MaxColsToTry := TotalCellEstimate;
 
-      for c := MinCols to MaxColsToTry do
-      begin
-        r := Ceil(TotalCellEstimate / c);
-        if r < 3 then r := 3;
+    for c := MinCols to MaxColsToTry do
+    begin
+      r := Ceil(TotalCellEstimate / c);
+      if r < 3 then
+        r := 3;
 
-        PotentialCellWidth := (Width - FSpacing * (c + 1)) / c;
-        PotentialCellHeight := (Height - FSpacing * (r + 1)) / r;
+      PotentialCellWidth := (Width - FSpacing * (c + 1)) / c;
+      PotentialCellHeight := (Height - FSpacing * (r + 1)) / r;
 
         // If cell size is too small, no point in trying this configuration
-        if (PotentialCellWidth < MIN_CELL_SIZE) or (PotentialCellHeight < MIN_CELL_SIZE) then
-          Continue;
+      if (PotentialCellWidth < MIN_CELL_SIZE) or (PotentialCellHeight < MIN_CELL_SIZE) then
+        Continue;
 
         // Prioritize cell width over area.
         // This ensures the layout uses the full horizontal space.
-        if PotentialCellWidth > MaxCellWidth then
-        begin
-          MaxCellWidth := PotentialCellWidth;
-          BestCols := c;
-          BestRows := r;
-        end;
+      if PotentialCellWidth > MaxCellWidth then
+      begin
+        MaxCellWidth := PotentialCellWidth;
+        BestCols := c;
+        BestRows := r;
       end;
+    end;
 
       // Fallback if the loop didn't find a good layout
-      if BestCols = 0 then
-      begin
-          BestCols := Max(3, Ceil(Sqrt(TotalCellEstimate)));
-          BestRows := Max(3, Ceil(TotalCellEstimate / BestCols));
-      end;
+    if BestCols = 0 then
+    begin
+      BestCols := Max(3, Ceil(Sqrt(TotalCellEstimate)));
+      BestRows := Max(3, Ceil(TotalCellEstimate / BestCols));
+    end;
 
-      Cols := BestCols;
-      Rows := BestRows;
+    Cols := BestCols;
+    Rows := BestRows;
 
     // =================================================================
     // END OF NEW SECTION
@@ -2745,7 +2747,8 @@ begin
     for i := 0 to VisibleImages.Count - 1 do
     begin
       ImageItem := TImageItem(VisibleImages[i]);
-      if (ImageItem.Bitmap.Width = 0) or (ImageItem.Bitmap.Height = 0) then Continue;
+      if (ImageItem.Bitmap.Width = 0) or (ImageItem.Bitmap.Height = 0) then
+        Continue;
 
       ImageAspectRatio := ImageItem.Bitmap.Width / ImageItem.Bitmap.Height;
 
@@ -2779,7 +2782,8 @@ begin
             Break;
           end;
         end;
-        if Placed then Break;
+        if Placed then
+          Break;
       end;
 
       // Fallback: If the image didn't fit with its span, try to force it as 1x1
@@ -2796,7 +2800,8 @@ begin
               Break;
             end;
           end;
-          if Placed then Break;
+          if Placed then
+            Break;
         end;
       end;
     end;
@@ -3174,12 +3179,7 @@ begin
     NewCenterY := Y - FDragOffset.Y;
 
     // Update the target rect of the selected image to follow the mouse
-    FSelectedImage.TargetRect := Rect(
-      NewCenterX - (FSelectedImage.TargetRect.Right - FSelectedImage.TargetRect.Left) div 2,
-      NewCenterY - (FSelectedImage.TargetRect.Bottom - FSelectedImage.TargetRect.Top) div 2,
-      NewCenterX + (FSelectedImage.TargetRect.Right - FSelectedImage.TargetRect.Left) div 2,
-      NewCenterY + (FSelectedImage.TargetRect.Bottom - FSelectedImage.TargetRect.Top) div 2
-    );
+    FSelectedImage.TargetRect := Rect(NewCenterX - (FSelectedImage.TargetRect.Right - FSelectedImage.TargetRect.Left) div 2, NewCenterY - (FSelectedImage.TargetRect.Bottom - FSelectedImage.TargetRect.Top) div 2, NewCenterX + (FSelectedImage.TargetRect.Right - FSelectedImage.TargetRect.Left) div 2, NewCenterY + (FSelectedImage.TargetRect.Bottom - FSelectedImage.TargetRect.Top) div 2);
 
     // =================================================================
     // == LOGIC FOR ACTIVATION ZONES ==
@@ -3628,6 +3628,7 @@ var
 
   // The CompareHotZoom function can be simplified or reverted to the original,
   // as it will no longer handle entering images.
+
   function CompareHotZoom(Item1, Item2: Pointer): Integer;
   var
     Zoom1, Zoom2: Double;
@@ -3824,83 +3825,83 @@ end; }
   // Draw zoomed + alpha + glow item
   // --------------------------------------------------------------
   procedure DrawHotZoomedItem(Item: TImageItem; IsCurrentHot: Boolean);
-var
-  CenterX, CenterY, BaseW, BaseH, NewW, NewH: Integer;
-  ZoomFactor: Double;
-  R: TRect;
-  OffsetX, OffsetY: Integer;
-  BorderWidth: Integer;
-begin
-  if not Item.Visible or Item.Bitmap.Empty then
-    Exit;
-
-  if (not FHotTrackZoom) and (not Item.IsSelected) then
+  var
+    CenterX, CenterY, BaseW, BaseH, NewW, NewH: Integer;
+    ZoomFactor: Double;
+    R: TRect;
+    OffsetX, OffsetY: Integer;
+    BorderWidth: Integer;
   begin
-    DrawNormalItem(Item);
-    if IsCurrentHot then
+    if not Item.Visible or Item.Bitmap.Empty then
+      Exit;
+
+    if (not FHotTrackZoom) and (not Item.IsSelected) then
     begin
-      R := Item.CurrentRect;
-      InflateRect(R, FHotTrackWidth, FHotTrackWidth);
-      Canvas.Pen.Width := FHotTrackWidth;
-      Canvas.Pen.Color := FHotTrackColor;
-      Canvas.Brush.Style := bsClear;
-      Canvas.Rectangle(R.Left, R.Top, R.Right, R.Bottom);
+      DrawNormalItem(Item);
+      if IsCurrentHot then
+      begin
+        R := Item.CurrentRect;
+        InflateRect(R, FHotTrackWidth, FHotTrackWidth);
+        Canvas.Pen.Width := FHotTrackWidth;
+        Canvas.Pen.Color := FHotTrackColor;
+        Canvas.Brush.Style := bsClear;
+        Canvas.Rectangle(R.Left, R.Top, R.Right, R.Bottom);
+      end;
+      Exit;
     end;
-    Exit;
-  end;
   // ===================================================================
 
   // Base size and center
-  if (Item.CurrentRect.Right > Item.CurrentRect.Left) and (Item.CurrentRect.Bottom > Item.CurrentRect.Top) then
-  begin
-    CenterX := Item.CurrentRect.Left + (Item.CurrentRect.Right - Item.CurrentRect.Left) div 2;
-    CenterY := Item.CurrentRect.Top + (Item.CurrentRect.Bottom - Item.CurrentRect.Top) div 2;
-    BaseW := Item.CurrentRect.Right - Item.CurrentRect.Left;
-    BaseH := Item.CurrentRect.Bottom - Item.CurrentRect.Top;
-  end
-  else
-  begin
-    CenterX := Item.TargetRect.Left + (Item.TargetRect.Right - Item.TargetRect.Left) div 2;
-    CenterY := Item.TargetRect.Top + (Item.TargetRect.Bottom - Item.TargetRect.Top) div 2;
-    BaseW := Item.TargetRect.Right - Item.TargetRect.Left;
-    BaseH := Item.TargetRect.Bottom - Item.TargetRect.Top;
-  end;
+    if (Item.CurrentRect.Right > Item.CurrentRect.Left) and (Item.CurrentRect.Bottom > Item.CurrentRect.Top) then
+    begin
+      CenterX := Item.CurrentRect.Left + (Item.CurrentRect.Right - Item.CurrentRect.Left) div 2;
+      CenterY := Item.CurrentRect.Top + (Item.CurrentRect.Bottom - Item.CurrentRect.Top) div 2;
+      BaseW := Item.CurrentRect.Right - Item.CurrentRect.Left;
+      BaseH := Item.CurrentRect.Bottom - Item.CurrentRect.Top;
+    end
+    else
+    begin
+      CenterX := Item.TargetRect.Left + (Item.TargetRect.Right - Item.TargetRect.Left) div 2;
+      CenterY := Item.TargetRect.Top + (Item.TargetRect.Bottom - Item.TargetRect.Top) div 2;
+      BaseW := Item.TargetRect.Right - Item.TargetRect.Left;
+      BaseH := Item.TargetRect.Bottom - Item.TargetRect.Top;
+    end;
 
-  ZoomFactor := Item.FHotZoom;
-  NewW := Round(BaseW * ZoomFactor);
-  NewH := Round(BaseH * ZoomFactor);
+    ZoomFactor := Item.FHotZoom;
+    NewW := Round(BaseW * ZoomFactor);
+    NewH := Round(BaseH * ZoomFactor);
 
-  R := Rect(CenterX - NewW div 2, CenterY - NewH div 2, CenterX + NewW div 2, CenterY + NewH div 2);
+    R := Rect(CenterX - NewW div 2, CenterY - NewH div 2, CenterX + NewW div 2, CenterY + NewH div 2);
 
   // Keep inside control (glow or hottrack margin)
-  BorderWidth := Max(FGlowWidth, FHotTrackWidth);
-  OffsetX := 0;
-  OffsetY := 0;
-  if R.Left < 0 then
-    OffsetX := -R.Left + BorderWidth;
-  if R.Right > Width then
-    OffsetX := Width - R.Right - BorderWidth;
-  if R.Top < 0 then
-    OffsetY := -R.Top + BorderWidth;
-  if R.Bottom > Height then
-    OffsetY := Height - R.Bottom - BorderWidth;
-  OffsetRect(R, OffsetX, OffsetY);
+    BorderWidth := Max(FGlowWidth, FHotTrackWidth);
+    OffsetX := 0;
+    OffsetY := 0;
+    if R.Left < 0 then
+      OffsetX := -R.Left + BorderWidth;
+    if R.Right > Width then
+      OffsetX := Width - R.Right - BorderWidth;
+    if R.Top < 0 then
+      OffsetY := -R.Top + BorderWidth;
+    if R.Bottom > Height then
+      OffsetY := Height - R.Bottom - BorderWidth;
+    OffsetRect(R, OffsetX, OffsetY);
 
-  Canvas.StretchDraw(R, Item.Bitmap);
+    Canvas.StretchDraw(R, Item.Bitmap);
 
   // Glow / hot border
-  if IsCurrentHot or Item.IsSelected then
-  begin
-    if Item.IsSelected then
-      InflateRect(R, FGlowWidth, FGlowWidth)
-    else
-      InflateRect(R, FHotTrackWidth, FHotTrackWidth);
-    Canvas.Pen.Width := ifThen(Item.IsSelected, FGlowWidth, FHotTrackWidth);
-    Canvas.Pen.Color := ifThen(Item.IsSelected, FGlowColor, FHotTrackColor);
-    Canvas.Brush.Style := bsClear;
-    Canvas.Rectangle(R.Left, R.Top, R.Right, R.Bottom);
+    if IsCurrentHot or Item.IsSelected then
+    begin
+      if Item.IsSelected then
+        InflateRect(R, FGlowWidth, FGlowWidth)
+      else
+        InflateRect(R, FHotTrackWidth, FHotTrackWidth);
+      Canvas.Pen.Width := ifThen(Item.IsSelected, FGlowWidth, FHotTrackWidth);
+      Canvas.Pen.Color := ifThen(Item.IsSelected, FGlowColor, FHotTrackColor);
+      Canvas.Brush.Style := bsClear;
+      Canvas.Rectangle(R.Left, R.Top, R.Right, R.Bottom);
+    end;
   end;
-end;
 
 begin
   if inPaintCycle or FClearing then
