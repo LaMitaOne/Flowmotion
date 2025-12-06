@@ -40,6 +40,8 @@ type
     SpinEdit2: TSpinEdit;
     Label3: TLabel;
     SpinEdit3: TSpinEdit;
+    Panel5: TPanel;
+    Panel6: TPanel;
     procedure Button10Click(Sender: TObject);
     procedure Button11Click(Sender: TObject);
     procedure Button12Click(Sender: TObject);
@@ -76,6 +78,7 @@ type
     procedure SpinEdit3Change(Sender: TObject);
   private
     procedure WMMouseWheel(var Msg: TWMMouseWheel); message WM_MOUSEWHEEL;
+    procedure Flowmotion1SelectedImageEnterZone(Sender: TObject; ImageItem: TImageItem; const ZoneName: string);
   public
     { Public-Deklarationen }
   end;
@@ -155,6 +158,18 @@ begin
   Doublebuffered := True;
   Flowmotion1.DoubleBuffered := True;
   Flowmotion1.SetBackgroundpicture(Extractfilepath(Application.ExeName) + 'back.jpg');
+  Flowmotion1.AddActivationZone('ActivationZone 1', Panel5.BoundsRect);
+  Flowmotion1.AddActivationZone('ActivationZone 2', Panel6.BoundsRect);
+  Flowmotion1.OnSelectedImageEnterZone := Flowmotion1SelectedImageEnterZone;
+end;
+
+procedure TFSampleform.Flowmotion1SelectedImageEnterZone(Sender: TObject; ImageItem: TImageItem; const ZoneName: string);
+begin
+  // Show a message or perform an action based on the zone name, here u can do...whatever u like then
+  if ZoneName = 'ActivationZone 1' then
+    ShowMessage('Image entered ActivationZone 1! ')
+  else if ZoneName = 'ActivationZone 2' then
+    ShowMessage('Image entered ActivationZone 2! ');
 end;
 
 procedure TFSampleform.WMMouseWheel(var Msg: TWMMouseWheel);

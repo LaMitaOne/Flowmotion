@@ -293,8 +293,8 @@ object FSampleform: TFSampleform
       OnClick = Button14Click
     end
     object CheckBox1: TCheckBox
-      Left = 16
-      Top = 122
+      Left = 40
+      Top = 145
       Width = 121
       Height = 17
       Caption = 'selected Breathing'
@@ -314,7 +314,7 @@ object FSampleform: TFSampleform
     end
     object CheckBox2: TCheckBox
       Left = 16
-      Top = 145
+      Top = 122
       Width = 121
       Height = 17
       Caption = 'Hotzoom enabled'
@@ -365,6 +365,22 @@ object FSampleform: TFSampleform
       Value = 1
       OnChange = SpinEdit3Change
     end
+  end
+  object Panel5: TPanel
+    Left = 312
+    Top = 251
+    Width = 217
+    Height = 143
+    Caption = 'ActivationZone 1 (Drag selected here)'
+    TabOrder = 3
+  end
+  object Panel6: TPanel
+    Left = 328
+    Top = 759
+    Width = 217
+    Height = 135
+    Caption = 'ActivationZone 2 (Drag selected here)'
+    TabOrder = 4
   end
   object OpenDialog1: TOpenDialog
     Left = 144
