@@ -77,7 +77,7 @@ I am working on getting more of it done :)
 ### Latest changes:    
     
 **v 0.987**  
-- New flFreeFloat Layout added, no zoomselected to center and all pictures free draggable   
+- New flFreeFloat Layout added, no zoomselected to center and all pictures free draggable (like a nonstatic grid)     
     
 **v 0.986**   
 - Added new ActivationZones for the selected image if `SelectedMovable` is True   
