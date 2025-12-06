@@ -82,7 +82,7 @@ I am working on getting more of it done :)
 - New SavePositionsToFile() / LoadPositionsFromFile() for persisting free float layouts    
 - AddImagesWithPositions() allows precise image placement with saved coordinates    
 - Automatic position validation ensures layouts work across different screen resolutions    
-- Sample project demonstrates save/load functionality with customizable button arrangements     
+- Sample project demonstrates save/load functionality       
       
 **v 0.986**   
 - Added new ActivationZones for the selected image if `SelectedMovable` is True   
