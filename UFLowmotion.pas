@@ -3454,6 +3454,9 @@ var
   ScaleFactor: Double;
   NearestZoneDistance: Double;
   ZoneRect: TRect;
+  BorderWidth, ZoneCenterX, ZoneCenterY, OffsetX, OffsetY: Integer;
+  R: TRect;
+  Distance: Double;
 const
   DRAG_THRESHOLD = 20;
   MIN_SCALE_WHILE_DRAGGING = 0.7;
@@ -3485,10 +3488,6 @@ begin
     if Length(FActivationZones) = 0 then
     begin
       // Keep inside control (glow or hottrack margin)
-      var BorderWidth: Integer;
-      var OffsetX: Integer;
-      var OffsetY: Integer;
-      var R: TRect;
 
       BorderWidth := Max(FGlowWidth, FHotTrackWidth);
       OffsetX := 0;
@@ -3522,9 +3521,9 @@ begin
         begin
           ZoneRect := FActivationZones[i].Rect;
           // Calculate distance to the center of the zone
-          var ZoneCenterX: Integer := ZoneRect.Left + (ZoneRect.Right - ZoneRect.Left) div 2;
-          var ZoneCenterY: Integer := ZoneRect.Top + (ZoneRect.Bottom - ZoneRect.Top) div 2;
-          var Distance: Double := Sqrt(Sqr(ImageCenter.X - ZoneCenterX) + Sqr(ImageCenter.Y - ZoneCenterY));
+          ZoneCenterX := ZoneRect.Left + (ZoneRect.Right - ZoneRect.Left) div 2;
+          ZoneCenterY := ZoneRect.Top + (ZoneRect.Bottom - ZoneRect.Top) div 2;
+          Distance := Sqrt(Sqr(ImageCenter.X - ZoneCenterX) + Sqr(ImageCenter.Y - ZoneCenterY));
 
           if Distance < NearestZoneDistance then
             NearestZoneDistance := Distance;
@@ -3588,10 +3587,6 @@ begin
     if Length(FActivationZones) = 0 then
     begin
       // Keep inside control (glow or hottrack margin)
-      var BorderWidth: Integer;
-      var OffsetX: Integer;
-      var OffsetY: Integer;
-      var R: TRect;
 
       BorderWidth := Max(FGlowWidth, FHotTrackWidth);
       OffsetX := 0;
@@ -3625,9 +3620,9 @@ begin
         begin
           ZoneRect := FActivationZones[i].Rect;
           // Calculate distance to the center of the zone
-          var ZoneCenterX: Integer := ZoneRect.Left + (ZoneRect.Right - ZoneRect.Left) div 2;
-          var ZoneCenterY: Integer := ZoneRect.Top + (ZoneRect.Bottom - ZoneRect.Top) div 2;
-          var Distance: Double := Sqrt(Sqr(ImageCenter.X - ZoneCenterX) + Sqr(ImageCenter.Y - ZoneCenterY));
+          ZoneCenterX := ZoneRect.Left + (ZoneRect.Right - ZoneRect.Left) div 2;
+          ZoneCenterY := ZoneRect.Top + (ZoneRect.Bottom - ZoneRect.Top) div 2;
+          Distance := Sqrt(Sqr(ImageCenter.X - ZoneCenterX) + Sqr(ImageCenter.Y - ZoneCenterY));
 
           if Distance < NearestZoneDistance then
             NearestZoneDistance := Distance;
