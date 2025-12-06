@@ -61,8 +61,8 @@ Not bad for my first component ever think :D
 So I thought maybe some of you will like it too :)  
 
 Still got lots more ideas for it and it will grow more and more, cant stop somehow :P thats the Delphi Mojooo   
-   
-Still tweaking and some things are not perfect yet, some not fully implemented,   
+---------------------------------     
+Some things are not perfect yet, some not fully implemented,   
 but it’s already basically stable and looks really nice in my player!   
   
 !!! --- NOT FINISHED - Partly stable, parts not working so far.  
