@@ -1,7 +1,7 @@
 
 {------------------------------------------------------------------------------}
 {                                                                              }
-{ Flowmotion v0.986                                                            }
+{ Flowmotion v0.987                                                            }
 { by Lara Miriam Tamy Reschke                                                  }
 {                                                                              }
 { larate@gmx.net                                                               }
@@ -10,6 +10,8 @@
 {------------------------------------------------------------------------------}
 {
  ----Latest Changes
+  v 0.987
+    - New flFreeFloat Layout added, no zoomselected to center and all pictures free draggable
   v 0.986
     - Added new ActivationZones for the selected image if `SelectedMovable` is True.
     - New `AddActivationZone(const AName: string; const ARect: TRect)` and `ClearActivationZones` methods
@@ -30,7 +32,7 @@
     - added more functions into Sample project
   v 0.984
     - higher hotzoomed get painted above lower hotzoomed
-      (think that way almost perfect z-order... as possible for me at least)
+      (think that way almost perfect z-order... for now)
     - fixed z-order of new animated incoming single images from Addimage
     - fixed z-order of prev selected animating back from selectnext or prev pic function.
     - fixed that last flicker sometimes of just hotzoomed down, in line,
@@ -40,8 +42,6 @@
     - new HotTrackWidth property
     - new inoming pics now start tiny sized START_SCALE
     - AddImagesAsync & AddImageAsync now working
-  v 0.983
-    - Animations now Threaded, massive performance gain like 20 times faster
   v 0.983
     - Animations now Threaded, massive performance gain like 20 times faster
   v 0.982
@@ -108,7 +108,7 @@ const
   DEFAULT_HOTTRACK_WIDTH = 1;
   DEFAULT_MAX_ZOOM_SIZE = 300;
   HOT_ZOOM_MIN_FACTOR = 1.02;
-  HOT_ZOOM_MAX_FACTOR = 1.4;
+  HOT_ZOOM_MAX_FACTOR = 1.3;
   HOT_ZOOM_IN_SPEED = 0.07;
   HOT_ZOOM_OUT_SPEED = 0.09;
   HOT_ZOOM_IN_PER_SEC = 2.5;
@@ -128,7 +128,7 @@ type
   DWORD_PTR = Cardinal; // 32-bit: Pointer is 4 bytes
 {$ENDIF}
 
-  TFlowLayout = (flPerfectSize, flSorted);
+  TFlowLayout = (flSorted, flFreeFloat);
 
   TImageLoadEvent = procedure(Sender: TObject; const FileName: string; Success: Boolean) of object;
 
@@ -216,8 +216,8 @@ type
     Name: string;
     Rect: TRect;
   end;
-
   // Event type fired when the selected image enters an activation zone
+
   TSelectedImageEnterZoneEvent = procedure(Sender: TObject; ImageItem: TImageItem; const ZoneName: string) of object;
 
 
@@ -305,6 +305,8 @@ type
     FMaxRows: Integer; // 0 = auto
     FSorted: Boolean; // True = load order, False = size order
     FDragOffset: TPoint;
+    FDraggingImage: Boolean;
+    FDraggedImage: TImageItem;
 
     // Visual
     FBackgroundColor: TColor;
@@ -375,7 +377,7 @@ type
     // Internal methods - Layout
     procedure CalculateLayout;
     procedure CalculateLayoutSorted;
-    procedure CalculateLayoutPerfectSized;
+    procedure CalculateLayoutFreeFloat;
     function IsAreaFree(const Grid: TBooleanGrid; Row, Col, SpanRows, SpanCols: Integer): Boolean;
     procedure MarkAreaOccupied(var Grid: TBooleanGrid; Row, Col, SpanRows, SpanCols: Integer);
     procedure PlaceImage(ImageItem: TImageItem; var Grid: TBooleanGrid; Row, Col, SpanRows, SpanCols: Integer; BaseCellWidth, BaseCellHeight: Integer);
@@ -402,7 +404,6 @@ type
 
     // Property setters
     procedure SetLoadMode(Value: TFlowmotionLoadMode);
-    procedure SetFlowLayout(Value: TFlowLayout);
     procedure SetActive(Value: Boolean);
     procedure SetSelectedMovable(Value: Boolean);
     procedure SetSorted(Value: Boolean);
@@ -436,6 +437,9 @@ type
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
 
+    // Layout
+    procedure SetFlowLayout(Value: TFlowLayout);
+
     // Image management
     procedure AddImage(const FileName: string); overload;
     procedure AddImage(const FileName, ACaption, APath: string); overload;
@@ -452,7 +456,7 @@ type
     procedure Clear(animated: Boolean; ZoominSelected: Boolean = false); overload;
     procedure MoveImageToPos(RelIndexFrom, RelIndexTo: Integer);
 
-    //Activation zone
+    // Activation zone
     procedure AddActivationZone(const AName: string; const ARect: TRect);
     procedure ClearActivationZones;
 
@@ -792,6 +796,8 @@ begin
   inherited Create(AOwner);
   //Gdip := TGDIPlus.Create('');
   FImages := TList.Create;
+  FDraggingImage := False;
+  FDraggedImage := nil;
   FNextLoaderCoreIndex := 0;
   FClearing := False;
   FBreathingPhase := 0.0;
@@ -805,7 +811,7 @@ begin
   FAnimationThread := nil;
   FImageEntryStyle := iesRandom;
   FEntryPoint := Point(-1000, -1000);
-  FFlowLayout := flPerfectSize; //flSorted;     flPerfectSize
+  FFlowLayout := flSorted; //flSorted  flFreeFloat
   FKeepSpaceforZoomed := False;
   FLoadMode := lmLazy;
   FAnimationSpeed := DEFAULT_ANIMATION_SPEED;
@@ -933,7 +939,22 @@ begin
   begin
     TImageItem(FImages[i]).FHotZoomTarget := 1.0;
   end;
-  SetSelectedImage(nil, -1);
+
+  // In free float mode, directly deselect without animation
+  if FFlowLayout = flFreeFloat then
+  begin
+    // Clear selection directly
+    if FSelectedImage <> nil then
+    begin
+      FSelectedImage.IsSelected := False;
+      FSelectedImage := nil;
+      FCurrentSelectedIndex := -1;
+      FHotItem := nil;
+    end;
+    Invalidate;
+  end
+  else
+    SetSelectedImage(nil, -1);
 end;
 
 { Returns the total number of pages based on page size and total files }
@@ -955,15 +976,34 @@ begin
   end;
 end;
 
-{ Sets the flow layout algorithm }
+{ SetFlowLayout - Sets the flow layout algorithm and recalculates layout }
 procedure TFlowmotion.SetFlowLayout(Value: TFlowLayout);
 begin
+  if not visible then
+    Exit;
+
   if FFlowLayout <> Value then
   begin
+    DeselectZoomedImage;
+
     FFlowLayout := Value;
+
+    // When switching to free float mode, ensure all images have positions
+    if FFlowLayout = flFreeFloat then
+    begin
+
+      CalculateLayoutFreeFloat;
+    end
+    else
+    begin
+      // For other layout modes, recalculate the layout
+      CalculateLayout;
+    end;
+
     Invalidate;
   end;
 end;
+
 
 { Sets the ImageEntryStyle for new images }
 procedure TFlowmotion.SetImageEntryStyle(Value: TImageEntryStyle);
@@ -1031,8 +1071,8 @@ begin
   FActivationZones[High(FActivationZones)].Name := AName;
   FActivationZones[High(FActivationZones)].Rect := ARect;
 end;
-
 { Clears all activation zones and resets the last zone name }
+
 procedure TFlowmotion.ClearActivationZones;
 begin
   SetLength(FActivationZones, 0);
@@ -1560,7 +1600,6 @@ begin
   if FHotTrackZoom <> Value then
   begin
     FHotTrackZoom := Value;
-
     // When HotTrackZoom is disabled, all active hot-zooms must be
     // immediately reset to prevent a "glow-after-effect".
     if not FHotTrackZoom then
@@ -1577,7 +1616,6 @@ begin
         end;
         FHotItem := nil;
       end;
-
       // Reset all other images that might still be animating.
       for i := 0 to FImages.Count - 1 do
       begin
@@ -1590,7 +1628,6 @@ begin
         end;
       end;
     end;
-
     Invalidate;
   end;
 end;
@@ -2571,21 +2608,82 @@ begin
   Result := Min((FCurrentPage + 1) * FPageSize, FAllFiles.Count) - 1;
 end;
 
-{ Calculates the layout for all images based on current FlowLayout setting }
+{ CalculateLayout - Calculates the layout for all images based on current FlowLayout setting }
 procedure TFlowmotion.CalculateLayout;
 begin
   case FFlowLayout of
-    flPerfectSize:
-      CalculateLayoutPerfectSized;
     flSorted:
       CalculateLayoutSorted;
+    flFreeFloat:
+      CalculateLayoutFreeFloat;
   end;
 end;
 
-{ Placeholder for testing around }
-procedure TFlowmotion.CalculateLayoutPerfectSized;
-begin
 
+{ CalculateLayoutFreeFloat - Implements free float positioning for images }
+procedure TFlowmotion.CalculateLayoutFreeFloat;
+var
+  i: Integer;
+  ImageItem: TImageItem;
+  DefaultWidth, DefaultHeight: Integer;
+  ColCount, RowCount: Integer;
+  NeedsInitialLayout: Boolean;
+begin
+  // Check if we need to do an initial sorted layout first
+  NeedsInitialLayout := False;
+  for i := 0 to FImages.Count - 1 do
+  begin
+    ImageItem := TImageItem(FImages[i]);
+    // If any image doesn't have a position, we need initial layout
+    if IsRectEmpty(ImageItem.TargetRect) then
+    begin
+      NeedsInitialLayout := True;
+      Break;
+    end;
+  end;
+
+  // If we need initial layout, do sorted layout first
+  if NeedsInitialLayout then
+  begin
+    // Temporarily switch to sorted mode to calculate proper layout
+    FFlowLayout := flSorted;
+    try
+      CalculateLayoutSorted;
+    finally
+      FFlowLayout := flFreeFloat;
+    end;
+    Exit;
+  end;
+
+  // In free float mode, we don't recalculate positions for existing images
+  // Images stay where they were placed by user
+  // Only handle newly added images that don't have a position yet
+
+  // Set default size for new images - use a reasonable default size
+  DefaultWidth := Max(150, Width div 6); // At least 150px or 1/6 of width
+  DefaultHeight := Max(150, Height div 6); // At least 150px or 1/6 of height
+  ColCount := Max(1, Width div (DefaultWidth + 20)); // 20px spacing
+  RowCount := Max(1, Height div (DefaultHeight + 20)); // 20px spacing
+
+  for i := 0 to FImages.Count - 1 do
+  begin
+    ImageItem := TImageItem(FImages[i]);
+
+    // IMPORTANT: Skip the selected image in free float mode - it stays where it is
+    if (FFlowLayout = flFreeFloat) and (ImageItem = FSelectedImage) then
+      Continue;
+
+    // If this is a new image without a position, place it at a default location
+    if IsRectEmpty(ImageItem.TargetRect) then
+    begin
+      // Place new images in a simple grid initially
+      ImageItem.TargetRect := Rect(20 + (i mod ColCount) * (DefaultWidth + 20), 20 + (i div ColCount) * (DefaultHeight + 20), 20 + (i mod ColCount) * (DefaultWidth + 20) + DefaultWidth, 20 + (i div ColCount) * (DefaultHeight + 20) + DefaultHeight);
+
+      // For new images, set StartRect to TargetRect to avoid animation
+      ImageItem.StartRect := ImageItem.TargetRect;
+      ImageItem.CurrentRect := ImageItem.TargetRect;
+    end;
+  end;
 end;
 
 
@@ -3109,7 +3207,7 @@ begin
   Result := BestCandidate;
 end;
 
-{ Handles mouse button release events }
+{ MouseUp - Handles mouse button release events }
 procedure TFlowmotion.MouseUp(Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
 var
   ImageUnderCursor: TImageItem;
@@ -3119,20 +3217,35 @@ begin
 
   if (Button = mbLeft) then
   begin
-    // Check if a drag or a potential drag has just ended
+    // Handle dragging any image in free float mode
+    if FDraggingImage then
+    begin
+      FDraggingImage := False;
+      FDraggedImage := nil;
+      MouseCapture := False;
+
+      if FlowLayout = flFreeFloat then
+        FBreathingPhase := FBreathingPhase - 0.4;
+
+      // Check if the mouse cursor is still over the image after release
+      ImageUnderCursor := GetImageAtPoint(X, Y);
+      if (ImageUnderCursor <> nil) then
+      begin
+        FHotItem := ImageUnderCursor;
+        StartAnimationThread;
+      end;
+    end;
+
+    // Handle dragging of selected image
     if FDraggingSelected or FIsPotentialDrag then
     begin
-      // Reset both dragging states
       FDraggingSelected := False;
       FIsPotentialDrag := False;
       MouseCapture := False;
 
-      // Check if the mouse cursor is still over the selected image after release
       ImageUnderCursor := GetImageAtPoint(X, Y);
       if (ImageUnderCursor = FSelectedImage) and (FSelectedImage <> nil) then
       begin
-        // The mouse is still over the image, so it should be the hot item again
-        // This is crucial for re-enabling the breathing effect
         FHotItem := FSelectedImage;
         StartAnimationThread;
       end;
@@ -3142,7 +3255,7 @@ begin
   inherited MouseUp(Button, Shift, X, Y);
 end;
 
-{ Handles mouse movement for hot-tracking and dragging }
+{ MouseMove - Handles mouse movement for hot-tracking and dragging }
 procedure TFlowmotion.MouseMove(Shift: TShiftState; X, Y: Integer);
 var
   NewHot: TImageItem;
@@ -3151,78 +3264,77 @@ var
   CurrentZoneName: string;
   i: Integer;
 const
-  // Minimum distance in pixels the mouse must move to be considered a drag
   DRAG_THRESHOLD = 20;
 begin
   if FClearing or FInFallAnimation then
     Exit;
 
-  // =================================================================
-  // == NEW LOGIC: Initiate dragging only after a small mouse movement ==
-  // =================================================================
+  // Existing dragging logic for selected image
   if FIsPotentialDrag and (FSelectedImage <> nil) then
   begin
-    // Has the mouse moved enough since the click to qualify as a drag?
     if (Abs(X - FDragStartPos.X) > DRAG_THRESHOLD) or (Abs(Y - FDragStartPos.Y) > DRAG_THRESHOLD) then
     begin
-      // YES! This is now a confirmed drag.
       FDraggingSelected := True;
       FBreathingPhase := 0;
-      FIsPotentialDrag := False; // The potential state is over
+      FIsPotentialDrag := False;
     end;
   end;
 
-  // Handle dragging of the selected image
   if FDraggingSelected and (FSelectedImage <> nil) then
   begin
     NewCenterX := X - FDragOffset.X;
     NewCenterY := Y - FDragOffset.Y;
 
-    // Update the target rect of the selected image to follow the mouse
     FSelectedImage.TargetRect := Rect(NewCenterX - (FSelectedImage.TargetRect.Right - FSelectedImage.TargetRect.Left) div 2, NewCenterY - (FSelectedImage.TargetRect.Bottom - FSelectedImage.TargetRect.Top) div 2, NewCenterX + (FSelectedImage.TargetRect.Right - FSelectedImage.TargetRect.Left) div 2, NewCenterY + (FSelectedImage.TargetRect.Bottom - FSelectedImage.TargetRect.Top) div 2);
 
-    // =================================================================
-    // == LOGIC FOR ACTIVATION ZONES ==
-    // =================================================================
-    // Calculate the center point of the image's *new* target rectangle
+    // Check activation zones
     ImageCenter.X := FSelectedImage.TargetRect.Left + (FSelectedImage.TargetRect.Right - FSelectedImage.TargetRect.Left) div 2;
     ImageCenter.Y := FSelectedImage.TargetRect.Top + (FSelectedImage.TargetRect.Bottom - FSelectedImage.TargetRect.Top) div 2;
 
-    // Reset the current zone name before checking
     CurrentZoneName := '';
-
-    // Check if the image center is inside any of the defined activation zones
     for i := Low(FActivationZones) to High(FActivationZones) do
     begin
       if PtInRect(FActivationZones[i].Rect, ImageCenter) then
       begin
         CurrentZoneName := FActivationZones[i].Name;
-        Break; // Zone found, no need to check further
+        Break;
       end;
     end;
 
-    // If the image has entered a *new* zone, fire the event
     if (CurrentZoneName <> '') and (CurrentZoneName <> FLastActivationZoneName) then
     begin
-      FLastActivationZoneName := CurrentZoneName; // Store the new zone name
+      FLastActivationZoneName := CurrentZoneName;
       if Assigned(FOnSelectedImageEnterZone) then
         FOnSelectedImageEnterZone(Self, FSelectedImage, CurrentZoneName);
     end
-    // If the image is not in any zone, reset the last zone name
     else if CurrentZoneName = '' then
     begin
       FLastActivationZoneName := '';
     end;
-    // =================================================================
 
     StartAnimationThread;
-    Exit; // Skip hot-tracking while dragging
+    Exit;
   end;
 
-  // Find the image under the cursor
+  // Allow dragging any image in free float mode
+  if (FFlowLayout = flFreeFloat) and FDraggingImage and (FDraggedImage <> nil) then
+  begin
+    NewCenterX := X - FDragOffset.X;
+    NewCenterY := Y - FDragOffset.Y;
+
+    // Calculate new position based on mouse position and offset
+    FDraggedImage.TargetRect := Rect(NewCenterX - (FDraggedImage.TargetRect.Right - FDraggedImage.TargetRect.Left) div 2, NewCenterY - (FDraggedImage.TargetRect.Bottom - FDraggedImage.TargetRect.Top) div 2, NewCenterX + (FDraggedImage.TargetRect.Right - FDraggedImage.TargetRect.Left) div 2, NewCenterY + (FDraggedImage.TargetRect.Bottom - FDraggedImage.TargetRect.Top) div 2);
+
+    // Update current position immediately for responsive dragging
+    FDraggedImage.CurrentRect := FDraggedImage.TargetRect;
+
+    StartAnimationThread;
+    Exit;
+  end;
+
+  // Existing hot-tracking logic
   NewHot := GetImageAtPoint(X, Y);
 
-  // If HotTrackZoom is disabled, ensure no item is hot and exit.
   if not FHotTrackZoom then
   begin
     if FHotItem <> nil then
@@ -3234,10 +3346,8 @@ begin
   end
   else
   begin
-    // HotTrackZoom is enabled, proceed with hot-tracking logic.
     if (NewHot = nil) and (FHotItem <> nil) then
     begin
-      // Mouse is over empty space, so fade out the previous hot item.
       FHotItem.FHotZoomTarget := 1.0;
       FHotItem := nil;
       StartAnimationThread;
@@ -3246,13 +3356,10 @@ begin
     end
     else if (NewHot <> FHotItem) and (NewHot <> nil) then
     begin
-      // Mouse is over a new image.
       if (FHotItem <> nil) and (FHotItem <> NewHot) then
       begin
-        // Fade out the previous hot item if it's different.
         FHotItem.FHotZoomTarget := 1.0;
       end;
-      // Set the new hot item.
       FHotItem := NewHot;
       StartAnimationThread;
       if not inPaintCycle then
@@ -3260,15 +3367,13 @@ begin
     end;
   end;
 
-  // Update the cursor based on whether an item is hot.
   if FHotItem <> nil then
     Cursor := crHandPoint
   else
     Cursor := crDefault;
 end;
 
-
-{ Handles mouse button press events for selection, double-click and dragging }
+{ MouseDown - Handles mouse button press events for selection, double-click and dragging }
 procedure TFlowmotion.MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
 var
   ImageItem: TImageItem;
@@ -3282,15 +3387,36 @@ begin
   ImageItem := GetImageAtPoint(X, Y);
   Index := FImages.IndexOf(ImageItem);
 
-  // ------------------------------------------------------------------
-  // 1. Double-click on an image
-  // ------------------------------------------------------------------
+  // Handle double-click
   if (Button = mbLeft) and (ssDouble in Shift) then
   begin
     if ImageItem <> nil then
     begin
-      if FSelectedImage <> ImageItem then
-        SetSelectedImage(ImageItem, Index);
+      if FFlowLayout = flFreeFloat then
+      begin
+        // Clear previous selection
+        if FSelectedImage <> nil then
+        begin
+          FSelectedImage.IsSelected := False;
+          if FSelectedImage = FWasSelectedItem then
+            FWasSelectedItem := nil;
+        end;
+
+        // Set new selection directly
+        FSelectedImage := ImageItem;
+        FCurrentSelectedIndex := Index;
+        ImageItem.IsSelected := True;
+        FHotItem := ImageItem;
+
+        // Trigger selection event
+        if Assigned(FOnItemSelected) then
+          FOnItemSelected(Self, ImageItem, Index);
+      end
+      else
+      begin
+        if FSelectedImage <> ImageItem then
+          SetSelectedImage(ImageItem, Index);
+      end;
 
       if Assigned(FOnSelectedImageDblClick) then
         FOnSelectedImageDblClick(Self, ImageItem, Index);
@@ -3298,44 +3424,75 @@ begin
     Exit;
   end;
 
-  // ------------------------------------------------------------------
-  // 2. Click on background ? deselect and zoom everything back to normal view
-  // ------------------------------------------------------------------
+  // Click on background - deselect
   if (Button = mbLeft) and (ImageItem = nil) then
   begin
     if FSelectedImage <> nil then
     begin
-      DeselectZoomedImage; // Smoothly returns all images to normal grid size
-      Invalidate; // Repaint immediately
+      DeselectZoomedImage;
+      Invalidate;
     end;
     Exit;
   end;
 
-  // ------------------------------------------------------------------
-  // 3. Left click on an actual image
-  // ------------------------------------------------------------------
+  // Left click on an image
   if Button = mbLeft then
   begin
-    // External handler (e.g. for dragging support)
+    // External handler
     if Assigned(FOnSelectedItemMouseDown) then
       FOnSelectedItemMouseDown(Self, ImageItem, Index, X, Y, Button, Shift);
 
-    // Check for POTENTIAL dragging start
+    // Handle dragging any image in free float mode
+    if (FFlowLayout = flFreeFloat) and (ImageItem <> nil) then
+    begin
+      FDraggingImage := True;
+      FDraggedImage := ImageItem;
+      FDragStartPos := Point(X, Y);
+
+      // Calculate offset from mouse to center of image
+      FDragOffset.X := X - ((ImageItem.CurrentRect.Left + ImageItem.CurrentRect.Right) div 2);
+      FDragOffset.Y := Y - ((ImageItem.CurrentRect.Top + ImageItem.CurrentRect.Bottom) div 2);
+      MouseCapture := True;
+
+      // In free float mode, select the image WITHOUT calling SetSelectedImage
+      if FSelectedImage <> ImageItem then
+      begin
+        // Clear previous selection
+        if FSelectedImage <> nil then
+        begin
+          FSelectedImage.IsSelected := False;
+          if FSelectedImage = FWasSelectedItem then
+            FWasSelectedItem := nil;
+        end;
+
+        // Set new selection directly
+        FSelectedImage := ImageItem;
+        FCurrentSelectedIndex := Index;
+        ImageItem.IsSelected := True;
+        FHotItem := ImageItem;
+
+        // Trigger selection event
+        if Assigned(FOnItemSelected) then
+          FOnItemSelected(Self, ImageItem, Index);
+      end;
+
+      Exit;
+    end;
+
+    // Existing dragging logic for selected image (for non-free-float modes)
     if FSelectedMovable and (ImageItem = FSelectedImage) then
     begin
       FIsPotentialDrag := True;
       FDragStartPos := Point(X, Y);
 
-      // Calculate offset from mouse to center of the image
       FDragOffset.X := X - ((ImageItem.CurrentRect.Left + ImageItem.CurrentRect.Right) div 2);
       FDragOffset.Y := Y - ((ImageItem.CurrentRect.Top + ImageItem.CurrentRect.Bottom) div 2);
-      MouseCapture := True; // Capture mouse events even if it leaves the control
+      MouseCapture := True;
     end;
 
-    // Select new image (if not already selected)
+    // Select new image if not already selected (for non-free-float modes)
     if FSelectedImage <> ImageItem then
     begin
-      // Small tactile "dip" when clicking a hot-tracked (zoomed) image
       if ImageItem.FHotZoom >= 1.1 then
         ImageItem.FHotZoom := ImageItem.FHotZoom - 0.1;
 
@@ -3343,11 +3500,11 @@ begin
     end
     else
     begin
-      // Already selected ? small breathing push for tactile feedback
       FBreathingPhase := FBreathingPhase - 0.4;
     end;
   end;
 end;
+
 
 { Sets up animation for a new image entering the gallery }
 procedure TFlowmotion.AnimateImage(ImageItem: TImageItem; EntryStyle: TImageEntryStyle);
@@ -3436,23 +3593,32 @@ begin
   // --------------------------------------------------------------
   // All new images start tiny and grow to full size
   // --------------------------------------------------------------
-
   // For center/point we start literally as a dot
-  if EffectiveStyle in [iesFromCenter, iesFromPoint] then
+
+  if FFlowLayout = flFreeFloat then
   begin
-    ImageItem.StartRect := Rect(StartX, StartY, StartX, StartY); // single pixel
-    ImageItem.CurrentRect := ImageItem.StartRect;
+    ImageItem.FHotZoom := 1.0; // Start at normal size
+    ImageItem.FHotZoomTarget := 1.0; // No zoom to normal size
   end
   else
   begin
-    // Start tiny but with correct aspect ratio
-    ImageItem.StartRect := Rect(StartX + Round(W * (1 - START_SCALE) / 2), StartY + Round(H * (1 - START_SCALE) / 2), StartX + Round(W * START_SCALE) + Round(W * (1 - START_SCALE) / 2), StartY + Round(H * START_SCALE) + Round(H * (1 - START_SCALE) / 2));
-    ImageItem.CurrentRect := ImageItem.StartRect;
-  end;
+    if (EffectiveStyle in [iesFromCenter, iesFromPoint]) then
+    begin
+      ImageItem.StartRect := Rect(StartX, StartY, StartX, StartY); // single pixel
+      ImageItem.CurrentRect := ImageItem.StartRect;
+    end
+    else
+    begin
+      // Start tiny but with correct aspect ratio
+      ImageItem.StartRect := Rect(StartX + Round(W * (1 - START_SCALE) / 2), StartY + Round(H * (1 - START_SCALE) / 2), StartX + Round(W * START_SCALE) + Round(W * (1 - START_SCALE) / 2), StartY + Round(H * START_SCALE) + Round(H * (1 - START_SCALE) / 2));
+      ImageItem.CurrentRect := ImageItem.StartRect;
+    end;
 
-  // Force hot-zoom animation from tiny ? normal
-  ImageItem.FHotZoom := START_SCALE; // start tiny
-  ImageItem.FHotZoomTarget := 1.0; // grow to normal size
+    // Force hot-zoom animation from tiny ? normal
+    ImageItem.FHotZoom := START_SCALE; // start tiny
+    ImageItem.FHotZoomTarget := 1.0; // grow to normal size
+
+  end;
 
   ImageItem.TargetRect := Target;
   ImageItem.AnimationProgress := 0;
@@ -3524,7 +3690,7 @@ begin
   end;
 end;
 
-{ Sets the selected image and starts zoom animations }
+{ SetSelectedImage - Sets the selected image and starts zoom animations }
 procedure TFlowmotion.SetSelectedImage(ImageItem: TImageItem; Index: Integer);
 var
   OldSelected: TImageItem;
@@ -3588,9 +3754,12 @@ begin
   end;
   FCurrentSelectedIndex := -1;
 
-  CalculateLayout;
+  // Only calculate layout if NOT in free float mode
+  if FFlowLayout <> flFreeFloat then
+    CalculateLayout;
 
-  if FZoomSelectedtoCenter then
+  // Only zoom to center if NOT in free float mode
+  if FZoomSelectedtoCenter and (FFlowLayout <> flFreeFloat) then
   begin
     // Start zoom animations
     if OldSelected <> nil then
@@ -3608,8 +3777,9 @@ begin
     FOnItemSelected(Self, ImageItem, Index);
 end;
 
-{ Main paint procedure: draws background and all images in (almost always) correct z-order }
-{ Main paint procedure: draws background and all images in (almost always) correct z-order }
+
+
+{ Main paint procedure: draws background and all images in (almost always) correct z-order }{ Main paint procedure: draws background and all images in (almost always) correct z-order }
 procedure TFlowmotion.Paint;
 var
   i: Integer;
@@ -3617,7 +3787,6 @@ var
   DrawRect: TRect;
   AnimatingItems: TList;
   EnteringItems: TList;
-
   // --------------------------------------------------------------
   // Compare function for correct Z-ordering during animations.
   // It uses a two-level sort:
@@ -3625,7 +3794,6 @@ var
   // 2. Secondary: If HotZoom is equal, sort by on-screen area (descending).
   // This ensures actively zooming items appear on top of static ones.
   // --------------------------------------------------------------
-
   // The CompareHotZoom function can be simplified or reverted to the original,
   // as it will no longer handle entering images.
 
@@ -3637,7 +3805,6 @@ var
   begin
     Zoom1 := TImageItem(Item1).FHotZoom;
     Zoom2 := TImageItem(Item2).FHotZoom;
-
     if Zoom1 > Zoom2 then
       Result := 1
     else if Zoom1 < Zoom2 then
@@ -3834,7 +4001,6 @@ end; }
   begin
     if not Item.Visible or Item.Bitmap.Empty then
       Exit;
-
     if (not FHotTrackZoom) and (not Item.IsSelected) then
     begin
       DrawNormalItem(Item);
@@ -3850,7 +4016,6 @@ end; }
       Exit;
     end;
   // ===================================================================
-
   // Base size and center
     if (Item.CurrentRect.Right > Item.CurrentRect.Left) and (Item.CurrentRect.Bottom > Item.CurrentRect.Top) then
     begin
@@ -3866,13 +4031,10 @@ end; }
       BaseW := Item.TargetRect.Right - Item.TargetRect.Left;
       BaseH := Item.TargetRect.Bottom - Item.TargetRect.Top;
     end;
-
     ZoomFactor := Item.FHotZoom;
     NewW := Round(BaseW * ZoomFactor);
     NewH := Round(BaseH * ZoomFactor);
-
     R := Rect(CenterX - NewW div 2, CenterY - NewH div 2, CenterX + NewW div 2, CenterY + NewH div 2);
-
   // Keep inside control (glow or hottrack margin)
     BorderWidth := Max(FGlowWidth, FHotTrackWidth);
     OffsetX := 0;
@@ -3886,9 +4048,7 @@ end; }
     if R.Bottom > Height then
       OffsetY := Height - R.Bottom - BorderWidth;
     OffsetRect(R, OffsetX, OffsetY);
-
     Canvas.StretchDraw(R, Item.Bitmap);
-
   // Glow / hot border
     if IsCurrentHot or Item.IsSelected then
     begin
@@ -3926,16 +4086,13 @@ begin
       Canvas.Brush.Color := FBackgroundColor;
       Canvas.FillRect(ClientRect);
     end;
-
     AnimatingItems := TList.Create;
     EnteringItems := TList.Create;
-
     try
       // 2. Collect animating and entering items
       for i := 0 to FImages.Count - 1 do
       begin
         ImageItem := TImageItem(FImages[i]);
-
         // A new image is "entering" if its animation progress is very low.
         // These get top priority and are added to their own special list.
         if (ImageItem.AnimationProgress < 0.99) and (ImageItem.FHotZoom < 0.99) and (ImageItem <> FSelectedImage) then
@@ -3949,7 +4106,6 @@ begin
           AnimatingItems.Add(ImageItem);
         end;
       end;
-
       // 3. Draw completely static items
       for i := 0 to FImages.Count - 1 do
       begin
@@ -3958,7 +4114,6 @@ begin
           Continue;
         DrawNormalItem(ImageItem);
       end;
-
       // 4. Draw all other animating items (sorted by zoom)
       if AnimatingItems.Count > 0 then
       begin
@@ -3972,7 +4127,6 @@ begin
             DrawNormalItem(TImageItem(AnimatingItems[i]));
         end;
       end;
-
       // 5. Current hovered item on top (unless it's selected or entering)
       if (FHotItem <> nil) and (FHotItem <> FSelectedImage) and (EnteringItems.IndexOf(FHotItem) = -1) then
       begin
@@ -3982,7 +4136,6 @@ begin
         else
           DrawNormalItem(FHotItem);
       end;
-
       // 6. Selected item (always on top of non-entering items)
       if FSelectedImage <> nil then
       begin
@@ -4003,7 +4156,6 @@ begin
           Canvas.Rectangle(DrawRect.Left, DrawRect.Top, DrawRect.Right, DrawRect.Bottom);
         end;
       end;
-
       // 7. Draw entering items on the very top
       for i := 0 to EnteringItems.Count - 1 do
       begin
@@ -4015,12 +4167,10 @@ begin
         else
           DrawNormalItem(TImageItem(EnteringItems[i]));
       end;
-
     finally
       AnimatingItems.Free;
       EnteringItems.Free;
     end;
-
   finally
     Canvas.Unlock;
     inPaintCycle := False;
@@ -4028,7 +4178,7 @@ begin
 end;
 
 
-{ Handles component resize: invalidates background cache and recalculates layout }
+{ Resize - Handles component resize: invalidates background cache and recalculates layout }
 procedure TFlowmotion.Resize;
 var
   NewSize: TSize;
@@ -4037,7 +4187,8 @@ begin
   inherited Resize;
 
   FBackgroundCacheValid := False;
-  if FZoomSelectedtoCenter and (FSelectedImage <> nil) then
+  // Only center selected image if NOT in free float mode
+  if FZoomSelectedtoCenter and (FSelectedImage <> nil) and (FFlowLayout <> flFreeFloat) then
   begin
     NewSize := GetOptimalSize(FSelectedImage.Bitmap.Width, FSelectedImage.Bitmap.Height, Min(FMaxZoomSize, Width div 2), Min(FMaxZoomSize, Height div 2));
     L := (Width - NewSize.cx) div 2;
@@ -4204,12 +4355,63 @@ begin
   if FInFallAnimation then
     Exit;
   if FCurrentSelectedIndex < FImages.Count - 1 then
-    SetSelectedImage(TImageItem(FImages[FCurrentSelectedIndex + 1]), FCurrentSelectedIndex + 1)
+  begin
+    // In free float mode, directly select without animation
+    if FFlowLayout = flFreeFloat then
+    begin
+      // Clear previous selection
+      if FSelectedImage <> nil then
+      begin
+        FSelectedImage.IsSelected := False;
+        if FSelectedImage = FWasSelectedItem then
+          FWasSelectedItem := nil;
+      end;
+
+      // Set new selection directly
+      FSelectedImage := TImageItem(FImages[FCurrentSelectedIndex + 1]);
+      FCurrentSelectedIndex := FCurrentSelectedIndex + 1;
+      FSelectedImage.IsSelected := True;
+      FHotItem := FSelectedImage;
+
+      // Trigger selection event
+      if Assigned(FOnItemSelected) then
+        FOnItemSelected(Self, FSelectedImage, FCurrentSelectedIndex);
+
+      Invalidate;
+    end
+    else
+      SetSelectedImage(TImageItem(FImages[FCurrentSelectedIndex + 1]), FCurrentSelectedIndex + 1);
+  end
   else if FCurrentPage < GetPageCount - 1 then
   begin
     NextPage;
     if FImages.Count > 0 then
-      SetSelectedImage(TImageItem(FImages[0]), 0);
+    begin
+      if FFlowLayout = flFreeFloat then
+      begin
+        // Clear previous selection
+        if FSelectedImage <> nil then
+        begin
+          FSelectedImage.IsSelected := False;
+          if FSelectedImage = FWasSelectedItem then
+            FWasSelectedItem := nil;
+        end;
+
+        // Set new selection directly
+        FSelectedImage := TImageItem(FImages[0]);
+        FCurrentSelectedIndex := 0;
+        FSelectedImage.IsSelected := True;
+        FHotItem := FSelectedImage;
+
+        // Trigger selection event
+        if Assigned(FOnItemSelected) then
+          FOnItemSelected(Self, FSelectedImage, FCurrentSelectedIndex);
+
+        Invalidate;
+      end
+      else
+        SetSelectedImage(TImageItem(FImages[0]), 0);
+    end;
   end;
 end;
 
@@ -4219,12 +4421,63 @@ begin
   if FInFallAnimation then
     Exit;
   if FCurrentSelectedIndex > 0 then
-    SetSelectedImage(TImageItem(FImages[FCurrentSelectedIndex - 1]), FCurrentSelectedIndex - 1)
+  begin
+    // In free float mode, directly select without animation
+    if FFlowLayout = flFreeFloat then
+    begin
+      // Clear previous selection
+      if FSelectedImage <> nil then
+      begin
+        FSelectedImage.IsSelected := False;
+        if FSelectedImage = FWasSelectedItem then
+          FWasSelectedItem := nil;
+      end;
+
+      // Set new selection directly
+      FSelectedImage := TImageItem(FImages[FCurrentSelectedIndex - 1]);
+      FCurrentSelectedIndex := FCurrentSelectedIndex - 1;
+      FSelectedImage.IsSelected := True;
+      FHotItem := FSelectedImage;
+
+      // Trigger selection event
+      if Assigned(FOnItemSelected) then
+        FOnItemSelected(Self, FSelectedImage, FCurrentSelectedIndex);
+
+      Invalidate;
+    end
+    else
+      SetSelectedImage(TImageItem(FImages[FCurrentSelectedIndex - 1]), FCurrentSelectedIndex - 1);
+  end
   else if FCurrentPage > 0 then
   begin
     PrevPage;
     if FImages.Count > 0 then
-      SetSelectedImage(TImageItem(FImages[FImages.Count - 1]), FImages.Count - 1);
+    begin
+      if FFlowLayout = flFreeFloat then
+      begin
+        // Clear previous selection
+        if FSelectedImage <> nil then
+        begin
+          FSelectedImage.IsSelected := False;
+          if FSelectedImage = FWasSelectedItem then
+            FWasSelectedItem := nil;
+        end;
+
+        // Set new selection directly
+        FSelectedImage := TImageItem(FImages[FImages.Count - 1]);
+        FCurrentSelectedIndex := FImages.Count - 1;
+        FSelectedImage.IsSelected := True;
+        FHotItem := FSelectedImage;
+
+        // Trigger selection event
+        if Assigned(FOnItemSelected) then
+          FOnItemSelected(Self, FSelectedImage, FCurrentSelectedIndex);
+
+        Invalidate;
+      end
+      else
+        SetSelectedImage(TImageItem(FImages[FImages.Count - 1]), FImages.Count - 1);
+    end;
   end;
 end;
 
