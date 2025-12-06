@@ -1188,7 +1188,6 @@ end;
 procedure TFlowmotion.LoadPositionsFromStream(Stream: TStream);
 var
   i, Count: Integer;
-  Pos: TImagePosition;
   Reader: TReader;
 begin
   Reader := TReader.Create(Stream, 4096);
@@ -1263,6 +1262,7 @@ begin
     ImageItem := TImageItem(FImages[i]);
     ImageItem.StartRect := ImageItem.CurrentRect;
     ImageItem.AnimationProgress := 0;
+    ImageItem.FHotZoomTarget := 1.0;
     ImageItem.Animating := True;
   end;
 
@@ -1345,9 +1345,13 @@ var
   Progress, Eased, Speed: Double;
   AnyAnimating, AnyAnimatingAfter, AllFinishedAtStart, NeedRepaint: Boolean;
   TempRect: TRect;
-  TempZoom, TempAlpha: Double;
+  TempZoom, TempAlpha, ZoomFactor : Double;
   TargetZoom: Double;
-
+  NewW, NewH,
+  CenterX, CenterY,
+  BaseW, BaseH,
+  OffsetX, OffsetY : Integer;
+  R : Trect;
   // -----------------------------------------------------------------------
   // Helper: compare two TRects for equality (pixel-exact)
   // -----------------------------------------------------------------------
@@ -1573,7 +1577,57 @@ begin
       if ImageItem.FHotZoom < 1.0 then
         ImageItem.FHotZoom := 1.0;
 
-      NeedRepaint := True;
+      // NEW: Ensure the CurrentRect stays within bounds during hotzoom
+      // This fixes the issue where images can go partially outside when hotzooming back
+      if (ImageItem.CurrentRect.Right > ImageItem.CurrentRect.Left) and 
+         (ImageItem.CurrentRect.Bottom > ImageItem.CurrentRect.Top) then
+      begin
+        CenterX := ImageItem.CurrentRect.Left + (ImageItem.CurrentRect.Right - ImageItem.CurrentRect.Left) div 2;
+        CenterY := ImageItem.CurrentRect.Top + (ImageItem.CurrentRect.Bottom - ImageItem.CurrentRect.Top) div 2;
+        BaseW := ImageItem.CurrentRect.Right - ImageItem.CurrentRect.Left;
+        BaseH := ImageItem.CurrentRect.Bottom - ImageItem.CurrentRect.Top;
+      end
+      else
+      begin
+        CenterX := ImageItem.TargetRect.Left + (ImageItem.TargetRect.Right - ImageItem.TargetRect.Left) div 2;
+        CenterY := ImageItem.TargetRect.Top + (ImageItem.TargetRect.Bottom - ImageItem.TargetRect.Top) div 2;
+        BaseW := ImageItem.TargetRect.Right - ImageItem.TargetRect.Left;
+        BaseH := ImageItem.TargetRect.Bottom - ImageItem.TargetRect.Top;
+      end;
+
+      ZoomFactor := ImageItem.FHotZoom;
+      NewW := Round(BaseW * ZoomFactor);
+      NewH := Round(BaseH * ZoomFactor);
+
+      // Calculate the zoomed rect
+      R := Rect(CenterX - NewW div 2, CenterY - NewH div 2, CenterX + NewW div 2, CenterY + NewH div 2);
+
+      // Keep inside control (glow or hottrack margin)
+      BorderWidth := Max(FGlowWidth, FHotTrackWidth);
+      OffsetX := 0;
+      OffsetY := 0;
+      if R.Left < 0 then
+        OffsetX := -R.Left + BorderWidth;
+      if R.Right > Width then
+        OffsetX := Width - R.Right - BorderWidth;
+      if R.Top < 0 then
+        OffsetY := -R.Top + BorderWidth;
+      if R.Bottom > Height then
+        OffsetY := Height - R.Bottom - BorderWidth;
+    
+      // If we need to adjust the position, update the CurrentRect
+      if (OffsetX <> 0) or (OffsetY <> 0) then
+      begin
+        // Calculate the new center position
+        CenterX := CenterX + OffsetX;
+        CenterY := CenterY + OffsetY;
+    
+        // Update the CurrentRect to keep it within bounds
+        ImageItem.CurrentRect := Rect(CenterX - BaseW div 2, CenterY - BaseH div 2, 
+                                     CenterX + BaseW div 2, CenterY + BaseH div 2);
+        NeedRepaint := True;
+      end;
+
     end;
 
     // Advance breathing phase only when selected item is hovered
@@ -2121,7 +2175,7 @@ begin
           FoundPosition := False;
           // First try the default grid position
           NewX := 20 + ((FImages.Count - 1) mod ColCount) * (DefaultWidth + 20);
-          NewY := 20 + ((FImages.Count - 1) div ColCount) * (DefaultHeight + 20);
+          NewY := 20 + ((FImages.Count - 1) div RowCount) * (DefaultHeight + 20);
           // Check if this position is within bounds
           if (NewX + DefaultWidth <= Width - 20) and (NewY + DefaultHeight <= Height - 20) then
           begin
@@ -3637,7 +3691,6 @@ var
   BorderSize: Integer;
 begin
   P := Point(X, Y);
-  Result := nil;
 
   // ==================================================================
   // 1. SELECTED IMAGE HAS ABSOLUTE PRIORITY
@@ -5208,4 +5261,3 @@ begin
 end;
 
 end.
-
