@@ -786,7 +786,7 @@ begin
   FKeepAspectRatio := True;
   FBackgroundColor := clBlack;
   FHotTrackColor := clTeal;
-  HotTrackZoom := True;
+  HotTrackZoom := true;
   FMaxColumns := 0;
   FMaxRows := 0;
   FSelectedMovable := True;
@@ -1260,6 +1260,20 @@ begin
     begin
       ImageItem := TImageItem(FImages[i]);
 
+
+    if (not FHotTrackZoom) and (ImageItem <> FSelectedImage) then
+    begin
+      if ImageItem.FHotZoom <> 1.0 then
+      begin
+        ImageItem.FHotZoom := 1.0;
+        ImageItem.FHotZoomTarget := 1.0;
+        NeedRepaint := True;
+      end;
+      // Skip the rest of the hot-zoom logic for this item.
+      Continue;
+    end;
+
+
       if not (ImageItem.Visible and HotTrackZoom) then
         Continue;
 
@@ -1268,7 +1282,7 @@ begin
         TargetZoom := 1.0 + BREATHING_AMPLITUDE * 0.2 * (Sin(FBreathingPhase * 2 * Pi) + 1.0)
 
         // Normal hot-zoom when only hovered
-      else if ImageItem = FHotItem then
+      else if (ImageItem = FHotItem) and HotTrackZoom then
         TargetZoom := HOT_ZOOM_MAX_FACTOR
       else
         TargetZoom := 1.0;
@@ -1281,7 +1295,8 @@ begin
 
       // Smooth approach
       ImageItem.FHotZoom := ImageItem.FHotZoom + (TargetZoom - ImageItem.FHotZoom) * Speed * DeltaTime;
-      ImageItem.FHotZoomTarget := TargetZoom; // for ItemFinished check
+      if HotTrackZoom then ImageItem.FHotZoomTarget := TargetZoom // for ItemFinished check
+       else  ImageItem.FHotZoomTarget := 1.0;
 
       // Clamp non-breathing hotzoom
       if (ImageItem <> FSelectedImage) and (ImageItem.FHotZoom > HOT_ZOOM_MAX_FACTOR) then
@@ -1494,10 +1509,43 @@ end;
 
 { Enables or disables hot-track zoom effect }
 procedure TFlowmotion.SetHotTrackZoom(const Value: Boolean);
+var
+  i: Integer;
 begin
   if FHotTrackZoom <> Value then
   begin
     FHotTrackZoom := Value;
+
+    // When HotTrackZoom is disabled, all active hot-zooms must be
+    // immediately reset to prevent a "glow-after-effect".
+    if not FHotTrackZoom then
+    begin
+      // Reset FHotItem so it's no longer considered "hot".
+      if FHotItem <> nil then
+      begin
+        // Only reset if it's not the selected image, which might have
+        // its own animation (e.g., breathing).
+        if FHotItem <> FSelectedImage then
+        begin
+          FHotItem.FHotZoom := 1.0;
+          FHotItem.FHotZoomTarget := 1.0;
+        end;
+        FHotItem := nil;
+      end;
+
+      // Reset all other images that might still be animating.
+      for i := 0 to FImages.Count - 1 do
+      begin
+        // The selected image is excluded here as it might have the
+        // "breathing" effect, which is independent of hot-tracking.
+        if (TImageItem(FImages[i]).FHotZoom > 1.0) and (TImageItem(FImages[i]) <> FSelectedImage) then
+        begin
+          TImageItem(FImages[i]).FHotZoom := 1.0;
+          TImageItem(FImages[i]).FHotZoomTarget := 1.0;
+        end;
+      end;
+    end;
+
     Invalidate;
   end;
 end;
@@ -2885,7 +2933,7 @@ var
   CurrentZoom: Double;
   CurrentArea: Integer;
   CurrentRect: TRect;
-  BorderSize: Integer; // For D7 compatibility and consistent border sizing
+  BorderSize: Integer;
 begin
   P := Point(X, Y);
   Result := nil;
@@ -3024,7 +3072,7 @@ begin
   inherited MouseUp(Button, Shift, X, Y);
 end;
 
-{ Handles mouse movement for hot-tracking }
+{ Handles mouse movement for hot-tracking and dragging }
 procedure TFlowmotion.MouseMove(Shift: TShiftState; X, Y: Integer);
 var
   NewHot: TImageItem;
@@ -3033,42 +3081,69 @@ begin
   if FClearing or FInFallAnimation then
     Exit;
 
-  // Handle dragging
+  // Handle dragging of the selected image
   if FDraggingSelected and (FSelectedImage <> nil) then
   begin
     NewCenterX := X - FDragOffset.X;
     NewCenterY := Y - FDragOffset.Y;
 
-    // Update the target rect of the selected image
-    FSelectedImage.TargetRect := Rect(NewCenterX - (FSelectedImage.TargetRect.Right - FSelectedImage.TargetRect.Left) div 2, NewCenterY - (FSelectedImage.TargetRect.Bottom - FSelectedImage.TargetRect.Top) div 2, NewCenterX + (FSelectedImage.TargetRect.Right - FSelectedImage.TargetRect.Left) div 2, NewCenterY + (FSelectedImage.TargetRect.Bottom - FSelectedImage.TargetRect.Top) div 2);
+    // Update the target rect of the selected image to follow the mouse
+    FSelectedImage.TargetRect := Rect(
+      NewCenterX - (FSelectedImage.TargetRect.Right - FSelectedImage.TargetRect.Left) div 2,
+      NewCenterY - (FSelectedImage.TargetRect.Bottom - FSelectedImage.TargetRect.Top) div 2,
+      NewCenterX + (FSelectedImage.TargetRect.Right - FSelectedImage.TargetRect.Left) div 2,
+      NewCenterY + (FSelectedImage.TargetRect.Bottom - FSelectedImage.TargetRect.Top) div 2
+    );
     // Start animation thread to smoothly move the image
     StartAnimationThread;
     Exit; // Skip hot-tracking while dragging
   end;
 
+  // Find the image under the cursor
   NewHot := GetImageAtPoint(X, Y);
 
-  if (NewHot = nil) and (FHotItem <> nil) then
+  // If HotTrackZoom is disabled, ensure no item is hot and exit.
+  if not FHotTrackZoom then
   begin
-    FHotItem.FHotZoomTarget := 1.0;
-    FHotItem := nil;
-    StartAnimationThread;
-    if not inPaintCycle then
-      Invalidate;
-  end
-  else if (NewHot <> FHotItem) and (NewHot <> nil) then
-  begin
-    if (FHotItem <> nil) and (FHotItem <> NewHot) then
+    // If a hot item still exists (it shouldn't after SetHotTrackZoom),
+    // reset it here as a safety measure.
+    if FHotItem <> nil then
     begin
       FHotItem.FHotZoomTarget := 1.0;
-    end;
-    FHotItem := NewHot;
-    StartAnimationThread;
-    if not inPaintCycle then
+      FHotItem := nil;
+      //StartAnimationThread; // Ensure the animation thread processes the reset
       Invalidate;
+    end;
+  end
+  else
+  begin
+    // HotTrackZoom is enabled, proceed with hot-tracking logic.
+    if (NewHot = nil) and (FHotItem <> nil) then
+    begin
+      // Mouse is over empty space, so fade out the previous hot item.
+      FHotItem.FHotZoomTarget := 1.0;
+      FHotItem := nil;
+      StartAnimationThread;
+      if not inPaintCycle then
+        Invalidate;
+    end
+    else if (NewHot <> FHotItem) and (NewHot <> nil) then
+    begin
+      // Mouse is over a new image.
+      if (FHotItem <> nil) and (FHotItem <> NewHot) then
+      begin
+        // Fade out the previous hot item if it's different.
+        FHotItem.FHotZoomTarget := 1.0;
+      end;
+      // Set the new hot item.
+      FHotItem := NewHot;
+      StartAnimationThread;
+      if not inPaintCycle then
+        Invalidate;
+    end;
   end;
 
-  // Cursor
+  // Update the cursor based on whether an item is hot.
   if FHotItem <> nil then
     Cursor := crHandPoint
   else
@@ -3259,9 +3334,6 @@ begin
   ImageItem.FHotZoom := START_SCALE; // start tiny
   ImageItem.FHotZoomTarget := 1.0; // grow to normal size
 
-  // Optional: tiny overshoot for extra juicy pop feel (uncomment if you want)
-  // ImageItem.FHotZoomTarget := 1.15;
-
   ImageItem.TargetRect := Target;
   ImageItem.AnimationProgress := 0;
   ImageItem.Animating := True;
@@ -3417,6 +3489,7 @@ begin
 end;
 
 { Main paint procedure: draws background and all images in (almost always) correct z-order }
+{ Main paint procedure: draws background and all images in (almost always) correct z-order }
 procedure TFlowmotion.Paint;
 var
   i: Integer;
@@ -3466,7 +3539,6 @@ var
         Result := 0;
     end;
   end;
-
 
   {        //gr32 test too slow like that:
  procedure GR32Stretch(DestCanvas: TCanvas; const DestRect: TRect; SrcBitmap: TBitmap);
@@ -3632,93 +3704,83 @@ end; }
   // Draw zoomed + alpha + glow item
   // --------------------------------------------------------------
   procedure DrawHotZoomedItem(Item: TImageItem; IsCurrentHot: Boolean);
-  var
-    CenterX, CenterY, BaseW, BaseH, NewW, NewH: Integer;
-    ZoomFactor: Double;
-    R: TRect;
-    OffsetX, OffsetY: Integer;
-    //BF: TBlendFunction;
-    BorderWidth: Integer;
+var
+  CenterX, CenterY, BaseW, BaseH, NewW, NewH: Integer;
+  ZoomFactor: Double;
+  R: TRect;
+  OffsetX, OffsetY: Integer;
+  BorderWidth: Integer;
+begin
+  if not Item.Visible or Item.Bitmap.Empty then
+    Exit;
+
+  if (not FHotTrackZoom) and (not Item.IsSelected) then
   begin
-    if not Item.Visible or Item.Bitmap.Empty then
-      Exit;
-
-    // Base size and center
-    if (Item.CurrentRect.Right > Item.CurrentRect.Left) and (Item.CurrentRect.Bottom > Item.CurrentRect.Top) then
+    DrawNormalItem(Item);
+    if IsCurrentHot then
     begin
-      CenterX := Item.CurrentRect.Left + (Item.CurrentRect.Right - Item.CurrentRect.Left) div 2;
-      CenterY := Item.CurrentRect.Top + (Item.CurrentRect.Bottom - Item.CurrentRect.Top) div 2;
-      BaseW := Item.CurrentRect.Right - Item.CurrentRect.Left;
-      BaseH := Item.CurrentRect.Bottom - Item.CurrentRect.Top;
-    end
-    else
-    begin
-      CenterX := Item.TargetRect.Left + (Item.TargetRect.Right - Item.TargetRect.Left) div 2;
-      CenterY := Item.TargetRect.Top + (Item.TargetRect.Bottom - Item.TargetRect.Top) div 2;
-      BaseW := Item.TargetRect.Right - Item.TargetRect.Left;
-      BaseH := Item.TargetRect.Bottom - Item.TargetRect.Top;
-    end;
-
-    ZoomFactor := Item.FHotZoom;
-    NewW := Round(BaseW * ZoomFactor);
-    NewH := Round(BaseH * ZoomFactor);
-
-    R := Rect(CenterX - NewW div 2, CenterY - NewH div 2, CenterX + NewW div 2, CenterY + NewH div 2);
-
-    // Keep inside control (glow or hottrack margin)
-    BorderWidth := Max(FGlowWidth, FHotTrackWidth);
-      // Use the larger border width
-
-    OffsetX := 0;
-    OffsetY := 0;
-    if R.Left < 0 then
-      OffsetX := -R.Left + BorderWidth;
-    if R.Right > Width then
-      OffsetX := Width - R.Right - BorderWidth;
-    if R.Top < 0 then
-      OffsetY := -R.Top + BorderWidth;
-    if R.Bottom > Height then
-      OffsetY := Height - R.Bottom - BorderWidth;
-    OffsetRect(R, OffsetX, OffsetY);
-
-    // Draw with alpha if needed
- {   if Item.Alpha < 255 then
-    begin
-      FTempBitmap.Width := NewW;
-      FTempBitmap.Height := NewH;
-      //SmartStretchDraw(FTempBitmap.Canvas, Rect(0,0,NewW,NewH), Item.Bitmap, Item.FAlpha);
-     // GR32Stretch(FTempBitmap.Canvas, Rect(0,0,NewW,NewH), Item.Bitmap);
-      FTempBitmap.Canvas.StretchDraw(Rect(0, 0, NewW, NewH), Item.Bitmap);
-
-      BF.BlendOp := AC_SRC_OVER;
-      BF.BlendFlags := 0;
-      BF.SourceConstantAlpha := Item.Alpha;
-      BF.AlphaFormat := 0;
-
-      AlphaBlend(Canvas.Handle, R.Left, R.Top, NewW, NewH, FTempBitmap.Canvas.Handle, 0, 0, NewW, NewH, BF);
-    end
-    else
-    begin
-    //  GR32Stretch(Canvas, R, Item.Bitmap);
-      //SmartStretchDraw(Canvas, R, Item.Bitmap, Item.FAlpha);
-      Canvas.StretchDraw(R, Item.Bitmap);
-    end;                  }
-
-    Canvas.StretchDraw(R, Item.Bitmap);
-
-    // Glow / hot border
-    if IsCurrentHot or Item.IsSelected then
-    begin
-      if Item.IsSelected then
-        InflateRect(R, FGlowWidth, FGlowWidth)
-      else
-        InflateRect(R, FHotTrackWidth, FHotTrackWidth);
-      Canvas.Pen.Width := ifThen(Item.IsSelected, FGlowWidth, FHotTrackWidth);
-      Canvas.Pen.Color := ifThen(Item.IsSelected, FGlowColor, FHotTrackColor);
+      R := Item.CurrentRect;
+      InflateRect(R, FHotTrackWidth, FHotTrackWidth);
+      Canvas.Pen.Width := FHotTrackWidth;
+      Canvas.Pen.Color := FHotTrackColor;
       Canvas.Brush.Style := bsClear;
       Canvas.Rectangle(R.Left, R.Top, R.Right, R.Bottom);
     end;
+    Exit;
   end;
+  // ===================================================================
+
+  // Base size and center
+  if (Item.CurrentRect.Right > Item.CurrentRect.Left) and (Item.CurrentRect.Bottom > Item.CurrentRect.Top) then
+  begin
+    CenterX := Item.CurrentRect.Left + (Item.CurrentRect.Right - Item.CurrentRect.Left) div 2;
+    CenterY := Item.CurrentRect.Top + (Item.CurrentRect.Bottom - Item.CurrentRect.Top) div 2;
+    BaseW := Item.CurrentRect.Right - Item.CurrentRect.Left;
+    BaseH := Item.CurrentRect.Bottom - Item.CurrentRect.Top;
+  end
+  else
+  begin
+    CenterX := Item.TargetRect.Left + (Item.TargetRect.Right - Item.TargetRect.Left) div 2;
+    CenterY := Item.TargetRect.Top + (Item.TargetRect.Bottom - Item.TargetRect.Top) div 2;
+    BaseW := Item.TargetRect.Right - Item.TargetRect.Left;
+    BaseH := Item.TargetRect.Bottom - Item.TargetRect.Top;
+  end;
+
+  ZoomFactor := Item.FHotZoom;
+  NewW := Round(BaseW * ZoomFactor);
+  NewH := Round(BaseH * ZoomFactor);
+
+  R := Rect(CenterX - NewW div 2, CenterY - NewH div 2, CenterX + NewW div 2, CenterY + NewH div 2);
+
+  // Keep inside control (glow or hottrack margin)
+  BorderWidth := Max(FGlowWidth, FHotTrackWidth);
+  OffsetX := 0;
+  OffsetY := 0;
+  if R.Left < 0 then
+    OffsetX := -R.Left + BorderWidth;
+  if R.Right > Width then
+    OffsetX := Width - R.Right - BorderWidth;
+  if R.Top < 0 then
+    OffsetY := -R.Top + BorderWidth;
+  if R.Bottom > Height then
+    OffsetY := Height - R.Bottom - BorderWidth;
+  OffsetRect(R, OffsetX, OffsetY);
+
+  Canvas.StretchDraw(R, Item.Bitmap);
+
+  // Glow / hot border
+  if IsCurrentHot or Item.IsSelected then
+  begin
+    if Item.IsSelected then
+      InflateRect(R, FGlowWidth, FGlowWidth)
+    else
+      InflateRect(R, FHotTrackWidth, FHotTrackWidth);
+    Canvas.Pen.Width := ifThen(Item.IsSelected, FGlowWidth, FHotTrackWidth);
+    Canvas.Pen.Color := ifThen(Item.IsSelected, FGlowColor, FHotTrackColor);
+    Canvas.Brush.Style := bsClear;
+    Canvas.Rectangle(R.Left, R.Top, R.Right, R.Bottom);
+  end;
+end;
 
 begin
   if inPaintCycle or FClearing then
@@ -3745,7 +3807,6 @@ begin
     end;
 
     AnimatingItems := TList.Create;
-    // Create the new list for entering images
     EnteringItems := TList.Create;
 
     try
@@ -3783,17 +3844,29 @@ begin
         AnimatingItems.Sort(@CompareHotZoom);
         for i := 0 to AnimatingItems.Count - 1 do
         begin
-          DrawHotZoomedItem(TImageItem(AnimatingItems[i]), TImageItem(AnimatingItems[i]) = FHotItem);
+          // If HotTrackZoom is disabled, draw animating items as normal items.
+          if FHotTrackZoom then
+            DrawHotZoomedItem(TImageItem(AnimatingItems[i]), TImageItem(AnimatingItems[i]) = FHotItem)
+          else
+            DrawNormalItem(TImageItem(AnimatingItems[i]));
         end;
       end;
 
       // 5. Current hovered item on top (unless it's selected or entering)
       if (FHotItem <> nil) and (FHotItem <> FSelectedImage) and (EnteringItems.IndexOf(FHotItem) = -1) then
-        DrawHotZoomedItem(FHotItem, True);
+      begin
+        // If HotTrackZoom is disabled, draw the hovered item as a normal item.
+        if FHotTrackZoom then
+          DrawHotZoomedItem(FHotItem, True)
+        else
+          DrawNormalItem(FHotItem);
+      end;
 
       // 6. Selected item (always on top of non-entering items)
       if FSelectedImage <> nil then
       begin
+        // The selected image has its own zoom logic (e.g., ZoomSelectedtoCenter),
+        // so we always use DrawHotZoomedItem to respect that, regardless of the HotTrackZoom setting.
         if FSelectedImage.FHotZoom > 1.0 then
           DrawHotZoomedItem(FSelectedImage, FSelectedImage = FHotItem)
         else
@@ -3813,12 +3886,17 @@ begin
       // 7. Draw entering items on the very top
       for i := 0 to EnteringItems.Count - 1 do
       begin
-        DrawHotZoomedItem(TImageItem(EnteringItems[i]), TImageItem(EnteringItems[i]) = FHotItem);
+        // The pop-in animation for new images is a hot-zoom animation.
+        // It should only be drawn if the HotTrackZoom feature is enabled.
+        // If disabled, new images will just appear at their target size without the pop-in effect.
+        if FHotTrackZoom then
+          DrawHotZoomedItem(TImageItem(EnteringItems[i]), TImageItem(EnteringItems[i]) = FHotItem)
+        else
+          DrawNormalItem(TImageItem(EnteringItems[i]));
       end;
 
     finally
       AnimatingItems.Free;
-      // Free the new list
       EnteringItems.Free;
     end;
 
@@ -4072,4 +4150,3 @@ begin
 end;
 
 end.
-
