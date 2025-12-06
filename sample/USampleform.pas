@@ -5,7 +5,7 @@ interface
 uses
   Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, Vcl.Graphics,
   Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, UFLowmotion, Vcl.ExtCtrls,
-  Vcl.ComCtrls, Vcl.Samples.Spin;
+  Vcl.ComCtrls, Vcl.Samples.Spin, Math;
 
 type
   TFSampleform = class(TForm)
@@ -45,6 +45,9 @@ type
     Timer1: TTimer;
     ComboBox1: TComboBox;
     Label4: TLabel;
+    Button17: TButton;
+    Button18: TButton;
+    Label5: TLabel;
     procedure Button10Click(Sender: TObject);
     procedure Button11Click(Sender: TObject);
     procedure Button12Click(Sender: TObject);
@@ -52,6 +55,8 @@ type
     procedure Button14Click(Sender: TObject);
     procedure Button15Click(Sender: TObject);
     procedure Button16Click(Sender: TObject);
+    procedure Button17Click(Sender: TObject);
+    procedure Button18Click(Sender: TObject);
     procedure FormCreate(Sender: TObject);
     procedure Button1Click(Sender: TObject);
     procedure Button2Click(Sender: TObject);
@@ -156,6 +161,77 @@ begin
   if Flowmotion1.SelectedMovable then Button16.Caption := 'Drag selected on'
    else Button16.Caption := 'Drag selected off';
 
+end;
+
+procedure TFSampleform.Button17Click(Sender: TObject);
+begin
+  // Save current positions to a file
+  Flowmotion1.SavePositionsToFile(Extractfilepath(Application.ExeName) +'positions.dat');
+  ShowMessage('Positions saved!');
+end;
+
+procedure TFSampleform.Button18Click(Sender: TObject);
+var
+  Positions: TImagePositions;
+  i: Integer;
+  FileList, CaptionList, PathList: TStringList;
+  PositionArray: array of TRect;
+begin
+  // First, clear the current images
+  Flowmotion1.Clear(False);
+
+  // Create lists for the images you want to load
+  FileList := TStringList.Create;
+  CaptionList := TStringList.Create;
+  PathList := TStringList.Create;
+  try
+   //add ur images
+   for i := 1 to 12 do begin
+     FileList.add(Extractfilepath(Application.ExeName) + inttostr(i) + '.jpg');
+     Pathlist.add('Folder or whatever');
+     Captionlist.add('Caption');
+   end;
+   for i := 1 to 12 do begin
+     FileList.add(Extractfilepath(Application.ExeName) + inttostr(i) + '.jpg');
+     Pathlist.add('Folder or whatever');
+     Captionlist.add('Caption');
+   end;
+    // Check if saved positions exist
+    if FileExists('positions.dat') then
+    begin
+      // Load positions from file
+      Flowmotion1.LoadPositionsFromFile('positions.dat');
+
+      // Get the loaded positions
+      Positions := Flowmotion1.GetCurrentPositions;
+
+      // Create position array for AddImagesWithPositions
+      SetLength(PositionArray, Length(Positions));
+      for i := 0 to Length(Positions) - 1 do
+      begin
+        PositionArray[i] := Rect(
+          Positions[i].Left,
+          Positions[i].Top,
+          Positions[i].Left + Positions[i].Width,
+          Positions[i].Top + Positions[i].Height
+        );
+      end;
+
+      // Add images with their saved positions
+      Flowmotion1.AddImagesWithPositions(FileList, CaptionList, PathList, PositionArray);
+    end
+    else
+    begin
+      // If no saved positions exist, just add images normally
+      Flowmotion1.AddImages(FileList, CaptionList, PathList);
+    end;
+  finally
+    FileList.Free;
+    CaptionList.Free;
+    PathList.Free;
+  end;
+
+  ShowMessage('Positions loaded!');
 end;
 
 procedure TFSampleform.FormCreate(Sender: TObject);
@@ -289,6 +365,8 @@ begin
      0: Flowmotion1.SetFlowLayout(flSorted);
      1: Flowmotion1.SetFlowLayout(flFreeFloat);
    end;
+   Button17.Enabled := Combobox1.ItemIndex = 1;
+   Button18.Enabled := Button17.Enabled;
 end;
 
 procedure TFSampleform.Flowmotion1AllAnimationsFinished(Sender: TObject);

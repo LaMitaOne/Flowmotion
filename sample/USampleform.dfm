@@ -209,7 +209,7 @@ object FSampleform: TFSampleform
     Left = 1217
     Top = 0
     Width = 217
-    Height = 289
+    Height = 321
     Anchors = [akTop, akRight]
     Color = 855309
     Font.Charset = DEFAULT_CHARSET
@@ -221,7 +221,6 @@ object FSampleform: TFSampleform
     ParentFont = False
     TabOrder = 2
     StyleElements = [seClient, seBorder]
-    ExplicitLeft = 1221
     object Label1: TLabel
       Left = 16
       Top = 11
@@ -273,6 +272,20 @@ object FSampleform: TFSampleform
       Font.Name = 'Segoe UI'
       Font.Style = []
       ParentFont = False
+    end
+    object Label5: TLabel
+      Left = 88
+      Top = 215
+      Width = 121
+      Height = 32
+      Caption = 'Save/load positions for freefloat layout:'
+      Font.Charset = DEFAULT_CHARSET
+      Font.Color = clWhite
+      Font.Height = -12
+      Font.Name = 'Segoe UI'
+      Font.Style = []
+      ParentFont = False
+      WordWrap = True
     end
     object Panel3: TPanel
       Left = 8
@@ -381,7 +394,7 @@ object FSampleform: TFSampleform
     object ComboBox1: TComboBox
       Left = 7
       Top = 251
-      Width = 98
+      Width = 66
       Height = 23
       Style = csDropDownList
       ItemIndex = 0
@@ -391,6 +404,26 @@ object FSampleform: TFSampleform
       Items.Strings = (
         'normal'
         'free float')
+    end
+    object Button17: TButton
+      Left = 94
+      Top = 254
+      Width = 113
+      Height = 25
+      Caption = 'Save positions'
+      Enabled = False
+      TabOrder = 9
+      OnClick = Button17Click
+    end
+    object Button18: TButton
+      Left = 94
+      Top = 285
+      Width = 113
+      Height = 25
+      Caption = 'Load pics with pos'
+      Enabled = False
+      TabOrder = 10
+      OnClick = Button18Click
     end
   end
   object Panel5: TPanel
