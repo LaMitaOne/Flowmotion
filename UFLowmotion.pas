@@ -1774,16 +1774,13 @@ begin
   FAllFiles.Add(FileName);
   FAllCaptions.Add(ACaption);
   FAllPaths.Add(APath);
-
   if WasEmpty or (FLoadMode = lmLoadAll) then
   begin
     ShowPage(FCurrentPage);
     Exit;
   end;
-
   IsLastPage := (FCurrentPage = GetPageCount - 1);
   IsSpaceOnPage := (FImages.Count < FPageSize);
-
   // Only load image if on last page and there's space
   if IsLastPage and IsSpaceOnPage then
   begin
@@ -1795,7 +1792,6 @@ begin
     Bitmap := TBitmap.Create;
     try
       LoadImageFromFile(FileName, Bitmap);
-
       NewItem := TImageItem.Create;
       NewItem.Bitmap.Assign(Bitmap);
       NewItem.Caption := ACaption;
@@ -1815,22 +1811,18 @@ begin
           DefaultHeight := Max(150, Height div 6);
           ColCount := Max(1, Width div (DefaultWidth + 20));
           RowCount := Max(1, Height div (DefaultHeight + 20));
-
           // Try to find a valid position for the new pic
           MaxAttempts := 100;
           FoundPosition := False;
-
           // First try the default grid position
           NewX := 20 + ((FImages.Count - 1) mod ColCount) * (DefaultWidth + 20);
           NewY := 20 + ((FImages.Count - 1) div ColCount) * (DefaultHeight + 20);
-
           // Check if this position is within bounds
           if (NewX + DefaultWidth <= Width - 20) and (NewY + DefaultHeight <= Height - 20) then
           begin
             // Check for overlap with existing images
             FoundPosition := True;
             NewItem.TargetRect := Rect(NewX, NewY, NewX + DefaultWidth, NewY + DefaultHeight);
-
             for i := 0 to FImages.Count - 2 do // -2 because we haven't added the current image yet
             begin
               ExistingRect := TImageItem(FImages[i]).TargetRect;
@@ -1841,7 +1833,6 @@ begin
               end;
             end;
           end;
-
           // If default position doesn't work, try random positions
           if not FoundPosition then
           begin
@@ -1849,9 +1840,7 @@ begin
             begin
               NewX := 20 + Random(Width - DefaultWidth - 40);
               NewY := 20 + Random(Height - DefaultHeight - 40);
-
               NewItem.TargetRect := Rect(NewX, NewY, NewX + DefaultWidth, NewY + DefaultHeight);
-
               // Check for overlap with existing images
               FoundPosition := True;
               for j := 0 to FImages.Count - 2 do
@@ -1863,11 +1852,9 @@ begin
                   Break;
                 end;
               end;
-
               if FoundPosition then
                 Break;
             end;
-
             // If we still couldn't find a good position, just place it at a random position
             if not FoundPosition then
             begin
@@ -1876,7 +1863,6 @@ begin
               NewItem.TargetRect := Rect(NewX, NewY, NewX + DefaultWidth, NewY + DefaultHeight);
             end;
           end;
-
           // Animation for new pic
           AnimateImage(NewItem, NewItem.Direction);
         end
@@ -1885,10 +1871,8 @@ begin
           CalculateLayout;
           AnimateImage(NewItem, NewItem.Direction);
         end;
-
         NewItem.Visible := True;
       end;
-
       StartAnimationThread;
     finally
       Bitmap.Free;
@@ -2722,7 +2706,6 @@ var
   X, Y: Integer;
   ImageSize: TSize;
   CellWidth, CellHeight: Integer;
-
   function CompareImageSize(A, B: Pointer): Integer;
   var
     AreaA, AreaB: Int64;
@@ -2738,18 +2721,15 @@ var
     else
       Result := 0;
   end;
-
 begin
   if FImages.Count = 0 then
     Exit;
   if FInFallAnimation then
     Exit;
-
   AddforZoomed := 0;
   if FKeepSpaceforZoomed then
     if FSelectedImage <> nil then
       AddforZoomed := 2;
-
   // Collect visible images
   VisibleImages := TList.Create;
   try
@@ -2761,7 +2741,6 @@ begin
     end;
     if VisibleImages.Count = 0 then
       Exit;
-
     // Sort only when Sorted = False (by size)
     if not FSorted then
     begin
@@ -2774,12 +2753,10 @@ begin
         SortList.Free;
       end;
     end;
-
     if FZoomSelectedtoCenter and (FSelectedImage <> nil) then
       VCount := VisibleImages.Count + 1
     else
       VCount := VisibleImages.Count;
-
     // =================================================================
     // First, estimate the total number of cells needed
     // =================================================================
@@ -2790,7 +2767,6 @@ begin
       if (ImageItem.Bitmap.Width = 0) or (ImageItem.Bitmap.Height = 0) then
         Continue;
       ImageAspectRatio := ImageItem.Bitmap.Width / ImageItem.Bitmap.Height;
-
       if ImageAspectRatio > 1.4 then
         Inc(TotalCellEstimate, 2) // Wide image takes 2 cells
       else if ImageAspectRatio < 0.75 then
@@ -2798,11 +2774,9 @@ begin
       else
         Inc(TotalCellEstimate, 1); // Square image takes 1 cell
     end;
-
     // Ensure the grid is at least large enough for the number of images
     if TotalCellEstimate < VCount then
       TotalCellEstimate := VCount;
-
     // =================================================================
     // Find the optimal number of columns for the best layout
     // =================================================================
@@ -2811,20 +2785,16 @@ begin
     BestRows := 0;
     MinCols := Max(3, Trunc(Sqrt(TotalCellEstimate)));
     MaxColsToTry := TotalCellEstimate;
-
     for c := MinCols to MaxColsToTry do
     begin
       r := Ceil(TotalCellEstimate / c);
       if r < 3 then
         r := 3;
-
       PotentialCellWidth := (Width - FSpacing * (c + 1)) / c;
       PotentialCellHeight := (Height - FSpacing * (r + 1)) / r;
-
         // If cell size is too small, no point in trying this configuration
       if (PotentialCellWidth < MIN_CELL_SIZE) or (PotentialCellHeight < MIN_CELL_SIZE) then
         Continue;
-
         // Prioritize cell width over area.
         // This ensures the layout uses the full horizontal space.
       if PotentialCellWidth > MaxCellWidth then
@@ -2834,29 +2804,23 @@ begin
         BestRows := r;
       end;
     end;
-
       // Fallback if the loop didn't find a good layout
     if BestCols = 0 then
     begin
       BestCols := Max(3, Ceil(Sqrt(TotalCellEstimate)));
       BestRows := Max(3, Ceil(TotalCellEstimate / BestCols));
     end;
-
     Cols := BestCols;
     Rows := BestRows;
-
     // =================================================================
     // END OF NEW SECTION
     // =================================================================
-
     BaseCellWidth := Max(MIN_CELL_SIZE, (Width - FSpacing * (Cols + 1)) div Cols);
     BaseCellHeight := Max(MIN_CELL_SIZE, (Height - FSpacing * (Rows + 1)) div Rows);
-
     SetLength(Grid, Rows, Cols);
     for Row := 0 to Rows - 1 do
       for Col := 0 to Cols - 1 do
         Grid[Row, Col] := False;
-
     // The robust placement logic from the previous answer is correct and should be used here.
     // It will now work because the grid is guaranteed to be large enough.
     for i := 0 to VisibleImages.Count - 1 do
@@ -2864,9 +2828,7 @@ begin
       ImageItem := TImageItem(VisibleImages[i]);
       if (ImageItem.Bitmap.Width = 0) or (ImageItem.Bitmap.Height = 0) then
         Continue;
-
       ImageAspectRatio := ImageItem.Bitmap.Width / ImageItem.Bitmap.Height;
-
       if ImageAspectRatio > 1.4 then
       begin
         SpanCols := 2;
@@ -2882,9 +2844,7 @@ begin
         SpanCols := 1;
         SpanRows := 1;
       end;
-
       Placed := False;
-
       // Exhaustive search for a free spot
       for r := 0 to Rows - SpanRows do
       begin
@@ -2895,30 +2855,23 @@ begin
             // Calculate cell position and size
             X := FSpacing + c * BaseCellWidth + c * FSpacing;
             Y := r * (BaseCellHeight + FSpacing);
-
             // Available size for the image
             CellWidth := (SpanCols * BaseCellWidth) + ((SpanCols - 1) * FSpacing);
             CellHeight := (SpanRows * BaseCellHeight) + ((SpanRows - 1) * FSpacing);
-
             // Optimal image size preserving aspect ratio
             ImageSize := GetOptimalSize(ImageItem.Bitmap.Width, ImageItem.Bitmap.Height, CellWidth, CellHeight);
-
             // Center image in cell
             X := X + (CellWidth - ImageSize.cx) div 2;
             Y := Y + (CellHeight - ImageSize.cy) div 2;
-
             // Ensure the image stays within component bounds
             if X < 0 then X := 0;
             if Y < 0 then Y := 0;
             if X + ImageSize.cx > Width then X := Width - ImageSize.cx;
             if Y + ImageSize.cy > Height then Y := Height - ImageSize.cy;
-
             ImageItem.TargetRect := Rect(X, Y, X + ImageSize.cx, Y + ImageSize.cy);
             ImageItem.StartRect := ImageItem.CurrentRect;
-
             ImageItem.AnimationProgress := 0;
             ImageItem.Animating := True;
-
             MarkAreaOccupied(Grid, r, c, SpanRows, SpanCols);
             Placed := True;
             Break;
@@ -2927,7 +2880,6 @@ begin
         if Placed then
           Break;
       end;
-
       // Fallback: If the image didn't fit with its span, try to force it as 1x1
       if not Placed then
       begin
@@ -2940,30 +2892,23 @@ begin
               // Calculate cell position and size
               X := FSpacing + c * BaseCellWidth + c * FSpacing;
               Y := r * (BaseCellHeight + FSpacing);
-
               // Available size for the image
               CellWidth := BaseCellWidth;
               CellHeight := BaseCellHeight;
-
               // Optimal image size preserving aspect ratio
               ImageSize := GetOptimalSize(ImageItem.Bitmap.Width, ImageItem.Bitmap.Height, CellWidth, CellHeight);
-
               // Center image in cell
               X := X + (CellWidth - ImageSize.cx) div 2;
               Y := Y + (CellHeight - ImageSize.cy) div 2;
-
               // Ensure the image stays within component bounds
               if X < 0 then X := 0;
               if Y < 0 then Y := 0;
               if X + ImageSize.cx > Width then X := Width - ImageSize.cx;
               if Y + ImageSize.cy > Height then Y := Height - ImageSize.cy;
-
               ImageItem.TargetRect := Rect(X, Y, X + ImageSize.cx, Y + ImageSize.cy);
               ImageItem.StartRect := ImageItem.CurrentRect;
-
               ImageItem.AnimationProgress := 0;
               ImageItem.Animating := True;
-
               MarkAreaOccupied(Grid, r, c, 1, 1);
               Placed := True;
               Break;
@@ -3605,7 +3550,6 @@ begin
     if Length(FActivationZones) = 0 then
     begin
       // Keep inside control (glow or hottrack margin)
-
       BorderWidth := Max(FGlowWidth, FHotTrackWidth);
       OffsetX := 0;
       OffsetY := 0;
@@ -3662,29 +3606,33 @@ begin
       end;
     end;
 
-    // Check activation zones
-    ImageCenter.X := FSelectedImage.TargetRect.Left + (FSelectedImage.TargetRect.Right - FSelectedImage.TargetRect.Left) div 2;
-    ImageCenter.Y := FSelectedImage.TargetRect.Top + (FSelectedImage.TargetRect.Bottom - FSelectedImage.TargetRect.Top) div 2;
-
-    CurrentZoneName := '';
-    for i := Low(FActivationZones) to High(FActivationZones) do
+    // Check activation zones - FIX FOR FREEFLOAT LAYOUT
+    if Length(FActivationZones) > 0 then
     begin
-      if PtInRect(FActivationZones[i].Rect, ImageCenter) then
+      // Use the actual center of the dragged image, not the target rect
+      ImageCenter.X := NewCenterX;
+      ImageCenter.Y := NewCenterY;
+
+      CurrentZoneName := '';
+      for i := Low(FActivationZones) to High(FActivationZones) do
       begin
-        CurrentZoneName := FActivationZones[i].Name;
-        Break;
+        if PtInRect(FActivationZones[i].Rect, ImageCenter) then
+        begin
+          CurrentZoneName := FActivationZones[i].Name;
+          Break;
+        end;
       end;
-    end;
 
-    if (CurrentZoneName <> '') and (CurrentZoneName <> FLastActivationZoneName) then
-    begin
-      FLastActivationZoneName := CurrentZoneName;
-      if Assigned(FOnSelectedImageEnterZone) then
-        FOnSelectedImageEnterZone(Self, FSelectedImage, CurrentZoneName);
-    end
-    else if CurrentZoneName = '' then
-    begin
-      FLastActivationZoneName := '';
+      if (CurrentZoneName <> '') and (CurrentZoneName <> FLastActivationZoneName) then
+      begin
+        FLastActivationZoneName := CurrentZoneName;
+        if Assigned(FOnSelectedImageEnterZone) then
+          FOnSelectedImageEnterZone(Self, FSelectedImage, CurrentZoneName);
+      end
+      else if CurrentZoneName = '' then
+      begin
+        FLastActivationZoneName := '';
+      end;
     end;
 
     StartAnimationThread;
@@ -3704,7 +3652,6 @@ begin
     if Length(FActivationZones) = 0 then
     begin
       // Keep inside control (glow or hottrack margin)
-
       BorderWidth := Max(FGlowWidth, FHotTrackWidth);
       OffsetX := 0;
       OffsetY := 0;
@@ -3758,6 +3705,35 @@ begin
           // Return to normal size when far from zones
           FDraggedImage.FHotZoomTarget := 1.0;
         end;
+      end;
+    end;
+
+    // Check activation zones - FIX FOR FREEFLOAT LAYOUT
+    if Length(FActivationZones) > 0 then
+    begin
+      // Use the actual center of the dragged image, not the target rect
+      ImageCenter.X := NewCenterX;
+      ImageCenter.Y := NewCenterY;
+
+      CurrentZoneName := '';
+      for i := Low(FActivationZones) to High(FActivationZones) do
+      begin
+        if PtInRect(FActivationZones[i].Rect, ImageCenter) then
+        begin
+          CurrentZoneName := FActivationZones[i].Name;
+          Break;
+        end;
+      end;
+
+      if (CurrentZoneName <> '') and (CurrentZoneName <> FLastActivationZoneName) then
+      begin
+        FLastActivationZoneName := CurrentZoneName;
+        if Assigned(FOnSelectedImageEnterZone) then
+          FOnSelectedImageEnterZone(Self, FDraggedImage, CurrentZoneName);
+      end
+      else if CurrentZoneName = '' then
+      begin
+        FLastActivationZoneName := '';
       end;
     end;
 
@@ -4841,7 +4817,6 @@ begin
     end;
   end;
 end;
-
 { Selects the previous image, or moves to previous page if at start }
 procedure TFlowmotion.SelectPreviousImage;
 begin
