@@ -37,7 +37,7 @@ Pure Delphi 7 compatible code, no special components.
 Low CPU usage, easy to integrate, and smooth visual effects even with large image sets.   
   
 ### Features:  
-- Pinterest-like masonry layout  
+- Pinterest-like masonry layout / freefloat Layout 
 - Animated appearance (slide-in, “falling” effect on clear/page change)  
 - Select / focus item and move or zoom it into a target rect   
 - HotTrack & HotZoom hover effects   
