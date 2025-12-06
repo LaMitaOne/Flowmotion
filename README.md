@@ -40,7 +40,7 @@ Low CPU usage, easy to integrate, and smooth visual effects even with large imag
 - Animated appearance (slide-in, “falling” effect on clear/page change)  
 - Select / focus item and move or zoom it into a target rect   
 - HotTrack & HotZoom hover effects   
-- Dragging selected  
+- Dragging selected  (+ new activation zones which trigger event)
 - Threaded Animation  
 - Smooth transitions, similar in spirit to TMS GUIMotions but much lighter  
 - Works on Delphi 7 and Delphi 11.3 here, so probably on any Delphi almost    
@@ -71,6 +71,14 @@ I am working on getting more of it done :)
     
 ### Latest changes:  
 
+**v 0.986**   
+- Added new ActivationZones for the selected image if `SelectedMovable` is True   
+- New `AddActivationZone(const AName: string; const ARect: TRect)` and `ClearActivationZones` methods   
+  allow defining named rectangular areas on the component.   
+- A new `OnSelectedImageEnterZone` event is fired when the dragged selected image   
+  enters one of these zones. The event provides the image item and the name of the zone.   
+- Added those functions to Sample project     
+      
 **v 0.985**   
 - Improved Z-ordering for animated and static images.   
   The paint routine now sorts items by a combination of their hot-zoom factor    
