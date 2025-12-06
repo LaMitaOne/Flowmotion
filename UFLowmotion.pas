@@ -1,7 +1,7 @@
 
 {------------------------------------------------------------------------------}
 {                                                                              }
-{ Flowmotion v0.985                                                            }
+{ Flowmotion v0.986                                                            }
 { by Lara Miriam Tamy Reschke                                                  }
 {                                                                              }
 { larate@gmx.net                                                               }
@@ -10,6 +10,13 @@
 {------------------------------------------------------------------------------}
 {
  ----Latest Changes
+  v 0.986
+    - Added new ActivationZones for the selected image if `SelectedMovable` is True.
+    - New `AddActivationZone(const AName: string; const ARect: TRect)` and `ClearActivationZones` methods
+      allow defining named rectangular areas on the component.
+    - A new `OnSelectedImageEnterZone` event is fired when the dragged selected image
+      enters one of these zones. The event provides the image item and the name of the zone.
+    - Added those functions to Sample project
   v 0.985
     - Improved Z-ordering for animated and static images.
       The paint routine now sorts items by a combination of their hot-zoom factor
@@ -145,6 +152,7 @@ type
     iesFromPoint // all fly in from a custom point (e.g. mouse)
   );
 
+
   {
     TImageItem - Represents a single image in the gallery with animation state
     Properties:
@@ -202,6 +210,16 @@ type
   TImageSelectEvent = procedure(Sender: TObject; ImageItem: TImageItem; Index: Integer) of object;
 
   TBooleanGrid = array of array of Boolean;
+
+  // Defines a rectangular activation zone for the selected image
+  TActivationZone = record
+    Name: string;
+    Rect: TRect;
+  end;
+
+  // Event type fired when the selected image enters an activation zone
+  TSelectedImageEnterZoneEvent = procedure(Sender: TObject; ImageItem: TImageItem; const ZoneName: string) of object;
+
 
   {
     TImageLoadThread - Background thread for loading images
@@ -310,9 +328,13 @@ type
     FMaxZoomSize: Integer;
     FZoomAnimationType: TZoomAnimationType;
     FSelectedMovable: Boolean;
-    // Allow dragging selected image (feature not fully implemented)
     FDraggingSelected: Boolean;
+    FDragStartPos: TPoint;
+    FIsPotentialDrag: Boolean;
     FHotItem: TImageItem;
+    FActivationZones: array of TActivationZone;
+    FLastActivationZoneName: string;
+
 
     // Paging
     FPageSize: Integer; // Images per page
@@ -330,6 +352,7 @@ type
     FOnSelectedItemMouseDown: TOnSelectedItemMouseDown;
     FOnAllAnimationsFinished: TOnAllAnimationsFinished;
     FOnSelectedImageDblClick: TOnSelectedImageDblClick;
+    FOnSelectedImageEnterZone: TSelectedImageEnterZoneEvent;
 
     // Internal methods - Animation
     procedure WMUser1(var Message: TMessage); message WM_USER + 1;
@@ -429,6 +452,10 @@ type
     procedure Clear(animated: Boolean; ZoominSelected: Boolean = false); overload;
     procedure MoveImageToPos(RelIndexFrom, RelIndexTo: Integer);
 
+    //Activation zone
+    procedure AddActivationZone(const AName: string; const ARect: TRect);
+    procedure ClearActivationZones;
+
     // Navigation
     procedure SelectNextImage;
     procedure SelectPreviousImage;
@@ -448,7 +475,6 @@ type
 
     // Properties
     property MaxZoomSize: Integer read FMaxZoomSize write FMaxZoomSize default DEFAULT_MAX_ZOOM_SIZE;
-
     property HotTrackColor: TColor read FHotTrackColor write SetHotTrackColor;
     property GlowColor: TColor read FGlowColor write SetGlowColor;
     property GlowWidth: Integer read FGlowWidth write SetGlowWidth;
@@ -489,6 +515,7 @@ type
     property CurrentPage: Integer read FCurrentPage;
     property ImageEntryStyle: TImageEntryStyle read FImageEntryStyle write SetImageEntryStyle default iesRandom;
     property EntryPoint: TPoint read FEntryPoint write FEntryPoint;
+    property OnSelectedImageEnterZone: TSelectedImageEnterZoneEvent read FOnSelectedImageEnterZone write FOnSelectedImageEnterZone;
 
     // Inherited properties
     property Align;
@@ -997,6 +1024,21 @@ begin
   end;
 end;
 
+{ Adds a new activation zone }
+procedure TFlowmotion.AddActivationZone(const AName: string; const ARect: TRect);
+begin
+  SetLength(FActivationZones, Length(FActivationZones) + 1);
+  FActivationZones[High(FActivationZones)].Name := AName;
+  FActivationZones[High(FActivationZones)].Rect := ARect;
+end;
+
+{ Clears all activation zones and resets the last zone name }
+procedure TFlowmotion.ClearActivationZones;
+begin
+  SetLength(FActivationZones, 0);
+  FLastActivationZoneName := '';
+end;
+
 { Sets the priority for image loading threads }
 procedure TFlowmotion.SetThreadPriority(Value: TThreadPriority);
 begin
@@ -1261,10 +1303,13 @@ begin
       ImageItem := TImageItem(FImages[i]);
 
 
-    if (not FHotTrackZoom) and (ImageItem <> FSelectedImage) then
+    if (not FHotTrackZoom) and (ImageItem <> FSelectedImage)
+     or (FDraggingSelected and (ImageItem = FSelectedImage))
+     then
     begin
       if ImageItem.FHotZoom <> 1.0 then
       begin
+        if not (FDraggingSelected and (ImageItem = FSelectedImage)) then
         ImageItem.FHotZoom := 1.0;
         ImageItem.FHotZoomTarget := 1.0;
         NeedRepaint := True;
@@ -1278,11 +1323,11 @@ begin
         Continue;
 
       // Breathing when selected AND hovered
-      if FBreathingEnabled and (ImageItem = FSelectedImage) and (ImageItem = FHotItem) then
+      if FBreathingEnabled and (ImageItem = FSelectedImage) and (ImageItem = FHotItem) and (not FDraggingSelected) then
         TargetZoom := 1.0 + BREATHING_AMPLITUDE * 0.2 * (Sin(FBreathingPhase * 2 * Pi) + 1.0)
 
         // Normal hot-zoom when only hovered
-      else if (ImageItem = FHotItem) and HotTrackZoom then
+      else if (ImageItem = FHotItem) and HotTrackZoom and (not FDraggingSelected) then
         TargetZoom := HOT_ZOOM_MAX_FACTOR
       else
         TargetZoom := 1.0;
@@ -3061,14 +3106,34 @@ end;
 
 { Handles mouse button release events }
 procedure TFlowmotion.MouseUp(Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
+var
+  ImageUnderCursor: TImageItem;
 begin
   if FClearing or FInFallAnimation then
     Exit;
-  if FDraggingSelected and (Button = mbLeft) then
+
+  if (Button = mbLeft) then
   begin
-    FDraggingSelected := False;
-    MouseCapture := False;
+    // Check if a drag or a potential drag has just ended
+    if FDraggingSelected or FIsPotentialDrag then
+    begin
+      // Reset both dragging states
+      FDraggingSelected := False;
+      FIsPotentialDrag := False;
+      MouseCapture := False;
+
+      // Check if the mouse cursor is still over the selected image after release
+      ImageUnderCursor := GetImageAtPoint(X, Y);
+      if (ImageUnderCursor = FSelectedImage) and (FSelectedImage <> nil) then
+      begin
+        // The mouse is still over the image, so it should be the hot item again
+        // This is crucial for re-enabling the breathing effect
+        FHotItem := FSelectedImage;
+        StartAnimationThread;
+      end;
+    end;
   end;
+
   inherited MouseUp(Button, Shift, X, Y);
 end;
 
@@ -3077,9 +3142,30 @@ procedure TFlowmotion.MouseMove(Shift: TShiftState; X, Y: Integer);
 var
   NewHot: TImageItem;
   NewCenterX, NewCenterY: Integer;
+  ImageCenter: TPoint;
+  CurrentZoneName: string;
+  i: Integer;
+const
+  // Minimum distance in pixels the mouse must move to be considered a drag
+  DRAG_THRESHOLD = 20;
 begin
   if FClearing or FInFallAnimation then
     Exit;
+
+  // =================================================================
+  // == NEW LOGIC: Initiate dragging only after a small mouse movement ==
+  // =================================================================
+  if FIsPotentialDrag and (FSelectedImage <> nil) then
+  begin
+    // Has the mouse moved enough since the click to qualify as a drag?
+    if (Abs(X - FDragStartPos.X) > DRAG_THRESHOLD) or (Abs(Y - FDragStartPos.Y) > DRAG_THRESHOLD) then
+    begin
+      // YES! This is now a confirmed drag.
+      FDraggingSelected := True;
+      FBreathingPhase := 0;
+      FIsPotentialDrag := False; // The potential state is over
+    end;
+  end;
 
   // Handle dragging of the selected image
   if FDraggingSelected and (FSelectedImage <> nil) then
@@ -3094,7 +3180,41 @@ begin
       NewCenterX + (FSelectedImage.TargetRect.Right - FSelectedImage.TargetRect.Left) div 2,
       NewCenterY + (FSelectedImage.TargetRect.Bottom - FSelectedImage.TargetRect.Top) div 2
     );
-    // Start animation thread to smoothly move the image
+
+    // =================================================================
+    // == LOGIC FOR ACTIVATION ZONES ==
+    // =================================================================
+    // Calculate the center point of the image's *new* target rectangle
+    ImageCenter.X := FSelectedImage.TargetRect.Left + (FSelectedImage.TargetRect.Right - FSelectedImage.TargetRect.Left) div 2;
+    ImageCenter.Y := FSelectedImage.TargetRect.Top + (FSelectedImage.TargetRect.Bottom - FSelectedImage.TargetRect.Top) div 2;
+
+    // Reset the current zone name before checking
+    CurrentZoneName := '';
+
+    // Check if the image center is inside any of the defined activation zones
+    for i := Low(FActivationZones) to High(FActivationZones) do
+    begin
+      if PtInRect(FActivationZones[i].Rect, ImageCenter) then
+      begin
+        CurrentZoneName := FActivationZones[i].Name;
+        Break; // Zone found, no need to check further
+      end;
+    end;
+
+    // If the image has entered a *new* zone, fire the event
+    if (CurrentZoneName <> '') and (CurrentZoneName <> FLastActivationZoneName) then
+    begin
+      FLastActivationZoneName := CurrentZoneName; // Store the new zone name
+      if Assigned(FOnSelectedImageEnterZone) then
+        FOnSelectedImageEnterZone(Self, FSelectedImage, CurrentZoneName);
+    end
+    // If the image is not in any zone, reset the last zone name
+    else if CurrentZoneName = '' then
+    begin
+      FLastActivationZoneName := '';
+    end;
+    // =================================================================
+
     StartAnimationThread;
     Exit; // Skip hot-tracking while dragging
   end;
@@ -3105,13 +3225,10 @@ begin
   // If HotTrackZoom is disabled, ensure no item is hot and exit.
   if not FHotTrackZoom then
   begin
-    // If a hot item still exists (it shouldn't after SetHotTrackZoom),
-    // reset it here as a safety measure.
     if FHotItem <> nil then
     begin
       FHotItem.FHotZoomTarget := 1.0;
       FHotItem := nil;
-      //StartAnimationThread; // Ensure the animation thread processes the reset
       Invalidate;
     end;
   end
@@ -3149,6 +3266,7 @@ begin
   else
     Cursor := crDefault;
 end;
+
 
 { Handles mouse button press events for selection, double-click and dragging }
 procedure TFlowmotion.MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
@@ -3202,10 +3320,12 @@ begin
     if Assigned(FOnSelectedItemMouseDown) then
       FOnSelectedItemMouseDown(Self, ImageItem, Index, X, Y, Button, Shift);
 
-    // Check for dragging start
+    // Check for POTENTIAL dragging start
     if FSelectedMovable and (ImageItem = FSelectedImage) then
     begin
-      FDraggingSelected := True;
+      FIsPotentialDrag := True;
+      FDragStartPos := Point(X, Y);
+
       // Calculate offset from mouse to center of the image
       FDragOffset.X := X - ((ImageItem.CurrentRect.Left + ImageItem.CurrentRect.Right) div 2);
       FDragOffset.Y := Y - ((ImageItem.CurrentRect.Top + ImageItem.CurrentRect.Bottom) div 2);
