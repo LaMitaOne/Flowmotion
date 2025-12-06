@@ -42,7 +42,8 @@ Low CPU usage, easy to integrate, and smooth visual effects even with large imag
 - Select / focus item and move or zoom it into a target rect   
 - HotTrack & HotZoom hover effects   
 - Dragging selected  (+ new activation zones which trigger event)
-- Threaded Animation  
+- Threaded Animation
+- ActivationZone -> move selected to defined areas and trigger event   
 - Smooth transitions, similar in spirit to TMS GUIMotions but much lighter  
 - Works on Delphi 7 and Delphi 11.3 here, so probably on any Delphi    
 
