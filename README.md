@@ -39,9 +39,9 @@ Low CPU usage, easy to integrate, and smooth visual effects even with large imag
 ### Features:  
 - Pinterest-like masonry layout / freefloat Layout 
 - Animated appearance (slide-in, “falling” effect on clear/page change)  
-- Select / focus item and move or zoom it into a target rect   
+- Select / move or zoom it into a target rect   
 - HotTrack & HotZoom hover effects   
-- Dragging selected  (+ new activation zones which trigger event)
+- Dragging selected or all free floating   
 - Threaded Animation
 - ActivationZone -> move selected to defined areas and trigger event   
 - Smooth transitions, similar in spirit to TMS GUIMotions but much lighter  
