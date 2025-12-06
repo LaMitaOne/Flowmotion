@@ -260,7 +260,7 @@ end;
 
 procedure TFSampleform.CheckBox2Click(Sender: TObject);
 begin
-  Flowmotion1.HotTrackZoom := CheckBox1.Checked;
+  Flowmotion1.HotTrackZoom := CheckBox2.Checked;
 end;
 
 procedure TFSampleform.Flowmotion1AllAnimationsFinished(Sender: TObject);
