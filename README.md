@@ -89,8 +89,9 @@ I am working on getting more of it done :)
 - New flFreeFloat Layout added, no zoomselected to center and all pictures free draggable (like a nonstatic grid)     
 - New SavePositionsToFile() / LoadPositionsFromFile() for persisting free float layouts    
 - AddImagesWithPositions() allows precise image placement with saved coordinates    
-- Automatic position validation ensures layouts work across different screen resolutions    
-- Sample project demonstrates save/load functionality       
+- Automatic position validation ensures layouts work across different screen resolutions     
+- Sample project demonstrates save/load functionality  
+- added new KeepfreeAreaRect (not working fully now)  
       
 **v 0.986**   
 - Added new ActivationZones for the selected image if `SelectedMovable` is True   
