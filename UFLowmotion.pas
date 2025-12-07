@@ -15,8 +15,9 @@
     - MoveImage bug fixed when there was duplicate picpaths
     - New Captions with semi-transparent background
       CaptionOnHoverOnly, ShowCaptions, CaptionFont, CaptionColor, CaptionBackground,
-      CaptionAlpha, CaptionOffsetY propertys
+      CaptionAlpha, CaptionOffsetY, SetSelectedCaptionBackground, SetSelectedCaptionColor propertys
     - OnCaptionClick event added
+    - added new KeepfreeAreaRect (not working fully now)
   v 0.987
     - New flFreeFloat Layout added, no zoomselected to center and all pictures free draggable
     - New SavePositionsToFile() / LoadPositionsFromFile() for persisting free float layouts
@@ -103,7 +104,7 @@ uses
   Pngimage;
 
 //, SynGdiPlus; //for test syngdiplus
-//, GR32, GR32_Image, GR32_Resamplers;  //for test gr32 draw
+//, GR32, GR32_Image, GR32_Resamplers;  //for test gr32
 
 const
   // Animation constants
@@ -351,10 +352,13 @@ type
     FCaptionFont: TFont;
     FCaptionColor: TColor;
     FCaptionBackground: TColor;
+    FSelectedCaptionColor: TColor;
+    FSelectedCaptionBackground: TColor;
     FCaptionAlpha: Byte;
     FCaptionOffsetY: Integer;
     FShowCaptions: Boolean;
     FCaptionOnHoverOnly: Boolean;
+    FKeepAreaFreeRect: TRect;
 
     // Selection & Zoom
     FSelectedImage: TImageItem;
@@ -413,7 +417,7 @@ type
     procedure CalculateLayoutFreeFloat;
     function IsAreaFree(const Grid: TBooleanGrid; Row, Col, SpanRows, SpanCols: Integer): Boolean;
     procedure MarkAreaOccupied(var Grid: TBooleanGrid; Row, Col, SpanRows, SpanCols: Integer);
-    procedure PlaceImage(ImageItem: TImageItem; var Grid: TBooleanGrid; Row, Col, SpanRows, SpanCols: Integer; BaseCellWidth, BaseCellHeight: Integer);
+    function PlaceImage(ImageItem: TImageItem; var Grid: TBooleanGrid; Row, Col, SpanRows, SpanCols: Integer; BaseCellWidth, BaseCellHeight: Integer): Boolean;
     function GetOptimalSize(const OriginalWidth, OriginalHeight: Integer; const MaxWidth, MaxHeight: Integer): TSize;
 
     // Internal methods - Paging
@@ -465,6 +469,9 @@ type
     procedure SetCaptionOffsetY(Value: Integer);
     procedure SetShowCaptions(Value: Boolean);
     procedure SetCaptionOnHoverOnly(Value: Boolean);
+    procedure SetSelectedCaptionColor(Value: TColor);
+    procedure SetSelectedCaptionBackground(Value: TColor);
+    procedure SetKeepAreaFreeRect(const Value: TRect);
   protected
     procedure Paint; override;
     procedure Resize; override;
@@ -581,6 +588,9 @@ type
     property CaptionAlpha: Byte read FCaptionAlpha write SetCaptionAlpha default 180;
     property CaptionOffsetY: Integer read FCaptionOffsetY write SetCaptionOffsetY default 8;
     property OnCaptionClick: TOnCaptionClick read FOnCaptionClick write FOnCaptionClick;
+    property SelectedCaptionColor: TColor read FSelectedCaptionColor write SetSelectedCaptionColor default clYellow;
+    property SelectedCaptionBackground: TColor read FSelectedCaptionBackground write SetSelectedCaptionBackground default clMaroon;
+    property KeepAreaFreeRect: TRect read FKeepAreaFreeRect write SetKeepAreaFreeRect;
 
     // Inherited properties
     property Align;
@@ -858,6 +868,8 @@ begin
   FCaptionFont.Style := [fsBold];
   FCaptionColor := clWhite;
   FCaptionBackground := clBlack;
+  FSelectedCaptionColor := clBlack;
+  FSelectedCaptionBackground := clAqua;
   FCaptionAlpha := 180;
   FShowCaptions := True;
   FCaptionOnHoverOnly := True;
@@ -1191,15 +1203,15 @@ var
 begin
   Writer := TWriter.Create(Stream, 4096);
   try
-    // Number of images (this is the only thing we really need for matching by index)
+    // Number of images
     Writer.WriteInteger(FImages.Count);
 
     for i := 0 to FImages.Count - 1 do
       with TImageItem(FImages[i]) do
       begin
-     // Writer.WriteString(FFileName);
-     // Writer.WriteString(FCaption);
-     // Writer.WriteString(FPath);
+        Writer.WriteString(FileName);
+        Writer.WriteString(Caption);
+        Writer.WriteString(Path);
 
         Writer.WriteInteger(TargetRect.Left);
         Writer.WriteInteger(TargetRect.Top);
@@ -1236,10 +1248,18 @@ begin
   Reader := TReader.Create(Stream, 4096);
   try
     Count := Reader.ReadInteger;
+    // Add a sanity check for the count to prevent memory issues
+    if (Count < 0) or (Count > 10000) then
+      Exit; // Invalid data, abort loading
+
     SetLength(FLoadedPositions, Count);
 
     for i := 0 to Count - 1 do
     begin
+      FLoadedPositions[i].FileName := Reader.ReadString;
+      FLoadedPositions[i].Caption := Reader.ReadString;
+      FLoadedPositions[i].Path := Reader.ReadString;
+
       FLoadedPositions[i].Left := Reader.ReadInteger;
       FLoadedPositions[i].Top := Reader.ReadInteger;
       FLoadedPositions[i].Width := Reader.ReadInteger;
@@ -2151,6 +2171,7 @@ var
   FoundPosition: Boolean;
   ExistingRect: TRect;
   i, j: Integer;
+  TempRect: TRect;
 begin
   WasEmpty := (FAllFiles.Count = 0);
   // Add to master list if not already present
@@ -2224,7 +2245,16 @@ begin
               NewX := 20 + Random(Width - DefaultWidth - 40);
               NewY := 20 + Random(Height - DefaultHeight - 40);
               NewItem.TargetRect := Rect(NewX, NewY, NewX + DefaultWidth, NewY + DefaultHeight);
-              // Check for overlap with existing images
+
+            // Check if the placement overlaps with the user-defined free area
+              TempRect := NewItem.TargetRect;
+              if not IsRectEmpty(FKeepAreaFreeRect) and IntersectRect(TempRect, NewItem.TargetRect, FKeepAreaFreeRect) then
+              begin
+              // Overlap found. Try a new position in the next iteration of the random loop.
+                Continue;
+              end;
+
+            // Check for overlap with existing images
               FoundPosition := True;
               for j := 0 to FImages.Count - 2 do
               begin
@@ -2235,17 +2265,21 @@ begin
                   Break;
                 end;
               end;
+
               if FoundPosition then
-                Break;
-            end;
+                Break; // Found a valid position, exit the random attempt loop
             // If we still couldn't find a good position, just place it at a random position
+            end;
+
             if not FoundPosition then
             begin
               NewX := 20 + Random(Width - DefaultWidth - 40);
               NewY := 20 + Random(Height - DefaultHeight - 40);
               NewItem.TargetRect := Rect(NewX, NewY, NewX + DefaultWidth, NewY + DefaultHeight);
             end;
+
           end;
+
           // Animation for new pic
           AnimateImage(NewItem, NewItem.Direction, false, Rect(0, 0, 0, 0));
         end
@@ -3530,9 +3564,11 @@ begin
         begin
           if IsAreaFree(Grid, r, c, SpanRows, SpanCols) then
           begin
-            PlaceImage(ImageItem, Grid, r, c, SpanRows, SpanCols, BaseCellWidth, BaseCellHeight);
-            Placed := True;
-            Break;
+            if PlaceImage(ImageItem, Grid, r, c, SpanRows, SpanCols, BaseCellWidth, BaseCellHeight) then
+            begin
+              Placed := True;
+              Break;
+            end;
           end;
         end;
         if Placed then
@@ -3563,11 +3599,15 @@ begin
   end;
 end;
 
-{ Checks if an area in the grid is free for placing an image }
+// Checks if an area in the grid is free for placing an image
 function TFlowmotion.IsAreaFree(const Grid: TBooleanGrid; Row, Col, SpanRows, SpanCols: Integer): Boolean;
 var
   r, c: Integer;
   CenterRow, CenterCol, ProtectedSize: Integer;
+  PotentialRect: TRect;
+  DummyRect: TRect; // *** FIX: Dummy rect for the IntersectRect out parameter ***
+  BaseCellWidth, BaseCellHeight: Integer;
+  X, Y, CellW, CellH: Integer;
 begin
   // Bounds check
   if (Row < 0) or (Col < 0) or (Row + SpanRows > Length(Grid)) or (Col + SpanCols > Length(Grid[0])) then
@@ -3598,6 +3638,28 @@ begin
         Result := False;
         Exit;
       end;
+
+  // We calculate the potential screen rectangle for this grid area.
+  BaseCellWidth := Max(MIN_CELL_SIZE, (Width - FSpacing * (Length(Grid[0]) + 1)) div Length(Grid[0]));
+  BaseCellHeight := Max(MIN_CELL_SIZE, (Height - FSpacing * (Length(Grid) + 1)) div Length(Grid));
+
+  X := FSpacing + Col * BaseCellWidth + Col * FSpacing;
+  Y := Row * (BaseCellHeight + FSpacing);
+
+  CellW := (SpanCols * BaseCellWidth) + ((SpanCols - 1) * FSpacing);
+  CellH := (SpanRows * BaseCellHeight) + ((SpanRows - 1) * FSpacing);
+
+  PotentialRect := Rect(X, Y, X + CellW, Y + CellH);
+
+  // Now check for overlap with the user-defined free area.
+  // We use a dummy rectangle for the 'out' parameter.
+  if not IsRectEmpty(FKeepAreaFreeRect) and IntersectRect(DummyRect, PotentialRect, FKeepAreaFreeRect) then
+  begin
+    Result := False;
+    Exit;
+  end;
+
+  // If all checks passed, the area is free.
   Result := True;
 end;
 
@@ -3612,12 +3674,13 @@ begin
         Grid[r, c] := True;
 end;
 
-{ Places an image in the grid at the specified position and calculates its target rectangle }
-procedure TFlowmotion.PlaceImage(ImageItem: TImageItem; var Grid: TBooleanGrid; Row, Col, SpanRows, SpanCols: Integer; BaseCellWidth, BaseCellHeight: Integer);
+// Places an image in the grid at the specified position and calculates its target rectangle
+function TFlowmotion.PlaceImage(ImageItem: TImageItem; var Grid: TBooleanGrid; Row, Col, SpanRows, SpanCols: Integer; BaseCellWidth, BaseCellHeight: Integer): Boolean;
 var
   X, Y: Integer;
   CellWidth, CellHeight: Integer;
   ImageSize: TSize;
+  TempRect: TRect;
 begin
   // Calculate cell position and size
   X := FSpacing + Col * BaseCellWidth + Col * FSpacing;
@@ -3634,14 +3697,37 @@ begin
   X := X + (CellWidth - ImageSize.cx) div 2;
   Y := Y + (CellHeight - ImageSize.cy) div 2;
 
-  ImageItem.TargetRect := Rect(X, Y, X + ImageSize.cx, Y + ImageSize.cy);
-  ImageItem.StartRect := ImageItem.CurrentRect;
+  // Ensure the image stays within component bounds
+  if X < 0 then
+    X := 0;
+  if Y < 0 then
+    Y := 0;
+  if X + ImageSize.cx > Width then
+    X := Width - ImageSize.cx;
+  if Y + ImageSize.cy > Height then
+    Y := Height - ImageSize.cy;
 
+  // Set the final target rectangle first.
+  ImageItem.TargetRect := Rect(X, Y, X + ImageSize.cx, Y + ImageSize.cy);
+
+  // Now check if this FINAL rectangle overlaps with the user-defined free area.
+  TempRect := ImageItem.TargetRect;
+  if not IsRectEmpty(FKeepAreaFreeRect) and IntersectRect(TempRect, ImageItem.TargetRect, FKeepAreaFreeRect) then
+  begin
+    // It overlaps. Signal failure.
+    Result := False;
+    Exit;
+  end;
+
+  // If we get here, the placement is valid.
+  ImageItem.StartRect := ImageItem.CurrentRect;
   ImageItem.AnimationProgress := 0;
   ImageItem.Animating := True;
 
   MarkAreaOccupied(Grid, Row, Col, SpanRows, SpanCols);
+  Result := True; // Signal success
 end;
+
 
 { Returns the image item at the specified index, or nil if index is invalid }
 function TFlowmotion.GetImageItem(Index: Integer): TImageItem;
@@ -4107,7 +4193,8 @@ begin
   if (FImages.Count = 0) or FClearing or FInFallAnimation then
     Exit;
 
-  // First check if click is on a caption
+
+  // check if click is on a caption
   if Button = mbLeft then
   begin
     for Index := 0 to FImages.Count - 1 do
@@ -4127,6 +4214,18 @@ begin
   ImageItem := GetImageAtPoint(X, Y);
   Index := FImages.IndexOf(ImageItem);
 
+  // Click on background - deselect
+  if (Button = mbLeft) and (ImageItem = nil) then
+  begin
+    if FSelectedImage <> nil then
+    begin
+      DeselectZoomedImage;
+      Invalidate;
+    end;
+    Exit;
+  end;
+
+
   // Handle double-click
   if (Button = mbLeft) and (ssDouble in Shift) then
   begin
@@ -4141,16 +4240,6 @@ begin
     Exit;
   end;
 
-  // Click on background - deselect
-  if (Button = mbLeft) and (ImageItem = nil) then
-  begin
-    if FSelectedImage <> nil then
-    begin
-      DeselectZoomedImage;
-      Invalidate;
-    end;
-    Exit;
-  end;
 
   // Left click on an image
   if Button = mbLeft then
@@ -4185,19 +4274,21 @@ begin
           FOnItemSelected(Self, ImageItem, Index);
       end;
       Exit;
-    end;
-
-    // 2. SORTED LAYOUT — SELECT IMAGE FIRST, THEN ENABLE DRAGGING
-    if FSelectedImage <> ImageItem then
-    begin
-      // Small tactile "dip" when clicking a hot-tracked (zoomed) image
-      if ImageItem.FHotZoom >= 1.1 then
-        ImageItem.FHotZoom := ImageItem.FHotZoom - 0.1;
-
-      SetSelectedImage(ImageItem, Index);
     end
-    else if not FDraggingImage then
-      FBreathingPhase := FBreathingPhase - 0.4;
+    else
+    begin
+      // 2. SORTED LAYOUT — SELECT IMAGE FIRST, THEN ENABLE DRAGGING
+      if FSelectedImage <> ImageItem then
+      begin
+        // Small tactile "dip" when clicking a hot-tracked (zoomed) image
+        if ImageItem.FHotZoom >= 1.1 then
+          ImageItem.FHotZoom := ImageItem.FHotZoom - 0.1;
+
+        SetSelectedImage(ImageItem, Index);
+      end
+      else
+        FBreathingPhase := FBreathingPhase - 0.4;
+    end;
 
     // 3. ENABLE DRAGGING FOR SELECTED IMAGE IN SORTED LAYOUT
     if FSelectedMovable and (ImageItem = FSelectedImage) then
@@ -4210,7 +4301,8 @@ begin
     else if FSelectedImage = ImageItem then
     begin
       // Already selected ? small breathing push for tactile feedback
-      FBreathingPhase := FBreathingPhase - 0.4;
+      if (not FDraggingImage) and (FlowLayout <> flFreeFloat) then
+        FBreathingPhase := FBreathingPhase - 0.4;
     end;
   end;
 end;
@@ -4395,7 +4487,7 @@ begin
     else
       ImageItem.FHotZoomTarget := 1.0; // Only reset if breathing is OFF
 
-    FCurrentSelectedIndex := index;
+    FCurrentSelectedIndex := Index;
     ImageItem.AnimationProgress := 0;
     ImageItem.Animating := True;
   end
@@ -4616,13 +4708,19 @@ end; }
     BlendFunction: TBlendFunction;
     Lines: TStringList;
     i, LineHeight: Integer;
-    MaxCaptionWidth: Integer;
+    MaxCaptionWidth: Integer; // Max width for word wrapping (can be full image width)
+    MaxCaptionHeight: Integer; // The hard limit: half of the image height
     CurrentLine: string;
     LineWidth: Integer;
     WordStart, WordEnd: Integer;
     Word: string;
     LineTextWidth: Integer;
     TextX: Integer;
+    MaxLinesToShow: Integer; // Number of lines to display after truncation
+    MaxLineWidth: Integer;    // Width of the widest line for a snug box
+    ActualLinesToShow: Integer; // Helper variable to fix loop bounds
+    CurrentCaptionColor: TColor;       // *** MODIFICATION: Holds the color to use for this item ***
+    CurrentCaptionBackground: TColor; // *** MODIFICATION: Holds the background to use for this item ***
   begin
     if not FShowCaptions or (Item.Caption = '') then
       Exit;
@@ -4632,130 +4730,99 @@ end; }
     Canvas.Font.Assign(FCaptionFont);
     Canvas.Font.Color := FCaptionColor;
 
-    // Calculate maximum caption width (slightly less than image width)
+    // --- Step 1: Define constraints ---
+    // The height is hard constraint. The caption box cannot be taller than this.
+    MaxCaptionHeight := (DrawRect.Bottom - DrawRect.Top) div 2;
+    // The width is flexible. We use the full image width for wrapping to minimize height.
     MaxCaptionWidth := (DrawRect.Right - DrawRect.Left) - 20;
 
-    // Check if text needs wrapping
-    if Canvas.TextWidth(Item.Caption) > MaxCaptionWidth then
-    begin
-      Lines := TStringList.Create;
-      try
-        CurrentLine := '';
-        i := 1;
-
-        // Manual word parsing for Delphi 7 compatibility
-        while i <= Length(Item.Caption) do
+    // --- Step 2: ALWAYS perform word wrapping ---
+    // This simplifies logic. If the text is short, Lines will just contain one entry.
+    Lines := TStringList.Create;
+    try
+      CurrentLine := '';
+      i := 1;
+      while i <= Length(Item.Caption) do
+      begin
+        // Skip leading spaces
+        while (i <= Length(Item.Caption)) and (Item.Caption[i] = ' ') do
+          Inc(i);
+        if i > Length(Item.Caption) then
+          Break;
+        // Find word boundaries
+        WordStart := i;
+        while (i <= Length(Item.Caption)) and (Item.Caption[i] <> ' ') do
+          Inc(i);
+        WordEnd := i - 1;
+        // Extract the word
+        Word := Copy(Item.Caption, WordStart, WordEnd - WordStart + 1);
+        // Calculate width if we add this word
+        if CurrentLine = '' then
+          LineWidth := Canvas.TextWidth(Word)
+        else
+          LineWidth := Canvas.TextWidth(CurrentLine + ' ' + Word);
+        // If adding this word would exceed max width, start a new line
+        if LineWidth > MaxCaptionWidth then
         begin
-          // Skip leading spaces
-          while (i <= Length(Item.Caption)) and (Item.Caption[i] = ' ') do
-            Inc(i);
-
-          if i > Length(Item.Caption) then
-            Break;
-
-          // Find word boundaries
-          WordStart := i;
-          while (i <= Length(Item.Caption)) and (Item.Caption[i] <> ' ') do
-            Inc(i);
-          WordEnd := i - 1;
-
-          // Extract the word
-          Word := Copy(Item.Caption, WordStart, WordEnd - WordStart + 1);
-
-          // Calculate width if we add this word
+          if CurrentLine <> '' then
+            Lines.Add(CurrentLine);
+          CurrentLine := Word;
+        end
+        else
+        begin
           if CurrentLine = '' then
-            LineWidth := Canvas.TextWidth(Word)
+            CurrentLine := Word
           else
-            LineWidth := Canvas.TextWidth(CurrentLine + ' ' + Word);
-
-          // If adding this word would exceed max width, start a new line
-          if LineWidth > MaxCaptionWidth then
-          begin
-            // Add current line if not empty
-            if CurrentLine <> '' then
-              Lines.Add(CurrentLine);
-
-            // Start new line with current word
-            CurrentLine := Word;
-          end
-          else
-          begin
-            // Add word to current line
-            if CurrentLine = '' then
-              CurrentLine := Word
-            else
-              CurrentLine := CurrentLine + ' ' + Word;
-          end;
+            CurrentLine := CurrentLine + ' ' + Word;
         end;
-
-        // Add the last line
-        if CurrentLine <> '' then
-          Lines.Add(CurrentLine);
-
-        // Calculate total height needed
-        LineHeight := Canvas.TextHeight('Hg') + 2;
-        CaptionH := Lines.Count * LineHeight + 12;
-        CaptionW := MaxCaptionWidth + 4; // Add some padding
-
-        // Draw background
-        TextRect.Left := DrawRect.Left + (DrawRect.Right - DrawRect.Left - CaptionW) div 2;
-        TextRect.Top := DrawRect.Bottom - CaptionH - FCaptionOffsetY;
-        TextRect.Right := TextRect.Left + CaptionW;
-        TextRect.Bottom := TextRect.Top + CaptionH;
-
-        // Simple clipping
-        if TextRect.Bottom > ClientHeight then
-          Dec(TextRect.Top, TextRect.Bottom - ClientHeight);
-        if TextRect.Top < 0 then
-          TextRect.Top := 0;
-        TextRect.Bottom := TextRect.Top + CaptionH;
-
-        FTempBitmap.Width := CaptionW;
-        FTempBitmap.Height := CaptionH;
-
-        FTempBitmap.Canvas.Brush.Color := FCaptionBackground;
-        FTempBitmap.Canvas.FillRect(Rect(0, 0, CaptionW, CaptionH));
-
-        FTempBitmap.Canvas.Font.Assign(FCaptionFont);
-        FTempBitmap.Canvas.Font.Color := FCaptionColor;
-        FTempBitmap.Canvas.Brush.Style := bsClear;
-
-        // Draw wrapped text with proper centering
-        for i := 0 to Lines.Count - 1 do
-        begin
-          // Calculate the width of this specific line
-          LineTextWidth := Canvas.TextWidth(Lines[i]);
-
-          // Calculate X position to center this line within the caption box
-          TextX := (CaptionW - LineTextWidth) div 2;
-
-          // Draw the line at the centered position
-          FTempBitmap.Canvas.TextOut(TextX, 6 + i * LineHeight, Lines[i]);
-        end;
-
-        // Draw with alpha
-        BlendFunction.BlendOp := AC_SRC_OVER;
-        BlendFunction.BlendFlags := 0;
-        BlendFunction.SourceConstantAlpha := FCaptionAlpha;
-        BlendFunction.AlphaFormat := 0;
-
-        AlphaBlend(Canvas.Handle, TextRect.Left, TextRect.Top, CaptionW, CaptionH, FTempBitmap.Canvas.Handle, 0, 0, CaptionW, CaptionH, BlendFunction);
-      finally
-        Lines.Free;
       end;
-    end
-    else
-    begin
-      // Original single-line caption code
-      CaptionH := Canvas.TextHeight('Hg') + 12;
-      CaptionW := Canvas.TextWidth(Item.Caption) + 24;
+      if CurrentLine <> '' then
+        Lines.Add(CurrentLine);
 
+      // --- Step 3: Check if the resulting height is too high and truncate lines ---
+      LineHeight := Canvas.TextHeight('Hg') + 2;
+
+      // Calculate how many lines can fit into the max height.
+      MaxLinesToShow := (MaxCaptionHeight - 6) div LineHeight;
+      if MaxLinesToShow < 1 then
+        MaxLinesToShow := 1; // Always show at least one line.
+
+      // Determine the actual number of lines we will draw.
+      // This is the crucial fix to prevent "List index out of bounds".
+      ActualLinesToShow := Min(MaxLinesToShow, Lines.Count);
+
+      // If we have more lines than space, truncate the list's height.
+      if Lines.Count > MaxLinesToShow then
+      begin
+        // The final height will be our maximum allowed height.
+        CaptionH := MaxCaptionHeight;
+      end
+      else
+      begin
+        // It fits, so the height is based on the actual number of lines.
+        CaptionH := Lines.Count * LineHeight + 12;
+      end;
+
+      // --- Step 4: Calculate the final width of the caption box ---
+      // Find the width of the widest line that will actually be displayed.
+      MaxLineWidth := 0;
+      // BUG FIX: Loop only up to the number of lines that actually exist
+      for i := 0 to ActualLinesToShow - 1 do
+      begin
+        LineTextWidth := Canvas.TextWidth(Lines[i]);
+        if LineTextWidth > MaxLineWidth then
+          MaxLineWidth := LineTextWidth;
+      end;
+      // Add padding to the widest line to get the final box width.
+      CaptionW := MaxLineWidth + 24;
+
+      // --- Step 5: Position and draw the bottom-aligned caption box ---
       TextRect.Left := DrawRect.Left + (DrawRect.Right - DrawRect.Left - CaptionW) div 2;
-      TextRect.Top := DrawRect.Bottom - CaptionH - FCaptionOffsetY;
+      TextRect.Top := DrawRect.Bottom - CaptionH - FCaptionOffsetY; // Bottom-aligned
       TextRect.Right := TextRect.Left + CaptionW;
       TextRect.Bottom := TextRect.Top + CaptionH;
 
-      // Simple clipping
+      // Simple clipping to keep it on screen
       if TextRect.Bottom > ClientHeight then
         Dec(TextRect.Top, TextRect.Bottom - ClientHeight);
       if TextRect.Top < 0 then
@@ -4765,20 +4832,42 @@ end; }
       FTempBitmap.Width := CaptionW;
       FTempBitmap.Height := CaptionH;
 
-      FTempBitmap.Canvas.Brush.Color := FCaptionBackground;
+      // *** MODIFICATION: Choose colors based on selection state ***
+      if Item.IsSelected then
+      begin
+        CurrentCaptionColor := FSelectedCaptionColor;
+        CurrentCaptionBackground := FSelectedCaptionBackground;
+      end
+      else
+      begin
+        CurrentCaptionColor := FCaptionColor;
+        CurrentCaptionBackground := FCaptionBackground;
+      end;
+
+      FTempBitmap.Canvas.Brush.Color := CurrentCaptionBackground;
       FTempBitmap.Canvas.FillRect(Rect(0, 0, CaptionW, CaptionH));
 
       FTempBitmap.Canvas.Font.Assign(FCaptionFont);
-      FTempBitmap.Canvas.Font.Color := FCaptionColor;
+      FTempBitmap.Canvas.Font.Color := CurrentCaptionColor;
       FTempBitmap.Canvas.Brush.Style := bsClear;
-      FTempBitmap.Canvas.TextOut(12, 6, Item.Caption);
 
+      // Draw only the lines that fit, centered in the box.
+      for i := 0 to ActualLinesToShow - 1 do
+      begin
+        LineTextWidth := Canvas.TextWidth(Lines[i]);
+        TextX := (CaptionW - LineTextWidth) div 2; // Center each line
+        FTempBitmap.Canvas.TextOut(TextX, 6 + i * LineHeight, Lines[i]);
+      end;
+
+      // Draw with alpha
       BlendFunction.BlendOp := AC_SRC_OVER;
       BlendFunction.BlendFlags := 0;
       BlendFunction.SourceConstantAlpha := FCaptionAlpha;
       BlendFunction.AlphaFormat := 0;
 
       AlphaBlend(Canvas.Handle, TextRect.Left, TextRect.Top, CaptionW, CaptionH, FTempBitmap.Canvas.Handle, 0, 0, CaptionW, CaptionH, BlendFunction);
+    finally
+      Lines.Free;
     end;
   end;
 
@@ -4889,7 +4978,7 @@ end; }
       Canvas.Brush.Style := bsClear;
       Canvas.Rectangle(R.Left, R.Top, R.Right, R.Bottom);
     end;
-    DrawCaption(Item, Item.CurrentRect);
+    DrawCaption(Item, R);
   end;
 
 begin
@@ -5152,22 +5241,42 @@ begin
     if HasLoadedPositions then
     begin
       // Use loaded positions for new items
-      for i := 0 to NewItems.Count - 1 do
+      for j := 0 to Length(FLoadedPositions) - 1 do
       begin
-        ImageItem := TImageItem(NewItems[i]);
-        FoundPosition := False;
-
-        // Find matching position for this image
-        for j := 0 to Length(FLoadedPositions) - 1 do
+        if FLoadedPositions[j].Path = ImageItem.Path then
         begin
-          if FLoadedPositions[j].Path = ImageItem.Path then
-          begin
             // Use saved position
-            SavedRect := Rect(FLoadedPositions[j].Left, FLoadedPositions[j].Top, FLoadedPositions[j].Left + FLoadedPositions[j].Width, FLoadedPositions[j].Top + FLoadedPositions[j].Height);
-            AnimateImage(ImageItem, ImageItem.Direction, True, SavedRect); // Use saved position
-            FoundPosition := True;
+          SavedRect := Rect(FLoadedPositions[j].Left, FLoadedPositions[j].Top, FLoadedPositions[j].Left + FLoadedPositions[j].Width, FLoadedPositions[j].Top + FLoadedPositions[j].Height);
+
+            // Validate and clamp the saved rectangle
+            // 1. Check for invalid dimensions (e.g., width or height is zero or negative)
+          if (SavedRect.Right <= SavedRect.Left) or (SavedRect.Bottom <= SavedRect.Top) then
+          begin
+            FoundPosition := False; // Discard this invalid position
             Break;
           end;
+
+            // 2. Clamp the rectangle to be within the component's bounds
+          if SavedRect.Left < 0 then
+            SavedRect.Left := 0;
+          if SavedRect.Top < 0 then
+            SavedRect.Top := 0;
+          if SavedRect.Right > Self.Width then
+            SavedRect.Right := Self.Width;
+          if SavedRect.Bottom > Self.Height then
+            SavedRect.Bottom := Self.Height;
+
+            // 3. Check if the clamped rectangle is still a reasonable size
+          if (SavedRect.Right - SavedRect.Left < 10) or (SavedRect.Bottom - SavedRect.Top < 10) then
+          begin
+            FoundPosition := False; // Discard, too small after clamping
+            Break;
+          end;
+
+            // If we passed all checks, use the position
+          AnimateImage(ImageItem, ImageItem.Direction, True, SavedRect);
+          FoundPosition := True;
+          Break;
         end;
 
         // If no saved position found, use default animation
@@ -5385,6 +5494,27 @@ begin
   begin
     FCaptionBackground := Value;
     Invalidate;
+    Repaint;
+  end;
+end;
+
+procedure TFlowmotion.SetSelectedCaptionColor(Value: TColor);
+begin
+  if FSelectedCaptionColor <> Value then
+  begin
+    FSelectedCaptionColor := Value;
+    Invalidate;
+    Repaint;
+  end;
+end;
+
+procedure TFlowmotion.SetSelectedCaptionBackground(Value: TColor);
+begin
+  if FSelectedCaptionBackground <> Value then
+  begin
+    FSelectedCaptionBackground := Value;
+    Invalidate;
+    Repaint;
   end;
 end;
 
@@ -5425,6 +5555,21 @@ begin
     FCaptionOnHoverOnly := Value;
     Invalidate;
     Repaint;
+  end;
+end;
+
+{ define area where no images should be placed automatically at flyin }
+procedure TFlowmotion.SetKeepAreaFreeRect(const Value: TRect);
+begin
+  if not EqualRect(FKeepAreaFreeRect, Value) then
+  begin
+    FKeepAreaFreeRect := Value;
+    // Recalculate layout to move images out of the newly defined free area
+    if Visible then
+    begin
+      CalculateLayout;
+      Invalidate;
+    end;
   end;
 end;
 
