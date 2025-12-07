@@ -4395,6 +4395,7 @@ begin
     else
       ImageItem.FHotZoomTarget := 1.0; // Only reset if breathing is OFF
 
+    FCurrentSelectedIndex := index;
     ImageItem.AnimationProgress := 0;
     ImageItem.Animating := True;
   end
@@ -4404,7 +4405,6 @@ begin
     // If we are deselecting, clear the hot item too
     FHotItem := nil;
   end;
-  FCurrentSelectedIndex := -1;
 
   // Only calculate layout if NOT in free float mode
   if (FFlowLayout <> flFreeFloat) then
