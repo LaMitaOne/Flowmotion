@@ -16,6 +16,7 @@
     - New Captions with semi-transparent background
       CaptionOnHoverOnly, ShowCaptions, CaptionFont, CaptionColor, CaptionBackground,
       CaptionAlpha, CaptionOffsetY propertys
+    - OnCaptionClick event added
   v 0.987
     - New flFreeFloat Layout added, no zoomselected to center and all pictures free draggable
     - New SavePositionsToFile() / LoadPositionsFromFile() for persisting free float layouts
@@ -231,6 +232,8 @@ type
 
   TImageSelectEvent = procedure(Sender: TObject; ImageItem: TImageItem; Index: Integer) of object;
 
+  TOnCaptionClick = procedure(Sender: TObject; ImageItem: TImageItem; Index: Integer) of object;
+
   TBooleanGrid = array of array of Boolean;
 
   // Defines a rectangular activation zone for the selected image
@@ -366,7 +369,7 @@ type
     FHotItem: TImageItem;
     FActivationZones: array of TActivationZone;
     FLastActivationZoneName: string;
-
+    FOnCaptionClick: TOnCaptionClick;
 
     // Paging
     FPageSize: Integer; // Images per page
@@ -433,6 +436,7 @@ type
     function GetLoadingCount: Integer;
     procedure SetSelectedImage(ImageItem: TImageItem; Index: Integer);
     procedure LoadImageFromFile(const AFileName: string; ABitmap: TBitmap);
+    function GetCaptionRect(Item: TImageItem; const DrawRect: TRect): TRect;
 
     // Property setters
     procedure SetLoadMode(Value: TFlowmotionLoadMode);
@@ -576,6 +580,7 @@ type
     property CaptionBackground: TColor read FCaptionBackground write SetCaptionBackground default clBlack;
     property CaptionAlpha: Byte read FCaptionAlpha write SetCaptionAlpha default 180;
     property CaptionOffsetY: Integer read FCaptionOffsetY write SetCaptionOffsetY default 8;
+    property OnCaptionClick: TOnCaptionClick read FOnCaptionClick write FOnCaptionClick;
 
     // Inherited properties
     property Align;
@@ -3033,6 +3038,36 @@ begin
   end;
 end;
 
+
+// Helper function to calculate caption rect
+function TFlowmotion.GetCaptionRect(Item: TImageItem; const DrawRect: TRect): TRect;
+var
+  CaptionW, CaptionH: Integer;
+begin
+  if not FShowCaptions or (Item.Caption = '') then
+  begin
+    Result := Rect(0, 0, 0, 0);
+    Exit;
+  end;
+
+  Canvas.Font.Assign(FCaptionFont);
+  CaptionH := Canvas.TextHeight('Hg') + 12;
+  CaptionW := Canvas.TextWidth(Item.Caption) + 24;
+
+  Result.Left := DrawRect.Left + (DrawRect.Right - DrawRect.Left - CaptionW) div 2;
+  Result.Top := DrawRect.Bottom - CaptionH - FCaptionOffsetY;
+  Result.Right := Result.Left + CaptionW;
+  Result.Bottom := Result.Top + CaptionH;
+
+  // Simple clipping
+  if Result.Bottom > ClientHeight then
+    Dec(Result.Top, Result.Bottom - ClientHeight);
+  if Result.Top < 0 then
+    Result.Top := 0;
+  Result.Bottom := Result.Top + CaptionH;
+end;
+
+
 { Returns the absolute index of the first image on the current page }
 function TFlowmotion.GetPageStartIndex: Integer;
 begin
@@ -4065,11 +4100,29 @@ procedure TFlowmotion.MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: 
 var
   ImageItem: TImageItem;
   Index: Integer;
+  CaptionRect: TRect;
 begin
   inherited MouseDown(Button, Shift, X, Y);
 
   if (FImages.Count = 0) or FClearing or FInFallAnimation then
     Exit;
+
+  // First check if click is on a caption
+  if Button = mbLeft then
+  begin
+    for Index := 0 to FImages.Count - 1 do
+    begin
+      ImageItem := TImageItem(FImages[Index]);
+      CaptionRect := GetCaptionRect(ImageItem, ImageItem.CurrentRect);
+
+      if PtInRect(CaptionRect, Point(X, Y)) then
+      begin
+        if Assigned(FOnCaptionClick) then
+          FOnCaptionClick(Self, ImageItem, Index);
+        Exit;
+      end;
+    end;
+  end;
 
   ImageItem := GetImageAtPoint(X, Y);
   Index := FImages.IndexOf(ImageItem);
