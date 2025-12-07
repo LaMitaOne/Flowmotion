@@ -48,6 +48,17 @@ type
     Button17: TButton;
     Button18: TButton;
     Label5: TLabel;
+    GroupBox1: TGroupBox;
+    CheckBox3: TCheckBox;
+    Panel7: TPanel;
+    Panel8: TPanel;
+    SpinEdit4: TSpinEdit;
+    Label6: TLabel;
+    SpinEdit5: TSpinEdit;
+    Label7: TLabel;
+    Label8: TLabel;
+    SpinEdit6: TSpinEdit;
+    CheckBox4: TCheckBox;
     procedure Button10Click(Sender: TObject);
     procedure Button11Click(Sender: TObject);
     procedure Button12Click(Sender: TObject);
@@ -69,6 +80,8 @@ type
     procedure Button9Click(Sender: TObject);
     procedure CheckBox1Click(Sender: TObject);
     procedure CheckBox2Click(Sender: TObject);
+    procedure CheckBox3Click(Sender: TObject);
+    procedure CheckBox4Click(Sender: TObject);
     procedure ComboBox1Change(Sender: TObject);
     procedure Flowmotion1AllAnimationsFinished(Sender: TObject);
     procedure Flowmotion1ImageLoad(Sender: TObject; const FileName: string;
@@ -82,9 +95,14 @@ type
     procedure FormShow(Sender: TObject);
     procedure Panel3Click(Sender: TObject);
     procedure Panel4Click(Sender: TObject);
+    procedure Panel7Click(Sender: TObject);
+    procedure Panel8Click(Sender: TObject);
     procedure SpinEdit1Change(Sender: TObject);
     procedure SpinEdit2Change(Sender: TObject);
     procedure SpinEdit3Change(Sender: TObject);
+    procedure SpinEdit4Change(Sender: TObject);
+    procedure SpinEdit5Change(Sender: TObject);
+    procedure SpinEdit6Change(Sender: TObject);
     procedure Timer1Timer(Sender: TObject);
   private
     procedure WMMouseWheel(var Msg: TWMMouseWheel); message WM_MOUSEWHEEL;
@@ -179,7 +197,6 @@ var
 begin
   // First, clear the current images
   Flowmotion1.Clear(False);
-
   // Create lists for the images you want to load
   FileList := TStringList.Create;
   CaptionList := TStringList.Create;
@@ -201,10 +218,8 @@ begin
     begin
       // Load positions from file
       Flowmotion1.LoadPositionsFromFile('positions.dat');
-
       // Get the loaded positions
       Positions := Flowmotion1.GetCurrentPositions;
-
       // Create position array for AddImagesWithPositions
       SetLength(PositionArray, Length(Positions));
       for i := 0 to Length(Positions) - 1 do
@@ -216,7 +231,6 @@ begin
           Positions[i].Top + Positions[i].Height
         );
       end;
-
       // Add images with their saved positions
       Flowmotion1.AddImagesWithPositions(FileList, CaptionList, PathList, PositionArray);
     end
@@ -230,7 +244,6 @@ begin
     CaptionList.Free;
     PathList.Free;
   end;
-
   ShowMessage('Positions loaded!');
 end;
 
@@ -359,6 +372,16 @@ begin
   Flowmotion1.HotTrackZoom := CheckBox2.Checked;
 end;
 
+procedure TFSampleform.CheckBox3Click(Sender: TObject);
+begin
+ Flowmotion1.ShowCaptions := CheckBox3.Checked;
+end;
+
+procedure TFSampleform.CheckBox4Click(Sender: TObject);
+begin
+  Flowmotion1.CaptionOnHoverOnly := CheckBox4.Checked;
+end;
+
 procedure TFSampleform.ComboBox1Change(Sender: TObject);
 begin
    case Combobox1.ItemIndex of
@@ -425,6 +448,22 @@ begin
   end;
 end;
 
+procedure TFSampleform.Panel7Click(Sender: TObject);
+begin
+  if Colordialog1.Execute then begin
+    Flowmotion1.CaptionColor := Colordialog1.Color;
+    Panel7.Color := Colordialog1.Color;
+  end;
+end;
+
+procedure TFSampleform.Panel8Click(Sender: TObject);
+begin
+  if Colordialog1.Execute then begin
+    Flowmotion1.CaptionBackground := Colordialog1.Color;
+    Panel8.Color := Colordialog1.Color;
+  end;
+end;
+
 procedure TFSampleform.SpinEdit1Change(Sender: TObject);
 begin
    Flowmotion1.AnimationSpeed := SpinEdit1.Value;
@@ -438,6 +477,21 @@ end;
 procedure TFSampleform.SpinEdit3Change(Sender: TObject);
 begin
   Flowmotion1.HotTrackWidth := SpinEdit3.Value;
+end;
+
+procedure TFSampleform.SpinEdit4Change(Sender: TObject);
+begin
+  Flowmotion1.CaptionFont.Size := SpinEdit4.Value;
+end;
+
+procedure TFSampleform.SpinEdit5Change(Sender: TObject);
+begin
+   Flowmotion1.CaptionAlpha := SpinEdit5.Value;
+end;
+
+procedure TFSampleform.SpinEdit6Change(Sender: TObject);
+begin
+  Flowmotion1.CaptionOffsetY := SpinEdit6.Value;
 end;
 
 procedure TFSampleform.Timer1Timer(Sender: TObject);

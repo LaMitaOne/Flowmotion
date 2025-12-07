@@ -207,9 +207,9 @@ object FSampleform: TFSampleform
   end
   object Panel2: TPanel
     Left = 1217
-    Top = 0
+    Top = 4
     Width = 217
-    Height = 321
+    Height = 669
     Anchors = [akTop, akRight]
     Color = 855309
     Font.Charset = DEFAULT_CHARSET
@@ -277,7 +277,7 @@ object FSampleform: TFSampleform
       Left = 88
       Top = 215
       Width = 121
-      Height = 32
+      Height = 30
       Caption = 'Save/load positions for freefloat layout:'
       Font.Charset = DEFAULT_CHARSET
       Font.Color = clWhite
@@ -424,6 +424,148 @@ object FSampleform: TFSampleform
       Enabled = False
       TabOrder = 10
       OnClick = Button18Click
+    end
+    object GroupBox1: TGroupBox
+      Left = 8
+      Top = 344
+      Width = 185
+      Height = 289
+      Caption = 'Caption'
+      TabOrder = 11
+      object Label6: TLabel
+        Left = 24
+        Top = 169
+        Width = 46
+        Height = 15
+        Caption = 'Font size'
+        Font.Charset = DEFAULT_CHARSET
+        Font.Color = clWhite
+        Font.Height = -12
+        Font.Name = 'Segoe UI'
+        Font.Style = []
+        ParentFont = False
+      end
+      object Label7: TLabel
+        Left = 24
+        Top = 209
+        Width = 31
+        Height = 15
+        Caption = 'Alpha'
+        Font.Charset = DEFAULT_CHARSET
+        Font.Color = clWhite
+        Font.Height = -12
+        Font.Name = 'Segoe UI'
+        Font.Style = []
+        ParentFont = False
+      end
+      object Label8: TLabel
+        Left = 24
+        Top = 253
+        Width = 42
+        Height = 15
+        Caption = 'Y-offset'
+        Font.Charset = DEFAULT_CHARSET
+        Font.Color = clWhite
+        Font.Height = -12
+        Font.Name = 'Segoe UI'
+        Font.Style = []
+        ParentFont = False
+      end
+      object CheckBox3: TCheckBox
+        Left = 16
+        Top = 25
+        Width = 121
+        Height = 17
+        Caption = 'show caption'
+        Checked = True
+        Color = 855309
+        Font.Charset = DEFAULT_CHARSET
+        Font.Color = clRed
+        Font.Height = -12
+        Font.Name = 'Segoe UI'
+        Font.Style = []
+        ParentColor = False
+        ParentFont = False
+        State = cbChecked
+        TabOrder = 0
+        StyleElements = [seClient, seBorder]
+        OnClick = CheckBox3Click
+      end
+      object Panel7: TPanel
+        Left = 3
+        Top = 88
+        Width = 65
+        Height = 33
+        Caption = 'Font color'
+        Color = clSilver
+        ParentBackground = False
+        TabOrder = 1
+        OnClick = Panel7Click
+      end
+      object Panel8: TPanel
+        Left = 3
+        Top = 127
+        Width = 166
+        Height = 33
+        Caption = 'Caption background color'
+        Color = clSilver
+        ParentBackground = False
+        TabOrder = 2
+        OnClick = Panel8Click
+      end
+      object SpinEdit4: TSpinEdit
+        Left = 109
+        Top = 166
+        Width = 57
+        Height = 24
+        MaxValue = 40
+        MinValue = 2
+        TabOrder = 3
+        Value = 10
+        OnChange = SpinEdit4Change
+      end
+      object SpinEdit5: TSpinEdit
+        Left = 109
+        Top = 206
+        Width = 57
+        Height = 24
+        MaxValue = 255
+        MinValue = 2
+        TabOrder = 4
+        Value = 180
+        OnChange = SpinEdit5Change
+      end
+      object SpinEdit6: TSpinEdit
+        Left = 109
+        Top = 249
+        Width = 57
+        Height = 24
+        MaxValue = 200
+        MinValue = 0
+        TabOrder = 5
+        Value = 8
+        OnChange = SpinEdit6Change
+      end
+      object CheckBox4: TCheckBox
+        Left = 32
+        Top = 48
+        Width = 121
+        Height = 17
+        Caption = 'only on hover'
+        Checked = True
+        Color = 855309
+        Font.Charset = DEFAULT_CHARSET
+        Font.Color = clRed
+        Font.Height = -12
+        Font.Name = 'Segoe UI'
+        Font.Style = []
+        ParentColor = False
+        ParentFont = False
+        State = cbChecked
+        TabOrder = 6
+        StyleElements = [seClient, seBorder]
+        OnClick = CheckBox4Click
+      end
     end
   end
   object Panel5: TPanel
