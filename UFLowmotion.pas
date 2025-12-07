@@ -4143,8 +4143,8 @@ begin
 
       SetSelectedImage(ImageItem, Index);
     end
-    else
-      if not FDraggingImage then FBreathingPhase := FBreathingPhase - 0.4;
+    else if not FDraggingImage then
+      FBreathingPhase := FBreathingPhase - 0.4;
 
     // 3. ENABLE DRAGGING FOR SELECTED IMAGE IN SORTED LAYOUT
     if FSelectedMovable and (ImageItem = FSelectedImage) then
@@ -4561,6 +4561,15 @@ end; }
     TextRect: TRect;
     CaptionW, CaptionH: Integer;
     BlendFunction: TBlendFunction;
+    Lines: TStringList;
+    i, LineHeight: Integer;
+    MaxCaptionWidth: Integer;
+    CurrentLine: string;
+    LineWidth: Integer;
+    WordStart, WordEnd: Integer;
+    Word: string;
+    LineTextWidth: Integer;
+    TextX: Integer;
   begin
     if not FShowCaptions or (Item.Caption = '') then
       Exit;
@@ -4570,44 +4579,154 @@ end; }
     Canvas.Font.Assign(FCaptionFont);
     Canvas.Font.Color := FCaptionColor;
 
-    CaptionH := Canvas.TextHeight('Hg') + 12;
-    CaptionW := Canvas.TextWidth(Item.Caption) + 24;
+    // Calculate maximum caption width (slightly less than image width)
+    MaxCaptionWidth := (DrawRect.Right - DrawRect.Left) - 20;
 
-    TextRect.Left := DrawRect.Left + (DrawRect.Right - DrawRect.Left - CaptionW) div 2;
-    TextRect.Top := DrawRect.Bottom - CaptionH - FCaptionOffsetY;
-    TextRect.Right := TextRect.Left + CaptionW;
-    TextRect.Bottom := TextRect.Top + CaptionH;
+    // Check if text needs wrapping
+    if Canvas.TextWidth(Item.Caption) > MaxCaptionWidth then
+    begin
+      Lines := TStringList.Create;
+      try
+        CurrentLine := '';
+        i := 1;
 
-    // Simple clipping
-    if TextRect.Bottom > ClientHeight then
-      Dec(TextRect.Top, TextRect.Bottom - ClientHeight);
-    if TextRect.Top < 0 then
-      TextRect.Top := 0;
-    TextRect.Bottom := TextRect.Top + CaptionH;
+        // Manual word parsing for Delphi 7 compatibility
+        while i <= Length(Item.Caption) do
+        begin
+          // Skip leading spaces
+          while (i <= Length(Item.Caption)) and (Item.Caption[i] = ' ') do
+            Inc(i);
 
-    CaptionW := TextRect.Right - TextRect.Left;
-    CaptionH := TextRect.Bottom - TextRect.Top;
-    if (CaptionW <= 0) or (CaptionH <= 0) then
-      Exit;
+          if i > Length(Item.Caption) then
+            Break;
 
-    FTempBitmap.Width := CaptionW;
-    FTempBitmap.Height := CaptionH;
+          // Find word boundaries
+          WordStart := i;
+          while (i <= Length(Item.Caption)) and (Item.Caption[i] <> ' ') do
+            Inc(i);
+          WordEnd := i - 1;
 
-    FTempBitmap.Canvas.Brush.Color := FCaptionBackground;
-    FTempBitmap.Canvas.FillRect(Rect(0, 0, CaptionW, CaptionH));
+          // Extract the word
+          Word := Copy(Item.Caption, WordStart, WordEnd - WordStart + 1);
 
-    FTempBitmap.Canvas.Font.Assign(FCaptionFont);
-    FTempBitmap.Canvas.Font.Color := FCaptionColor;
-    FTempBitmap.Canvas.Brush.Style := bsClear;
-    FTempBitmap.Canvas.TextOut(12, 6, Item.Caption);
+          // Calculate width if we add this word
+          if CurrentLine = '' then
+            LineWidth := Canvas.TextWidth(Word)
+          else
+            LineWidth := Canvas.TextWidth(CurrentLine + ' ' + Word);
 
-    // EXACTLY LIKE YOU DO IN DrawNormalItem — 100% YOUR CODE
-    BlendFunction.BlendOp := AC_SRC_OVER;
-    BlendFunction.BlendFlags := 0;
-    BlendFunction.SourceConstantAlpha := FCaptionAlpha;
-    BlendFunction.AlphaFormat := 0;
+          // If adding this word would exceed max width, start a new line
+          if LineWidth > MaxCaptionWidth then
+          begin
+            // Add current line if not empty
+            if CurrentLine <> '' then
+              Lines.Add(CurrentLine);
 
-    AlphaBlend(Canvas.Handle, TextRect.Left, TextRect.Top, CaptionW, CaptionH, FTempBitmap.Canvas.Handle, 0, 0, CaptionW, CaptionH, BlendFunction);
+            // Start new line with current word
+            CurrentLine := Word;
+          end
+          else
+          begin
+            // Add word to current line
+            if CurrentLine = '' then
+              CurrentLine := Word
+            else
+              CurrentLine := CurrentLine + ' ' + Word;
+          end;
+        end;
+
+        // Add the last line
+        if CurrentLine <> '' then
+          Lines.Add(CurrentLine);
+
+        // Calculate total height needed
+        LineHeight := Canvas.TextHeight('Hg') + 2;
+        CaptionH := Lines.Count * LineHeight + 12;
+        CaptionW := MaxCaptionWidth + 4; // Add some padding
+
+        // Draw background
+        TextRect.Left := DrawRect.Left + (DrawRect.Right - DrawRect.Left - CaptionW) div 2;
+        TextRect.Top := DrawRect.Bottom - CaptionH - FCaptionOffsetY;
+        TextRect.Right := TextRect.Left + CaptionW;
+        TextRect.Bottom := TextRect.Top + CaptionH;
+
+        // Simple clipping
+        if TextRect.Bottom > ClientHeight then
+          Dec(TextRect.Top, TextRect.Bottom - ClientHeight);
+        if TextRect.Top < 0 then
+          TextRect.Top := 0;
+        TextRect.Bottom := TextRect.Top + CaptionH;
+
+        FTempBitmap.Width := CaptionW;
+        FTempBitmap.Height := CaptionH;
+
+        FTempBitmap.Canvas.Brush.Color := FCaptionBackground;
+        FTempBitmap.Canvas.FillRect(Rect(0, 0, CaptionW, CaptionH));
+
+        FTempBitmap.Canvas.Font.Assign(FCaptionFont);
+        FTempBitmap.Canvas.Font.Color := FCaptionColor;
+        FTempBitmap.Canvas.Brush.Style := bsClear;
+
+        // Draw wrapped text with proper centering
+        for i := 0 to Lines.Count - 1 do
+        begin
+          // Calculate the width of this specific line
+          LineTextWidth := Canvas.TextWidth(Lines[i]);
+
+          // Calculate X position to center this line within the caption box
+          TextX := (CaptionW - LineTextWidth) div 2;
+
+          // Draw the line at the centered position
+          FTempBitmap.Canvas.TextOut(TextX, 6 + i * LineHeight, Lines[i]);
+        end;
+
+        // Draw with alpha
+        BlendFunction.BlendOp := AC_SRC_OVER;
+        BlendFunction.BlendFlags := 0;
+        BlendFunction.SourceConstantAlpha := FCaptionAlpha;
+        BlendFunction.AlphaFormat := 0;
+
+        AlphaBlend(Canvas.Handle, TextRect.Left, TextRect.Top, CaptionW, CaptionH, FTempBitmap.Canvas.Handle, 0, 0, CaptionW, CaptionH, BlendFunction);
+      finally
+        Lines.Free;
+      end;
+    end
+    else
+    begin
+      // Original single-line caption code
+      CaptionH := Canvas.TextHeight('Hg') + 12;
+      CaptionW := Canvas.TextWidth(Item.Caption) + 24;
+
+      TextRect.Left := DrawRect.Left + (DrawRect.Right - DrawRect.Left - CaptionW) div 2;
+      TextRect.Top := DrawRect.Bottom - CaptionH - FCaptionOffsetY;
+      TextRect.Right := TextRect.Left + CaptionW;
+      TextRect.Bottom := TextRect.Top + CaptionH;
+
+      // Simple clipping
+      if TextRect.Bottom > ClientHeight then
+        Dec(TextRect.Top, TextRect.Bottom - ClientHeight);
+      if TextRect.Top < 0 then
+        TextRect.Top := 0;
+      TextRect.Bottom := TextRect.Top + CaptionH;
+
+      FTempBitmap.Width := CaptionW;
+      FTempBitmap.Height := CaptionH;
+
+      FTempBitmap.Canvas.Brush.Color := FCaptionBackground;
+      FTempBitmap.Canvas.FillRect(Rect(0, 0, CaptionW, CaptionH));
+
+      FTempBitmap.Canvas.Font.Assign(FCaptionFont);
+      FTempBitmap.Canvas.Font.Color := FCaptionColor;
+      FTempBitmap.Canvas.Brush.Style := bsClear;
+      FTempBitmap.Canvas.TextOut(12, 6, Item.Caption);
+
+      BlendFunction.BlendOp := AC_SRC_OVER;
+      BlendFunction.BlendFlags := 0;
+      BlendFunction.SourceConstantAlpha := FCaptionAlpha;
+      BlendFunction.AlphaFormat := 0;
+
+      AlphaBlend(Canvas.Handle, TextRect.Left, TextRect.Top, CaptionW, CaptionH, FTempBitmap.Canvas.Handle, 0, 0, CaptionW, CaptionH, BlendFunction);
+    end;
   end;
 
 // --------------------------------------------------------------
