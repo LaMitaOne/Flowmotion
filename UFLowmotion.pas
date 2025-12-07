@@ -1,7 +1,7 @@
 
 {------------------------------------------------------------------------------}
 {                                                                              }
-{ Flowmotion v0.987                                                            }
+{ Flowmotion v0.988                                                            }
 { by Lara Miriam Tamy Reschke                                                  }
 {                                                                              }
 { larate@gmx.net                                                               }
@@ -10,6 +10,12 @@
 {------------------------------------------------------------------------------}
 {
  ----Latest Changes
+  v 0.988
+    - LoadPositionsFromFile bug fixed(wasnt working after new exe start)
+    - MoveImage bug fixed when there was duplicate picpaths
+    - New Captions with semi-transparent background
+      CaptionOnHoverOnly, ShowCaptions, CaptionFont, CaptionColor, CaptionBackground,
+      CaptionAlpha, CaptionOffsetY propertys
   v 0.987
     - New flFreeFloat Layout added, no zoomselected to center and all pictures free draggable
     - New SavePositionsToFile() / LoadPositionsFromFile() for persisting free float layouts
@@ -339,6 +345,13 @@ type
     FZoomSelectedtoCenter: Boolean;
     FGlowColor: TColor;
     FGlowWidth: Integer;
+    FCaptionFont: TFont;
+    FCaptionColor: TColor;
+    FCaptionBackground: TColor;
+    FCaptionAlpha: Byte;
+    FCaptionOffsetY: Integer;
+    FShowCaptions: Boolean;
+    FCaptionOnHoverOnly: Boolean;
 
     // Selection & Zoom
     FSelectedImage: TImageItem;
@@ -387,8 +400,7 @@ type
     function GetEntryDirection: TImageEntryStyle;
     procedure WaitForAllAnimations;
     procedure FreeAllImagesAndClearLists;
-    procedure AnimateImage(ImageItem: TImageItem; EntryStyle: TImageEntryStyle;
-  UseSavedPosition: Boolean; SavedTargetRect: TRect);
+    procedure AnimateImage(ImageItem: TImageItem; EntryStyle: TImageEntryStyle; UseSavedPosition: Boolean; SavedTargetRect: TRect);
     procedure StartZoomAnimation(ImageItem: TImageItem; ZoomIn: Boolean);
     procedure SetImageEntryStyle(Value: TImageEntryStyle);
 
@@ -412,6 +424,8 @@ type
 
     // Internal methods - Threading
     procedure ThreadFinished(Thread: TImageLoadThread);
+    procedure EnsureBitmapLoaded(Item: TImageItem);
+    procedure FreeInvisibleBitmaps;
 
     // Internal methods - Utilities
     function GetImageItem(Index: Integer): TImageItem;
@@ -440,7 +454,13 @@ type
     procedure SetBackgroundColor(const Value: TColor);
     procedure SetMaxColumns(const Value: Integer);
     procedure SetMaxRows(const Value: Integer);
-
+    procedure SetCaptionFont(Value: TFont);
+    procedure SetCaptionColor(Value: TColor);
+    procedure SetCaptionBackground(Value: TColor);
+    procedure SetCaptionAlpha(Value: Byte);
+    procedure SetCaptionOffsetY(Value: Integer);
+    procedure SetShowCaptions(Value: Boolean);
+    procedure SetCaptionOnHoverOnly(Value: Boolean);
   protected
     procedure Paint; override;
     procedure Resize; override;
@@ -512,6 +532,7 @@ type
     property GlowColor: TColor read FGlowColor write SetGlowColor;
     property GlowWidth: Integer read FGlowWidth write SetGlowWidth;
     property HotTrackWidth: Integer read FHotTrackWidth write SetHotTrackWidth;
+    property CaptionOnHoverOnly: Boolean read FCaptionOnHoverOnly write SetCaptionOnHoverOnly default True;
     property PageCount: Integer read GetPageCount;
     property CurrentSelectedIndex: Integer read FCurrentSelectedIndex;
     property ImageCount: Integer read GetImageCount;
@@ -549,6 +570,12 @@ type
     property ImageEntryStyle: TImageEntryStyle read FImageEntryStyle write SetImageEntryStyle default iesRandom;
     property EntryPoint: TPoint read FEntryPoint write FEntryPoint;
     property OnSelectedImageEnterZone: TSelectedImageEnterZoneEvent read FOnSelectedImageEnterZone write FOnSelectedImageEnterZone;
+    property ShowCaptions: Boolean read FShowCaptions write SetShowCaptions default True;
+    property CaptionFont: TFont read FCaptionFont write SetCaptionFont;
+    property CaptionColor: TColor read FCaptionColor write SetCaptionColor default clWhite;
+    property CaptionBackground: TColor read FCaptionBackground write SetCaptionBackground default clBlack;
+    property CaptionAlpha: Byte read FCaptionAlpha write SetCaptionAlpha default 180;
+    property CaptionOffsetY: Integer read FCaptionOffsetY write SetCaptionOffsetY default 8;
 
     // Inherited properties
     property Align;
@@ -800,7 +827,7 @@ begin
             CalculateLayout;
 
             // Set up animation for the new image
-            AnimateImage(NewItem, NewItem.Direction, false, Rect(0,0,0,0));
+            AnimateImage(NewItem, NewItem.Direction, false, Rect(0, 0, 0, 0));
             NewItem.Visible := True;
           end;
         end;
@@ -820,6 +847,16 @@ constructor TFlowmotion.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
   //Gdip := TGDIPlus.Create('');
+  FCaptionFont := TFont.Create;
+  FCaptionFont.Name := 'Segoe UI';
+  FCaptionFont.Size := 10;
+  FCaptionFont.Style := [fsBold];
+  FCaptionColor := clWhite;
+  FCaptionBackground := clBlack;
+  FCaptionAlpha := 180;
+  FShowCaptions := True;
+  FCaptionOnHoverOnly := True;
+  FCaptionOffsetY := 8;
   FImages := TList.Create;
   SetLength(FLoadedPositions, 0);
   FDraggingImage := False;
@@ -942,6 +979,20 @@ begin
       FreeAndNil(FAnimationThread);
 
     FAnimationThread := TAnimationThread.Create(Self);
+  end;
+end;
+
+procedure TFlowmotion.EnsureBitmapLoaded(Item: TImageItem);
+begin
+  if (FLoadMode = lmLazyAndFree) and (Item.FBitmap = nil) and (Item.FFileName <> '') and FileExists(Item.FFileName) then
+  begin
+    Item.FBitmap := TBitmap.Create;
+    try
+      LoadImageFromFile(Item.FFileName, Item.FBitmap);
+    except
+      Item.FBitmap.Free;
+      Item.FBitmap := nil;
+    end;
   end;
 end;
 
@@ -1130,39 +1181,26 @@ end;
 // Save positions to a stream
 procedure TFlowmotion.SavePositionsToStream(Stream: TStream);
 var
-  i: Integer;
-  Count: Integer;
-  Pos: TImagePosition;
   Writer: TWriter;
+  i: Integer;
 begin
   Writer := TWriter.Create(Stream, 4096);
   try
-    // Write the number of images
-    Count := FImages.Count;
-    Writer.WriteInteger(Count);
+    // Number of images (this is the only thing we really need for matching by index)
+    Writer.WriteInteger(FImages.Count);
 
-    // Write each image's position data
     for i := 0 to FImages.Count - 1 do
-    begin
       with TImageItem(FImages[i]) do
       begin
-        Pos.FileName := FileName;
-        Pos.Caption := Caption;
-        Pos.Path := Path;
-        Pos.Left := TargetRect.Left;
-        Pos.Top := TargetRect.Top;
-        Pos.Width := TargetRect.Right - TargetRect.Left;
-        Pos.Height := TargetRect.Bottom - TargetRect.Top;
+     // Writer.WriteString(FFileName);
+     // Writer.WriteString(FCaption);
+     // Writer.WriteString(FPath);
 
-        Writer.WriteString(Pos.FileName);
-        Writer.WriteString(Pos.Caption);
-        Writer.WriteString(Pos.Path);
-        Writer.WriteInteger(Pos.Left);
-        Writer.WriteInteger(Pos.Top);
-        Writer.WriteInteger(Pos.Width);
-        Writer.WriteInteger(Pos.Height);
+        Writer.WriteInteger(TargetRect.Left);
+        Writer.WriteInteger(TargetRect.Top);
+        Writer.WriteInteger(TargetRect.Right - TargetRect.Left);
+        Writer.WriteInteger(TargetRect.Bottom - TargetRect.Top);
       end;
-    end;
   finally
     Writer.Free;
   end;
@@ -1187,23 +1225,16 @@ end;
 // Load positions from a stream with validation
 procedure TFlowmotion.LoadPositionsFromStream(Stream: TStream);
 var
-  i, Count: Integer;
   Reader: TReader;
+  Count, i: Integer;
 begin
   Reader := TReader.Create(Stream, 4096);
   try
-    // Read the number of positions
     Count := Reader.ReadInteger;
-
-    // Set the array size
     SetLength(FLoadedPositions, Count);
 
-    // Read each position and store it
     for i := 0 to Count - 1 do
     begin
-      FLoadedPositions[i].FileName := Reader.ReadString;
-      FLoadedPositions[i].Caption := Reader.ReadString;
-      FLoadedPositions[i].Path := Reader.ReadString;
       FLoadedPositions[i].Left := Reader.ReadInteger;
       FLoadedPositions[i].Top := Reader.ReadInteger;
       FLoadedPositions[i].Width := Reader.ReadInteger;
@@ -1262,7 +1293,6 @@ begin
     ImageItem := TImageItem(FImages[i]);
     ImageItem.StartRect := ImageItem.CurrentRect;
     ImageItem.AnimationProgress := 0;
-    ImageItem.FHotZoomTarget := 1.0;
     ImageItem.Animating := True;
   end;
 
@@ -1345,13 +1375,9 @@ var
   Progress, Eased, Speed: Double;
   AnyAnimating, AnyAnimatingAfter, AllFinishedAtStart, NeedRepaint: Boolean;
   TempRect: TRect;
-  TempZoom, TempAlpha, ZoomFactor : Double;
+  TempZoom, TempAlpha: Double;
   TargetZoom: Double;
-  NewW, NewH,
-  CenterX, CenterY,
-  BaseW, BaseH,
-  OffsetX, OffsetY : Integer;
-  R : Trect;
+
   // -----------------------------------------------------------------------
   // Helper: compare two TRects for equality (pixel-exact)
   // -----------------------------------------------------------------------
@@ -1577,57 +1603,7 @@ begin
       if ImageItem.FHotZoom < 1.0 then
         ImageItem.FHotZoom := 1.0;
 
-      // NEW: Ensure the CurrentRect stays within bounds during hotzoom
-      // This fixes the issue where images can go partially outside when hotzooming back
-      if (ImageItem.CurrentRect.Right > ImageItem.CurrentRect.Left) and 
-         (ImageItem.CurrentRect.Bottom > ImageItem.CurrentRect.Top) then
-      begin
-        CenterX := ImageItem.CurrentRect.Left + (ImageItem.CurrentRect.Right - ImageItem.CurrentRect.Left) div 2;
-        CenterY := ImageItem.CurrentRect.Top + (ImageItem.CurrentRect.Bottom - ImageItem.CurrentRect.Top) div 2;
-        BaseW := ImageItem.CurrentRect.Right - ImageItem.CurrentRect.Left;
-        BaseH := ImageItem.CurrentRect.Bottom - ImageItem.CurrentRect.Top;
-      end
-      else
-      begin
-        CenterX := ImageItem.TargetRect.Left + (ImageItem.TargetRect.Right - ImageItem.TargetRect.Left) div 2;
-        CenterY := ImageItem.TargetRect.Top + (ImageItem.TargetRect.Bottom - ImageItem.TargetRect.Top) div 2;
-        BaseW := ImageItem.TargetRect.Right - ImageItem.TargetRect.Left;
-        BaseH := ImageItem.TargetRect.Bottom - ImageItem.TargetRect.Top;
-      end;
-
-      ZoomFactor := ImageItem.FHotZoom;
-      NewW := Round(BaseW * ZoomFactor);
-      NewH := Round(BaseH * ZoomFactor);
-
-      // Calculate the zoomed rect
-      R := Rect(CenterX - NewW div 2, CenterY - NewH div 2, CenterX + NewW div 2, CenterY + NewH div 2);
-
-      // Keep inside control (glow or hottrack margin)
-      BorderWidth := Max(FGlowWidth, FHotTrackWidth);
-      OffsetX := 0;
-      OffsetY := 0;
-      if R.Left < 0 then
-        OffsetX := -R.Left + BorderWidth;
-      if R.Right > Width then
-        OffsetX := Width - R.Right - BorderWidth;
-      if R.Top < 0 then
-        OffsetY := -R.Top + BorderWidth;
-      if R.Bottom > Height then
-        OffsetY := Height - R.Bottom - BorderWidth;
-    
-      // If we need to adjust the position, update the CurrentRect
-      if (OffsetX <> 0) or (OffsetY <> 0) then
-      begin
-        // Calculate the new center position
-        CenterX := CenterX + OffsetX;
-        CenterY := CenterY + OffsetY;
-    
-        // Update the CurrentRect to keep it within bounds
-        ImageItem.CurrentRect := Rect(CenterX - BaseW div 2, CenterY - BaseH div 2, 
-                                     CenterX + BaseW div 2, CenterY + BaseH div 2);
-        NeedRepaint := True;
-      end;
-
+      NeedRepaint := True;
     end;
 
     // Advance breathing phase only when selected item is hovered
@@ -1748,6 +1724,42 @@ begin
   end;
 end;
 
+
+// ---------------------------------------------------------------------
+// FREE BITMAPS OF NON-VISIBLE IMAGES (only in LazyAndFree mode)
+// Called from ShowPage after old images are removed from FImages
+// ---------------------------------------------------------------------
+procedure TFlowmotion.FreeInvisibleBitmaps;
+var
+  i: Integer;
+  Item: TImageItem;
+  AbsIndex: Integer;
+  PageStart, PageEnd: Integer;
+begin
+  if FLoadMode <> lmLazyAndFree then
+    Exit;
+
+  PageStart := GetPageStartIndex;
+  PageEnd := PageStart + FPageSize - 1;
+
+  // Scan ALL loaded images (they may still exist in the old page cache)
+  for i := 0 to FImages.Count - 1 do
+  begin
+    Item := TImageItem(FImages[i]);
+    AbsIndex := PageStart + i;
+
+    // If this image is NOT on the current page → free its bitmap
+    if (AbsIndex < PageStart) or (AbsIndex > PageEnd) then
+    begin
+      if Assigned(Item.FBitmap) then
+      begin
+        Item.FBitmap.Free;
+        Item.FBitmap := nil;  // Mark as unloaded
+      end;
+    end;
+  end;
+end;
+
 { Fires the OnImageLoad event }
 procedure TFlowmotion.DoImageLoad(const FileName: string; Success: Boolean);
 begin
@@ -1776,8 +1788,7 @@ begin
 end;
 
 { Sets up animation for a new image entering the gallery }
-procedure TFlowmotion.AnimateImage(ImageItem: TImageItem; EntryStyle: TImageEntryStyle;
-  UseSavedPosition: Boolean; SavedTargetRect: TRect);
+procedure TFlowmotion.AnimateImage(ImageItem: TImageItem; EntryStyle: TImageEntryStyle; UseSavedPosition: Boolean; SavedTargetRect: TRect);
 var
   StartX, StartY, W, H: Integer;
   Target: TRect;
@@ -2053,56 +2064,64 @@ end;
   The indices are relative to the FImages list (0-based).
   The change is permanent and updates all internal lists.
 }
+// ---------------------------------------------------------------------
+// Moves an image within the current page (relative indices)
+// Updates master lists → change is permanent across pages and restarts
+// Fully safe with async loading, paging, selection, and saved positions
+// ---------------------------------------------------------------------
 procedure TFlowmotion.MoveImageToPos(RelIndexFrom, RelIndexTo: Integer);
 var
   PageStart: Integer;
   AbsIndexFrom, AbsIndexTo: Integer;
   Item: TImageItem;
-  Filename, Caption, Path: string;
+  FileName, Caption, Path: string;
+  OldSelectedIndex: Integer;
 begin
-  // --- 1. Safety Checks ---
-  // Prevent moving items during animations or page changes to avoid conflicts
+  // --- 1. Safety: never move during animation or page change ---
   if FInFallAnimation or FPageChangeInProgress or AnimationsRunning then
     Exit;
 
-  // --- 2. Index Validation (relative to FImages) ---
+  // --- 2. Validate relative indices ---
   if (RelIndexFrom < 0) or (RelIndexFrom >= FImages.Count) or (RelIndexTo < 0) or (RelIndexTo >= FImages.Count) or (RelIndexFrom = RelIndexTo) then
     Exit;
 
-  // --- 3. Move item in the visible list (FImages) ---
+  // --- 3. Move in visible list (FImages) ---
   Item := TImageItem(FImages[RelIndexFrom]);
   FImages.Delete(RelIndexFrom);
   FImages.Insert(RelIndexTo, Item);
 
-  // --- 4. Move item in the master lists to make the change permanent ---
-  PageStart := GetPageStartIndex();
+  // --- 4. Calculate absolute indices in master lists ---
+  PageStart := GetPageStartIndex;
   AbsIndexFrom := PageStart + RelIndexFrom;
   AbsIndexTo := PageStart + RelIndexTo;
 
-  // Move in FAllFiles
-  Filename := FAllFiles[AbsIndexFrom];
+  // --- 5. Move in ALL master lists (permanent change) ---
+  // FAllFiles
+  FileName := FAllFiles[AbsIndexFrom];
   FAllFiles.Delete(AbsIndexFrom);
-  FAllFiles.Insert(AbsIndexTo, Filename);
+  FAllFiles.Insert(AbsIndexTo, FileName);
 
-  // Move in FAllCaptions
+  // FAllCaptions
   Caption := FAllCaptions[AbsIndexFrom];
   FAllCaptions.Delete(AbsIndexFrom);
   FAllCaptions.Insert(AbsIndexTo, Caption);
 
-  // Move in FAllPaths
+  // FAllPaths
   Path := FAllPaths[AbsIndexFrom];
   FAllPaths.Delete(AbsIndexFrom);
   FAllPaths.Insert(AbsIndexTo, Path);
 
-  // --- 5. Update Selection Index ---
-  if FCurrentSelectedIndex = RelIndexFrom then
+  // --- 6. Fix selected index (critical!) ---
+  OldSelectedIndex := FCurrentSelectedIndex;
+
+  if OldSelectedIndex = RelIndexFrom then
     FCurrentSelectedIndex := RelIndexTo
-  else if (FCurrentSelectedIndex > RelIndexFrom) and (FCurrentSelectedIndex <= RelIndexTo) then
+  else if (OldSelectedIndex > RelIndexFrom) and (OldSelectedIndex <= RelIndexTo) then
     Dec(FCurrentSelectedIndex)
-  else if (FCurrentSelectedIndex >= RelIndexTo) and (FCurrentSelectedIndex < RelIndexFrom) then
+  else if (OldSelectedIndex >= RelIndexTo) and (OldSelectedIndex < RelIndexFrom) then
     Inc(FCurrentSelectedIndex);
 
-  // --- 6. Refresh ---
+  // --- 7. Refresh layout and repaint ---
   CalculateLayout;
   Invalidate;
 end;
@@ -2175,7 +2194,7 @@ begin
           FoundPosition := False;
           // First try the default grid position
           NewX := 20 + ((FImages.Count - 1) mod ColCount) * (DefaultWidth + 20);
-          NewY := 20 + ((FImages.Count - 1) div RowCount) * (DefaultHeight + 20);
+          NewY := 20 + ((FImages.Count - 1) div ColCount) * (DefaultHeight + 20);
           // Check if this position is within bounds
           if (NewX + DefaultWidth <= Width - 20) and (NewY + DefaultHeight <= Height - 20) then
           begin
@@ -2223,12 +2242,12 @@ begin
             end;
           end;
           // Animation for new pic
-          AnimateImage(NewItem, NewItem.Direction, false, Rect(0,0,0,0));
+          AnimateImage(NewItem, NewItem.Direction, false, Rect(0, 0, 0, 0));
         end
         else
         begin
           CalculateLayout;
-          AnimateImage(NewItem, NewItem.Direction, false, Rect(0,0,0,0));
+          AnimateImage(NewItem, NewItem.Direction, false, Rect(0, 0, 0, 0));
         end;
         NewItem.Visible := True;
       end;
@@ -2293,7 +2312,7 @@ begin
     CalculateLayout;
 
     // Set up the entry animation AFTER layout calculation
-    AnimateImage(ImageItem, ImageItem.Direction, false, Rect(0,0,0,0));
+    AnimateImage(ImageItem, ImageItem.Direction, false, Rect(0, 0, 0, 0));
 
     ImageItem.Visible := True;
   end;
@@ -2372,12 +2391,9 @@ begin
   // Add all files to master list
   for i := 0 to FileNames.Count - 1 do
   begin
-    //if FAllFiles.IndexOf(FileNames[i]) = -1 then   //no duplicates with thi
-    begin
-      FAllFiles.Add(FileNames[i]);
-      FAllCaptions.Add(Captions[i]);
-      FAllPaths.Add(Paths[i]);
-    end;
+    FAllFiles.Add(FileNames[i]);
+    FAllCaptions.Add(Captions[i]);
+    FAllPaths.Add(Paths[i]);
   end;
   if WasEmpty then
     ShowPage(FCurrentPage); //else  to do
@@ -2396,12 +2412,9 @@ begin
   // Add all files to master list
   for i := 0 to FileNames.Count - 1 do
   begin
-    if FAllFiles.IndexOf(FileNames[i]) = -1 then
-    begin
-      FAllFiles.Add(FileNames[i]);
-      FAllCaptions.Add(Captions[i]);
-      FAllPaths.Add(Paths[i]);
-    end;
+    FAllFiles.Add(FileNames[i]);
+    FAllCaptions.Add(Captions[i]);
+    FAllPaths.Add(Paths[i]);
   end;
   // Start loading threads
   for i := 0 to FileNames.Count - 1 do
@@ -3691,6 +3704,7 @@ var
   BorderSize: Integer;
 begin
   P := Point(X, Y);
+  Result := nil;
 
   // ==================================================================
   // 1. SELECTED IMAGE HAS ABSOLUTE PRIORITY
@@ -3881,210 +3895,134 @@ var
   ImageCenter: TPoint;
   CurrentZoneName: string;
   i: Integer;
-  ScaleFactor: Double;
-  NearestZoneDistance: Double;
+  ScaleFactor, NearestZoneDistance, Distance: Double;
   ZoneRect: TRect;
-  BorderWidth, ZoneCenterX, ZoneCenterY, OffsetX, OffsetY: Integer;
+  ZoneCenterX, ZoneCenterY: Integer;
+  BorderWidth, OffsetX, OffsetY: Integer;
   R: TRect;
-  Distance: Double;
+  DraggedItem: TImageItem;
 const
-  DRAG_THRESHOLD = 20;
-  MIN_SCALE_WHILE_DRAGGING = 0.7;
-  SCALE_DISTANCE = 150; // Distance at which scaling starts to take effect
+  DRAG_THRESHOLD = 10;
+  MIN_SCALE_WHILE_DRAGGING = 0.92;
+  SCALE_DISTANCE = 180;
 begin
   if FClearing or FInFallAnimation then
     Exit;
-  // Existing dragging logic for selected image
+
+  // ------------------------------------------------------------------
+  // 1. DRAGGING – Selected image (Sorted layout) or any image (FreeFloat)
+  // ------------------------------------------------------------------
+  DraggedItem := nil;
+  if FDraggingSelected and (FSelectedImage <> nil) then
+    DraggedItem := FSelectedImage
+  else if (FFlowLayout = flFreeFloat) and FDraggingImage and (FDraggedImage <> nil) then
+    DraggedItem := FDraggedImage;
+
+  if DraggedItem <> nil then
+  begin
+    // Update target rectangle based on mouse position
+    NewCenterX := X - FDragOffset.X;
+    NewCenterY := Y - FDragOffset.Y;
+    with DraggedItem.TargetRect do
+      DraggedItem.TargetRect := Rect(NewCenterX - (Right - Left) div 2, NewCenterY - (Bottom - Top) div 2, NewCenterX + (Right - Left) div 2, NewCenterY + (Bottom - Top) div 2);
+
+    // Keep inside component bounds when no activation zones are used
+    if Length(FActivationZones) = 0 then
+    begin
+      BorderWidth := Max(FGlowWidth, FHotTrackWidth) + 10;
+      R := DraggedItem.TargetRect;
+      OffsetX := 0;
+      OffsetY := 0;
+      if R.Left < BorderWidth then
+        OffsetX := BorderWidth - R.Left;
+      if R.Right > Width - BorderWidth then
+        OffsetX := Width - BorderWidth - R.Right;
+      if R.Top < BorderWidth then
+        OffsetY := BorderWidth - R.Top;
+      if R.Bottom > Height - BorderWidth then
+        OffsetY := Height - BorderWidth - R.Bottom;
+      OffsetRect(R, OffsetX, OffsetY);
+      DraggedItem.TargetRect := R;
+    end;
+
+    // Slight scale-down while dragging (visual feedback)
+    DraggedItem.FHotZoom := MIN_SCALE_WHILE_DRAGGING;
+    DraggedItem.FHotZoomTarget := MIN_SCALE_WHILE_DRAGGING;
+
+    // Activation zone scaling effect
+    if Length(FActivationZones) > 0 then
+    begin
+      ImageCenter := Point((DraggedItem.TargetRect.Left + DraggedItem.TargetRect.Right) div 2, (DraggedItem.TargetRect.Top + DraggedItem.TargetRect.Bottom) div 2);
+
+      NearestZoneDistance := MaxDouble;
+      for i := Low(FActivationZones) to High(FActivationZones) do
+      begin
+        ZoneRect := FActivationZones[i].Rect;
+        ZoneCenterX := (ZoneRect.Left + ZoneRect.Right) div 2;
+        ZoneCenterY := (ZoneRect.Top + ZoneRect.Bottom) div 2;
+        Distance := Hypot(ImageCenter.X - ZoneCenterX, ImageCenter.Y - ZoneCenterY);
+        if Distance < NearestZoneDistance then
+          NearestZoneDistance := Distance;
+      end;
+
+      if NearestZoneDistance < SCALE_DISTANCE then
+      begin
+        ScaleFactor := MIN_SCALE_WHILE_DRAGGING + (1.0 - MIN_SCALE_WHILE_DRAGGING) * (1.0 - NearestZoneDistance / SCALE_DISTANCE);
+        DraggedItem.FHotZoom := ScaleFactor;
+        DraggedItem.FHotZoomTarget := ScaleFactor;
+      end;
+    end;
+
+    // Activation zone detection
+    if Length(FActivationZones) > 0 then
+    begin
+      ImageCenter := Point((DraggedItem.TargetRect.Left + DraggedItem.TargetRect.Right) div 2, (DraggedItem.TargetRect.Top + DraggedItem.TargetRect.Bottom) div 2);
+
+      CurrentZoneName := '';
+      for i := Low(FActivationZones) to High(FActivationZones) do
+      begin
+        if PtInRect(FActivationZones[i].Rect, ImageCenter) then
+        begin
+          CurrentZoneName := FActivationZones[i].Name;
+          Break;
+        end;
+      end;
+
+      if (CurrentZoneName <> '') and (CurrentZoneName <> FLastActivationZoneName) then
+      begin
+        FLastActivationZoneName := CurrentZoneName;
+        if Assigned(FOnSelectedImageEnterZone) then
+          FOnSelectedImageEnterZone(Self, DraggedItem, CurrentZoneName);
+      end
+      else if CurrentZoneName = '' then
+        FLastActivationZoneName := '';
+    end;
+
+    // In FreeFloat: immediate update (no animation lag)
+    if FFlowLayout = flFreeFloat then
+      DraggedItem.CurrentRect := DraggedItem.TargetRect;
+
+    StartAnimationThread;
+    Exit; // Dragging has priority – skip hot-tracking
+  end;
+
+  // ------------------------------------------------------------------
+  // 2. Potential drag → real drag (threshold check for SelectedMovable)
+  // ------------------------------------------------------------------
   if FIsPotentialDrag and (FSelectedImage <> nil) then
   begin
     if (Abs(X - FDragStartPos.X) > DRAG_THRESHOLD) or (Abs(Y - FDragStartPos.Y) > DRAG_THRESHOLD) then
     begin
       FDraggingSelected := True;
-      FBreathingPhase := 0;
       FIsPotentialDrag := False;
     end;
   end;
-  if FDraggingSelected and (FSelectedImage <> nil) then
-  begin
-    NewCenterX := X - FDragOffset.X;
-    NewCenterY := Y - FDragOffset.Y;
-    // Calculate the new target rect without clipping when activation zones are present
-    FSelectedImage.TargetRect := Rect(NewCenterX - (FSelectedImage.TargetRect.Right - FSelectedImage.TargetRect.Left) div 2, NewCenterY - (FSelectedImage.TargetRect.Bottom - FSelectedImage.TargetRect.Top) div 2, NewCenterX + (FSelectedImage.TargetRect.Right - FSelectedImage.TargetRect.Left) div 2, NewCenterY + (FSelectedImage.TargetRect.Bottom - FSelectedImage.TargetRect.Top) div 2);
-    // Only apply clipping if there are no activation zones
-    if Length(FActivationZones) = 0 then
-    begin
-      // Keep inside control (glow or hottrack margin)
-      BorderWidth := Max(FGlowWidth, FHotTrackWidth);
-      OffsetX := 0;
-      OffsetY := 0;
-      R := FSelectedImage.TargetRect;
-      if R.Left < 0 then
-        OffsetX := -R.Left + BorderWidth;
-      if R.Right > Width then
-        OffsetX := Width - R.Right - BorderWidth;
-      if R.Top < 0 then
-        OffsetY := -R.Top + BorderWidth;
-      if R.Bottom > Height then
-        OffsetY := Height - R.Bottom - BorderWidth;
-      OffsetRect(R, OffsetX, OffsetY);
-      FSelectedImage.TargetRect := R;
-    end
-    else
-    begin
-      // Apply scaling effect based on proximity to activation zones
-      if Length(FActivationZones) > 0 then
-      begin
-        ImageCenter.X := FSelectedImage.TargetRect.Left + (FSelectedImage.TargetRect.Right - FSelectedImage.TargetRect.Left) div 2;
-        ImageCenter.Y := FSelectedImage.TargetRect.Top + (FSelectedImage.TargetRect.Bottom - FSelectedImage.TargetRect.Top) div 2;
-        // Find the nearest activation zone
-        NearestZoneDistance := MaxDouble;
-        for i := Low(FActivationZones) to High(FActivationZones) do
-        begin
-          ZoneRect := FActivationZones[i].Rect;
-          // Calculate distance to the center of the zone
-          ZoneCenterX := ZoneRect.Left + (ZoneRect.Right - ZoneRect.Left) div 2;
-          ZoneCenterY := ZoneRect.Top + (ZoneRect.Bottom - ZoneRect.Top) div 2;
-          Distance := Sqrt(Sqr(ImageCenter.X - ZoneCenterX) + Sqr(ImageCenter.Y - ZoneCenterY));
-          if Distance < NearestZoneDistance then
-            NearestZoneDistance := Distance;
-        end;
-        // Apply scaling based on distance
-        if NearestZoneDistance < SCALE_DISTANCE then
-        begin
-          // Scale down as we get closer to the zone
-          ScaleFactor := MIN_SCALE_WHILE_DRAGGING + (1.0 - MIN_SCALE_WHILE_DRAGGING) * (NearestZoneDistance / SCALE_DISTANCE);
-          FSelectedImage.FHotZoom := ScaleFactor;
-          FSelectedImage.FHotZoomTarget := ScaleFactor;
-        end
-        else
-        begin
-          // Return to normal size when far from zones
-          FSelectedImage.FHotZoomTarget := 1.0;
-        end;
-      end;
-    end;
-    // Check activation zones - FIX FOR FREEFLOAT LAYOUT
-    if Length(FActivationZones) > 0 then
-    begin
-      // Use the actual center of the dragged image, not the target rect
-      ImageCenter.X := NewCenterX;
-      ImageCenter.Y := NewCenterY;
-      CurrentZoneName := '';
-      for i := Low(FActivationZones) to High(FActivationZones) do
-      begin
-        if PtInRect(FActivationZones[i].Rect, ImageCenter) then
-        begin
-          CurrentZoneName := FActivationZones[i].Name;
-          Break;
-        end;
-      end;
-      if (CurrentZoneName <> '') and (CurrentZoneName <> FLastActivationZoneName) then
-      begin
-        FLastActivationZoneName := CurrentZoneName;
-        if Assigned(FOnSelectedImageEnterZone) then
-          FOnSelectedImageEnterZone(Self, FSelectedImage, CurrentZoneName);
-      end
-      else if CurrentZoneName = '' then
-      begin
-        FLastActivationZoneName := '';
-      end;
-    end;
-    StartAnimationThread;
-    Exit;
-  end;
-  // Allow dragging any image in free float mode
-  if (FFlowLayout = flFreeFloat) and FDraggingImage and (FDraggedImage <> nil) then
-  begin
-    NewCenterX := X - FDragOffset.X;
-    NewCenterY := Y - FDragOffset.Y;
-    // Calculate the new target rect without clipping when activation zones are present
-    FDraggedImage.TargetRect := Rect(NewCenterX - (FDraggedImage.TargetRect.Right - FDraggedImage.TargetRect.Left) div 2, NewCenterY - (FDraggedImage.TargetRect.Bottom - FDraggedImage.TargetRect.Top) div 2, NewCenterX + (FDraggedImage.TargetRect.Right - FDraggedImage.TargetRect.Left) div 2, NewCenterY + (FDraggedImage.TargetRect.Bottom - FDraggedImage.TargetRect.Top) div 2);
-    // Only apply clipping if there are no activation zones
-    if Length(FActivationZones) = 0 then
-    begin
-      // Keep inside control (glow or hottrack margin)
-      BorderWidth := Max(FGlowWidth, FHotTrackWidth);
-      OffsetX := 0;
-      OffsetY := 0;
-      R := FDraggedImage.TargetRect;
-      if R.Left < 0 then
-        OffsetX := -R.Left + BorderWidth;
-      if R.Right > Width then
-        OffsetX := Width - R.Right - BorderWidth;
-      if R.Top < 0 then
-        OffsetY := -R.Top + BorderWidth;
-      if R.Bottom > Height then
-        OffsetY := Height - R.Bottom - BorderWidth;
-      OffsetRect(R, OffsetX, OffsetY);
-      FDraggedImage.TargetRect := R;
-    end
-    else
-    begin
-      // Apply scaling effect based on proximity to activation zones
-      if Length(FActivationZones) > 0 then
-      begin
-        ImageCenter.X := FDraggedImage.TargetRect.Left + (FDraggedImage.TargetRect.Right - FDraggedImage.TargetRect.Left) div 2;
-        ImageCenter.Y := FDraggedImage.TargetRect.Top + (FDraggedImage.TargetRect.Bottom - FDraggedImage.TargetRect.Top) div 2;
-        // Find the nearest activation zone
-        NearestZoneDistance := MaxDouble;
-        for i := Low(FActivationZones) to High(FActivationZones) do
-        begin
-          ZoneRect := FActivationZones[i].Rect;
-          // Calculate distance to the center of the zone
-          ZoneCenterX := ZoneRect.Left + (ZoneRect.Right - ZoneRect.Left) div 2;
-          ZoneCenterY := ZoneRect.Top + (ZoneRect.Bottom - ZoneRect.Top) div 2;
-          Distance := Sqrt(Sqr(ImageCenter.X - ZoneCenterX) + Sqr(ImageCenter.Y - ZoneCenterY));
-          if Distance < NearestZoneDistance then
-            NearestZoneDistance := Distance;
-        end;
-        // Apply scaling based on distance
-        if NearestZoneDistance < SCALE_DISTANCE then
-        begin
-          // Scale down as we get closer to the zone
-          ScaleFactor := MIN_SCALE_WHILE_DRAGGING + (1.0 - MIN_SCALE_WHILE_DRAGGING) * (NearestZoneDistance / SCALE_DISTANCE);
-          FDraggedImage.FHotZoom := ScaleFactor;
-          FDraggedImage.FHotZoomTarget := ScaleFactor;
-        end
-        else
-        begin
-          // Return to normal size when far from zones
-          FDraggedImage.FHotZoomTarget := 1.0;
-        end;
-      end;
-    end;
-    // Check activation zones - FIX FOR FREEFLOAT LAYOUT
-    if Length(FActivationZones) > 0 then
-    begin
-      // Use the actual center of the dragged image, not the target rect
-      ImageCenter.X := NewCenterX;
-      ImageCenter.Y := NewCenterY;
-      CurrentZoneName := '';
-      for i := Low(FActivationZones) to High(FActivationZones) do
-      begin
-        if PtInRect(FActivationZones[i].Rect, ImageCenter) then
-        begin
-          CurrentZoneName := FActivationZones[i].Name;
-          Break;
-        end;
-      end;
-      if (CurrentZoneName <> '') and (CurrentZoneName <> FLastActivationZoneName) then
-      begin
-        FLastActivationZoneName := CurrentZoneName;
-        if Assigned(FOnSelectedImageEnterZone) then
-          FOnSelectedImageEnterZone(Self, FDraggedImage, CurrentZoneName);
-      end
-      else if CurrentZoneName = '' then
-      begin
-        FLastActivationZoneName := '';
-      end;
-    end;
-    // Update current position immediately for responsive dragging
-    FDraggedImage.CurrentRect := FDraggedImage.TargetRect;
-    StartAnimationThread;
-    Exit;
-  end;
-  // Existing hot-tracking logic
+
+  // ------------------------------------------------------------------
+  // 3. Normal hot-tracking (when nothing is being dragged)
+  // ------------------------------------------------------------------
   NewHot := GetImageAtPoint(X, Y);
+
   if not FHotTrackZoom then
   begin
     if FHotItem <> nil then
@@ -4107,15 +4045,15 @@ begin
     else if (NewHot <> FHotItem) and (NewHot <> nil) then
     begin
       if (FHotItem <> nil) and (FHotItem <> NewHot) then
-      begin
         FHotItem.FHotZoomTarget := 1.0;
-      end;
       FHotItem := NewHot;
       StartAnimationThread;
       if not inPaintCycle then
         Invalidate;
     end;
   end;
+
+  // Update cursor
   if FHotItem <> nil then
     Cursor := crHandPoint
   else
@@ -4141,31 +4079,8 @@ begin
   begin
     if ImageItem <> nil then
     begin
-      if FFlowLayout = flFreeFloat then
-      begin
-        // Clear previous selection
-        if FSelectedImage <> nil then
-        begin
-          FSelectedImage.IsSelected := False;
-          if FSelectedImage = FWasSelectedItem then
-            FWasSelectedItem := nil;
-        end;
-
-        // Set new selection directly
-        FSelectedImage := ImageItem;
-        FCurrentSelectedIndex := Index;
-        ImageItem.IsSelected := True;
-        FHotItem := ImageItem;
-
-        // Trigger selection event
-        if Assigned(FOnItemSelected) then
-          FOnItemSelected(Self, ImageItem, Index);
-      end
-      else
-      begin
-        if FSelectedImage <> ImageItem then
-          SetSelectedImage(ImageItem, Index);
-      end;
+      if FSelectedImage <> ImageItem then
+        SetSelectedImage(ImageItem, Index);
 
       if Assigned(FOnSelectedImageDblClick) then
         FOnSelectedImageDblClick(Self, ImageItem, Index);
@@ -4191,64 +4106,57 @@ begin
     if Assigned(FOnSelectedItemMouseDown) then
       FOnSelectedItemMouseDown(Self, ImageItem, Index, X, Y, Button, Shift);
 
-    // Handle dragging any image in free float mode
-    if (FFlowLayout = flFreeFloat) and (ImageItem <> nil) then
+    // 1. FREEFLOAT MODE — EVERY IMAGE IS DRAGGABLE
+    if FFlowLayout = flFreeFloat then
     begin
       FDraggingImage := True;
       FDraggedImage := ImageItem;
-      FDragStartPos := Point(X, Y);
-
-      // Calculate offset from mouse to center of image
       FDragOffset.X := X - ((ImageItem.CurrentRect.Left + ImageItem.CurrentRect.Right) div 2);
       FDragOffset.Y := Y - ((ImageItem.CurrentRect.Top + ImageItem.CurrentRect.Bottom) div 2);
       MouseCapture := True;
 
-      // In free float mode, select the image WITHOUT calling SetSelectedImage
+      // Selection handling in FreeFloat
       if FSelectedImage <> ImageItem then
       begin
-        // Clear previous selection
         if FSelectedImage <> nil then
         begin
           FSelectedImage.IsSelected := False;
           if FSelectedImage = FWasSelectedItem then
             FWasSelectedItem := nil;
         end;
-
-        // Set new selection directly
         FSelectedImage := ImageItem;
         FCurrentSelectedIndex := Index;
         ImageItem.IsSelected := True;
         FHotItem := ImageItem;
-
-        // Trigger selection event
         if Assigned(FOnItemSelected) then
           FOnItemSelected(Self, ImageItem, Index);
       end;
-
       Exit;
     end;
 
-    // Existing dragging logic for selected image (for non-free-float modes)
-    if FSelectedMovable and (ImageItem = FSelectedImage) then
-    begin
-      FIsPotentialDrag := True;
-      FDragStartPos := Point(X, Y);
-
-      FDragOffset.X := X - ((ImageItem.CurrentRect.Left + ImageItem.CurrentRect.Right) div 2);
-      FDragOffset.Y := Y - ((ImageItem.CurrentRect.Top + ImageItem.CurrentRect.Bottom) div 2);
-      MouseCapture := True;
-    end;
-
-    // Select new image if not already selected (for non-free-float modes)
+    // 2. SORTED LAYOUT — SELECT IMAGE FIRST, THEN ENABLE DRAGGING
     if FSelectedImage <> ImageItem then
     begin
+      // Small tactile "dip" when clicking a hot-tracked (zoomed) image
       if ImageItem.FHotZoom >= 1.1 then
         ImageItem.FHotZoom := ImageItem.FHotZoom - 0.1;
 
       SetSelectedImage(ImageItem, Index);
     end
     else
+      FBreathingPhase := FBreathingPhase - 0.4;
+
+    // 3. ENABLE DRAGGING FOR SELECTED IMAGE IN SORTED LAYOUT
+    if FSelectedMovable and (ImageItem = FSelectedImage) then
     begin
+      FDraggingSelected := True;
+      FDragOffset.X := X - ((ImageItem.CurrentRect.Left + ImageItem.CurrentRect.Right) div 2);
+      FDragOffset.Y := Y - ((ImageItem.CurrentRect.Top + ImageItem.CurrentRect.Bottom) div 2);
+      MouseCapture := True;
+    end
+    else if FSelectedImage = ImageItem then
+    begin
+      // Already selected ? small breathing push for tactile feedback
       FBreathingPhase := FBreathingPhase - 0.4;
     end;
   end;
@@ -4257,16 +4165,13 @@ end;
 
 
  { adds list of pictures with loaded positions }
-procedure TFlowmotion.AddImagesWithPositions(const FileNames, Captions, Paths: TStringList;
-  const Positions: array of TRect);
+procedure TFlowmotion.AddImagesWithPositions(const FileNames, Captions, Paths: TStringList; const Positions: array of TRect);
 var
   i: Integer;
   Bitmap: TBitmap;
   NewItem: TImageItem;
 begin
-  if (FileNames = nil) or (Captions = nil) or (Paths = nil) or
-     (FileNames.Count <> Captions.Count) or (FileNames.Count <> Paths.Count) or
-     (FileNames.Count <> Length(Positions)) then
+  if (FileNames = nil) or (Captions = nil) or (Paths = nil) or (FileNames.Count <> Captions.Count) or (FileNames.Count <> Paths.Count) or (FileNames.Count <> Length(Positions)) then
     Exit;
 
   for i := 0 to FileNames.Count - 1 do
@@ -4308,7 +4213,7 @@ begin
         else
         begin
           CalculateLayout;
-          AnimateImage(NewItem, NewItem.Direction, False, Rect(0,0,0,0)); // False = UseSavedPosition
+          AnimateImage(NewItem, NewItem.Direction, False, Rect(0, 0, 0, 0)); // False = UseSavedPosition
         end;
 
         NewItem.Visible := True;
@@ -4449,16 +4354,16 @@ begin
   FCurrentSelectedIndex := -1;
 
   // Only calculate layout if NOT in free float mode
-  if FFlowLayout <> flFreeFloat then
+  if (FFlowLayout <> flFreeFloat) then
     CalculateLayout;
 
   // Only zoom to center if NOT in free float mode
-  if FZoomSelectedtoCenter and (FFlowLayout <> flFreeFloat) then
+  if (FZoomSelectedtoCenter and (FFlowLayout <> flFreeFloat)) then
   begin
-    // Start zoom animations
     if OldSelected <> nil then
       StartZoomAnimation(OldSelected, False);
 
+    // Start zoom animation for the new selected image
     if ImageItem <> nil then
       StartZoomAnimation(ImageItem, True);
   end;
@@ -4649,6 +4554,62 @@ end; }
    end;
  end;          }
 
+
+  // Renders caption with semi-transparent background — used by both draw methods
+  procedure DrawCaption(Item: TImageItem; const DrawRect: TRect);
+  var
+    TextRect: TRect;
+    CaptionW, CaptionH: Integer;
+    BlendFunction: TBlendFunction;
+  begin
+    if not FShowCaptions or (Item.Caption = '') then
+      Exit;
+    if FCaptionOnHoverOnly and (Item <> FHotItem) and (Item <> FSelectedImage) then
+      Exit;
+
+    Canvas.Font.Assign(FCaptionFont);
+    Canvas.Font.Color := FCaptionColor;
+
+    CaptionH := Canvas.TextHeight('Hg') + 12;
+    CaptionW := Canvas.TextWidth(Item.Caption) + 24;
+
+    TextRect.Left := DrawRect.Left + (DrawRect.Right - DrawRect.Left - CaptionW) div 2;
+    TextRect.Top := DrawRect.Bottom - CaptionH - FCaptionOffsetY;
+    TextRect.Right := TextRect.Left + CaptionW;
+    TextRect.Bottom := TextRect.Top + CaptionH;
+
+    // Simple clipping
+    if TextRect.Bottom > ClientHeight then
+      Dec(TextRect.Top, TextRect.Bottom - ClientHeight);
+    if TextRect.Top < 0 then
+      TextRect.Top := 0;
+    TextRect.Bottom := TextRect.Top + CaptionH;
+
+    CaptionW := TextRect.Right - TextRect.Left;
+    CaptionH := TextRect.Bottom - TextRect.Top;
+    if (CaptionW <= 0) or (CaptionH <= 0) then
+      Exit;
+
+    FTempBitmap.Width := CaptionW;
+    FTempBitmap.Height := CaptionH;
+
+    FTempBitmap.Canvas.Brush.Color := FCaptionBackground;
+    FTempBitmap.Canvas.FillRect(Rect(0, 0, CaptionW, CaptionH));
+
+    FTempBitmap.Canvas.Font.Assign(FCaptionFont);
+    FTempBitmap.Canvas.Font.Color := FCaptionColor;
+    FTempBitmap.Canvas.Brush.Style := bsClear;
+    FTempBitmap.Canvas.TextOut(12, 6, Item.Caption);
+
+    // EXACTLY LIKE YOU DO IN DrawNormalItem — 100% YOUR CODE
+    BlendFunction.BlendOp := AC_SRC_OVER;
+    BlendFunction.BlendFlags := 0;
+    BlendFunction.SourceConstantAlpha := FCaptionAlpha;
+    BlendFunction.AlphaFormat := 0;
+
+    AlphaBlend(Canvas.Handle, TextRect.Left, TextRect.Top, CaptionW, CaptionH, FTempBitmap.Canvas.Handle, 0, 0, CaptionW, CaptionH, BlendFunction);
+  end;
+
 // --------------------------------------------------------------
 // Draw static item (no zoom, no animation)
 // --------------------------------------------------------------
@@ -4680,6 +4641,7 @@ end; }
     end
     else //SmartStretchDraw(Canvas, Item.CurrentRect, Item.Bitmap, Item.FAlpha);//GR32Stretch(Canvas, Item.CurrentRect, Item.Bitmap);
       Canvas.StretchDraw(Item.CurrentRect, Item.Bitmap);
+    DrawCaption(Item, Item.CurrentRect);
   end;
 
   // --------------------------------------------------------------
@@ -4755,6 +4717,7 @@ end; }
       Canvas.Brush.Style := bsClear;
       Canvas.Rectangle(R.Left, R.Top, R.Right, R.Bottom);
     end;
+    DrawCaption(Item, Item.CurrentRect);
   end;
 
 begin
@@ -4787,6 +4750,10 @@ begin
       for i := 0 to FImages.Count - 1 do
       begin
         ImageItem := TImageItem(FImages[i]);
+
+        //check if they need to get loaded for lazy
+        EnsureBitmapLoaded(ImageItem);
+
         // A new image is "entering" if its animation progress is very low.
         // These get top priority and are added to their own special list.
         if (ImageItem.AnimationProgress < 0.99) and (ImageItem.FHotZoom < 0.99) and (ImageItem <> FSelectedImage) then
@@ -5024,9 +4991,7 @@ begin
           if FLoadedPositions[j].Path = ImageItem.Path then
           begin
             // Use saved position
-            SavedRect := Rect(FLoadedPositions[j].Left, FLoadedPositions[j].Top,
-              FLoadedPositions[j].Left + FLoadedPositions[j].Width,
-              FLoadedPositions[j].Top + FLoadedPositions[j].Height);
+            SavedRect := Rect(FLoadedPositions[j].Left, FLoadedPositions[j].Top, FLoadedPositions[j].Left + FLoadedPositions[j].Width, FLoadedPositions[j].Top + FLoadedPositions[j].Height);
             AnimateImage(ImageItem, ImageItem.Direction, True, SavedRect); // Use saved position
             FoundPosition := True;
             Break;
@@ -5035,7 +5000,7 @@ begin
 
         // If no saved position found, use default animation
         if not FoundPosition then
-          AnimateImage(ImageItem, ImageItem.Direction, False, Rect(0,0,0,0));
+          AnimateImage(ImageItem, ImageItem.Direction, False, Rect(0, 0, 0, 0));
       end;
 
       // Clear all positions after using them
@@ -5049,7 +5014,7 @@ begin
       begin
         ImageItem := TImageItem(NewItems[i]);
         if Visible then
-          AnimateImage(ImageItem, ImageItem.Direction, False, Rect(0,0,0,0)); // Default animation
+          AnimateImage(ImageItem, ImageItem.Direction, False, Rect(0, 0, 0, 0)); // Default animation
       end;
     end;
 
@@ -5058,6 +5023,9 @@ begin
     begin
       TImageItem(NewItems[i]).Visible := True;
     end;
+
+    if FLoadMode = lmLazyAndFree then
+      FreeInvisibleBitmaps;
 
     // Request a repaint. The Paint method will now see items with valid TargetRect and CurrentRect.
     Invalidate;
@@ -5217,6 +5185,77 @@ begin
     end;
   end;
 end;
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Caption property setters
+// ─────────────────────────────────────────────────────────────────────────────
+procedure TFlowmotion.SetCaptionFont(Value: TFont);
+begin
+  FCaptionFont.Assign(Value);
+  Invalidate;
+  Repaint;
+end;
+
+procedure TFlowmotion.SetCaptionColor(Value: TColor);
+begin
+  if FCaptionColor <> Value then
+  begin
+    FCaptionColor := Value;
+    Invalidate;
+    Repaint;
+  end;
+end;
+
+procedure TFlowmotion.SetCaptionBackground(Value: TColor);
+begin
+  if FCaptionBackground <> Value then
+  begin
+    FCaptionBackground := Value;
+    Invalidate;
+  end;
+end;
+
+procedure TFlowmotion.SetCaptionAlpha(Value: Byte);
+begin
+  if FCaptionAlpha <> Value then
+  begin
+    FCaptionAlpha := Value;
+    Invalidate;
+    Repaint;
+  end;
+end;
+
+procedure TFlowmotion.SetCaptionOffsetY(Value: Integer);
+begin
+  if FCaptionOffsetY <> Value then
+  begin
+    FCaptionOffsetY := Value;
+    Invalidate;
+    Repaint;
+  end;
+end;
+
+procedure TFlowmotion.SetShowCaptions(Value: Boolean);
+begin
+  if FShowCaptions <> Value then
+  begin
+    FShowCaptions := Value;
+    Invalidate;
+    Repaint;
+  end;
+end;
+
+procedure TFlowmotion.SetCaptionOnHoverOnly(Value: Boolean);
+begin
+  if FCaptionOnHoverOnly <> Value then
+  begin
+    FCaptionOnHoverOnly := Value;
+    Invalidate;
+    Repaint;
+  end;
+end;
+
 
 { Checks if any animations are currently running }
 function TFlowmotion.AnimationsRunning: Boolean;
