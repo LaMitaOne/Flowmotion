@@ -64,6 +64,8 @@ type
     Label9: TLabel;
     Label10: TLabel;
     Panel11: TPanel;
+    Timer2: TTimer;
+    Button19: TButton;
     procedure Button10Click(Sender: TObject);
     procedure Button11Click(Sender: TObject);
     procedure Button12Click(Sender: TObject);
@@ -73,6 +75,7 @@ type
     procedure Button16Click(Sender: TObject);
     procedure Button17Click(Sender: TObject);
     procedure Button18Click(Sender: TObject);
+    procedure Button19Click(Sender: TObject);
     procedure FormCreate(Sender: TObject);
     procedure Button1Click(Sender: TObject);
     procedure Button2Click(Sender: TObject);
@@ -111,6 +114,7 @@ type
     procedure SpinEdit5Change(Sender: TObject);
     procedure SpinEdit6Change(Sender: TObject);
     procedure Timer1Timer(Sender: TObject);
+    procedure Timer2Timer(Sender: TObject);
   private
     procedure WMMouseWheel(var Msg: TWMMouseWheel); message WM_MOUSEWHEEL;
     procedure Flowmotion1SelectedImageEnterZone(Sender: TObject; ImageItem: TImageItem; const ZoneName: string);
@@ -150,9 +154,14 @@ begin
    for i := 1 to 12 do begin
      IMList.add(Extractfilepath(Application.ExeName) + inttostr(i) + '.jpg');
      Pathlist.add('Folder or whatever');
-     Captionlist.add('Caption of file or whatever you want tell here....blablabla test for wordwrap :D damn still not long enough, now should be enough to see it :P');
+     Captionlist.add('Caption');
    end;
-   Flowmotion1.MaxZoomSize := trunc(Clientwidth / 3);
+   for i := 1 to 12 do begin
+     IMList.add(Extractfilepath(Application.ExeName) + inttostr(i) + '.jpg');
+     Pathlist.add('Folder or whatever');
+     Captionlist.add('Caption');
+   end;
+   Flowmotion1.MaxZoomSize := trunc(Clientwidth / 4);
    Flowmotion1.AddImagesAsync(IMList,Captionlist,Pathlist);
   finally
    IMList.Free;
@@ -254,6 +263,11 @@ begin
   ShowMessage('Positions loaded!');
 end;
 
+procedure TFSampleform.Button19Click(Sender: TObject);
+begin
+  Timer2.Enabled := True;
+end;
+
 procedure TFSampleform.FormCreate(Sender: TObject);
 begin
   Doublebuffered := True;
@@ -313,15 +327,15 @@ begin
    for i := 1 to 12 do begin
      IMList.add(Extractfilepath(Application.ExeName) + inttostr(i) + '.jpg');
      Pathlist.add('Folder or whatever');
-     Captionlist.add('Caption of file or whatever you want tell here....blablabla test for wordwrap :D damn still not long enough, now should be enough to see it :P');
+     Captionlist.add('Caption');
    end;
    //twwice
    for i := 1 to 12 do begin
      IMList.add(Extractfilepath(Application.ExeName) + inttostr(i) + '.jpg');
      Pathlist.add('Folder or whatever');
-     Captionlist.add('Caption of file or whatever you want tell here....blablabla test for wordwrap :D damn still not long enough, now should be enough to see it :P');
+     Captionlist.add('Caption');
    end;
-   Flowmotion1.MaxZoomSize := trunc(Clientwidth / 3);
+   Flowmotion1.MaxZoomSize := trunc(Clientwidth / 4);
    Flowmotion1.AddImages(IMList,Captionlist,Pathlist);
   finally
    IMList.Free;
@@ -522,6 +536,12 @@ procedure TFSampleform.Timer1Timer(Sender: TObject);
 begin
   Timer1.Enabled := false;
   Button2Click(Self);
+end;
+
+procedure TFSampleform.Timer2Timer(Sender: TObject);
+begin
+  if Flowmotion1.ImageCount < 150 then Button11Click(Self)
+   else Timer2.Enabled := False;
 end;
 
 end.

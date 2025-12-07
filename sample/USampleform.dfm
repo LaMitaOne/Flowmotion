@@ -50,7 +50,7 @@ object FSampleform: TFSampleform
     Left = 0
     Top = 0
     Width = 97
-    Height = 881
+    Height = 927
     Color = 855309
     ParentBackground = False
     TabOrder = 1
@@ -85,7 +85,7 @@ object FSampleform: TFSampleform
     end
     object Button3: TButton
       Left = 5
-      Top = 774
+      Top = 822
       Width = 75
       Height = 25
       Caption = 'Clear'
@@ -94,7 +94,7 @@ object FSampleform: TFSampleform
     end
     object Button8: TButton
       Left = 8
-      Top = 423
+      Top = 471
       Width = 75
       Height = 25
       Caption = 'Deselect'
@@ -103,7 +103,7 @@ object FSampleform: TFSampleform
     end
     object Button6: TButton
       Left = 8
-      Top = 383
+      Top = 431
       Width = 25
       Height = 25
       Caption = '<'
@@ -112,7 +112,7 @@ object FSampleform: TFSampleform
     end
     object Button7: TButton
       Left = 58
-      Top = 383
+      Top = 431
       Width = 25
       Height = 25
       Caption = '>'
@@ -121,7 +121,7 @@ object FSampleform: TFSampleform
     end
     object Button9: TButton
       Left = 8
-      Top = 468
+      Top = 516
       Width = 75
       Height = 66
       Caption = 'Load background pic'
@@ -131,7 +131,7 @@ object FSampleform: TFSampleform
     end
     object Button10: TButton
       Left = 8
-      Top = 548
+      Top = 596
       Width = 75
       Height = 66
       Caption = 'Clear background pic'
@@ -141,7 +141,7 @@ object FSampleform: TFSampleform
     end
     object Button4: TButton
       Left = 5
-      Top = 816
+      Top = 864
       Width = 75
       Height = 49
       Caption = 'Clear to pos'
@@ -186,7 +186,7 @@ object FSampleform: TFSampleform
     end
     object Button15: TButton
       Left = 5
-      Top = 631
+      Top = 679
       Width = 75
       Height = 48
       Caption = 'Move last image to 0'
@@ -196,7 +196,7 @@ object FSampleform: TFSampleform
     end
     object Button16: TButton
       Left = 5
-      Top = 695
+      Top = 743
       Width = 75
       Height = 50
       Caption = 'Drag selected on'
@@ -204,12 +204,22 @@ object FSampleform: TFSampleform
       WordWrap = True
       OnClick = Button16Click
     end
+    object Button19: TButton
+      Left = 8
+      Top = 375
+      Width = 83
+      Height = 50
+      Caption = 'Flood 150 pics async'
+      TabOrder = 15
+      WordWrap = True
+      OnClick = Button19Click
+    end
   end
   object Panel2: TPanel
     Left = 1221
     Top = 4
     Width = 217
-    Height = 917
+    Height = 773
     Anchors = [akTop, akRight]
     Color = 855309
     Font.Charset = DEFAULT_CHARSET
@@ -429,7 +439,7 @@ object FSampleform: TFSampleform
       Left = 8
       Top = 344
       Width = 185
-      Height = 481
+      Height = 417
       Caption = 'Caption'
       TabOrder = 11
       object Label6: TLabel
@@ -633,12 +643,12 @@ object FSampleform: TFSampleform
     TabOrder = 4
   end
   object Panel11: TPanel
-    Left = 832
-    Top = 752
-    Width = 353
-    Height = 175
+    Left = 888
+    Top = 808
+    Width = 297
+    Height = 113
     Anchors = [akRight, akBottom]
-    Caption = 'Keep AreaFreeRect (not right aorking atm)'
+    Caption = 'Keep AreaFreeRect (not right working atm)'
     TabOrder = 5
     Visible = False
   end
@@ -656,5 +666,12 @@ object FSampleform: TFSampleform
     OnTimer = Timer1Timer
     Left = 280
     Top = 40
+  end
+  object Timer2: TTimer
+    Enabled = False
+    Interval = 10
+    OnTimer = Timer2Timer
+    Left = 576
+    Top = 88
   end
 end
