@@ -1599,12 +1599,17 @@ begin
       if not (ImageItem.Visible and HotTrackZoom) then
         Continue;
 
+      if FDraggingSelected and (ImageItem = FSelectedImage)  then begin
+        NeedRepaint := True;
+        continue;
+      end;
+
       // Breathing when selected AND hovered
-      if FBreathingEnabled and (ImageItem = FSelectedImage) and (ImageItem = FHotItem) and (not FDraggingSelected) then
+      if FBreathingEnabled and (ImageItem = FSelectedImage) and (ImageItem = FHotItem)  then
         TargetZoom := 1.0 + BREATHING_AMPLITUDE * 0.2 * (Sin(FBreathingPhase * 2 * Pi) + 1.0)
 
         // Normal hot-zoom when only hovered
-      else if (ImageItem = FHotItem) and HotTrackZoom and (not FDraggingSelected) then
+      else if (ImageItem = FHotItem) and HotTrackZoom  then
         TargetZoom := HOT_ZOOM_MAX_FACTOR
       else
         TargetZoom := 1.0;
@@ -1616,7 +1621,9 @@ begin
         Speed := HOT_ZOOM_OUT_PER_SEC;
 
       // Smooth approach
+      if not FDraggingImage then
       ImageItem.FHotZoom := ImageItem.FHotZoom + (TargetZoom - ImageItem.FHotZoom) * Speed * DeltaTime;
+      if not FDraggingImage then
       if HotTrackZoom then
         ImageItem.FHotZoomTarget := TargetZoom // for ItemFinished check
       else
@@ -1632,6 +1639,7 @@ begin
     end;
 
     // Advance breathing phase only when selected item is hovered
+    if not FDraggingImage then
     if FBreathingEnabled and (FHotItem <> nil) and (FHotItem = FSelectedImage) then
       FBreathingPhase := Frac(FBreathingPhase + BREATHING_SPEED_PER_SEC * DeltaTime);
 
@@ -3972,7 +3980,7 @@ begin
 
       MouseCapture := False;
 
-      if FlowLayout = flFreeFloat then
+      if (FlowLayout = flFreeFloat) and (not FDraggingImage) then
         FBreathingPhase := FBreathingPhase - 0.4;
 
       // Check if the mouse cursor is still over the image after release
@@ -4023,9 +4031,9 @@ var
   R: TRect;
   DraggedItem: TImageItem;
 const
-  DRAG_THRESHOLD = 10;
-  MIN_SCALE_WHILE_DRAGGING = 0.92;
-  SCALE_DISTANCE = 180;
+  DRAG_THRESHOLD = 30;
+  MIN_SCALE_WHILE_DRAGGING = 1.00;
+  SCALE_DISTANCE = 380;
 begin
   if FClearing or FInFallAnimation then
     Exit;
@@ -4281,12 +4289,14 @@ begin
       if FSelectedImage <> ImageItem then
       begin
         // Small tactile "dip" when clicking a hot-tracked (zoomed) image
+        if not FDraggingImage then
         if ImageItem.FHotZoom >= 1.1 then
           ImageItem.FHotZoom := ImageItem.FHotZoom - 0.1;
 
         SetSelectedImage(ImageItem, Index);
       end
       else
+      if not FDraggingImage then
         FBreathingPhase := FBreathingPhase - 0.4;
     end;
 
@@ -4476,6 +4486,7 @@ begin
   begin
     ImageItem.IsSelected := True;
     ImageItem.ZoomProgress := 0;
+    if not FDraggingImage then
     if ImageItem.FHotZoom < 1 then
       ImageItem.FHotZoom := 1;
 
