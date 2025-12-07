@@ -82,7 +82,8 @@ I am working on getting more of it done :)
 - MoveImage bug fixed when there was duplicate picpaths     
 - New Captions with semi-transparent background     
   CaptionOnHoverOnly, ShowCaptions, CaptionFont, CaptionColor, CaptionBackground,     
-  CaptionAlpha, CaptionOffsetY propertys     
+  CaptionAlpha, CaptionOffsetY propertys   
+- OnCaptionClick event added   
       
 **v 0.987**  
 - New flFreeFloat Layout added, no zoomselected to center and all pictures free draggable (like a nonstatic grid)     
