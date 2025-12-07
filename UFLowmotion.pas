@@ -1748,7 +1748,7 @@ begin
     Item := TImageItem(FImages[i]);
     AbsIndex := PageStart + i;
 
-    // If this image is NOT on the current page → free its bitmap
+    // If this image is NOT on the current page ? free its bitmap
     if (AbsIndex < PageStart) or (AbsIndex > PageEnd) then
     begin
       if Assigned(Item.FBitmap) then
@@ -2066,7 +2066,7 @@ end;
 }
 // ---------------------------------------------------------------------
 // Moves an image within the current page (relative indices)
-// Updates master lists → change is permanent across pages and restarts
+// Updates master lists ? change is permanent across pages and restarts
 // Fully safe with async loading, paging, selection, and saved positions
 // ---------------------------------------------------------------------
 procedure TFlowmotion.MoveImageToPos(RelIndexFrom, RelIndexTo: Integer);
@@ -4007,7 +4007,7 @@ begin
   end;
 
   // ------------------------------------------------------------------
-  // 2. Potential drag → real drag (threshold check for SelectedMovable)
+  // 2. Potential drag ? real drag (threshold check for SelectedMovable)
   // ------------------------------------------------------------------
   if FIsPotentialDrag and (FSelectedImage <> nil) then
   begin
@@ -4144,7 +4144,7 @@ begin
       SetSelectedImage(ImageItem, Index);
     end
     else
-      FBreathingPhase := FBreathingPhase - 0.4;
+      if not FDraggingImage then FBreathingPhase := FBreathingPhase - 0.4;
 
     // 3. ENABLE DRAGGING FOR SELECTED IMAGE IN SORTED LAYOUT
     if FSelectedMovable and (ImageItem = FSelectedImage) then
@@ -5187,9 +5187,9 @@ begin
 end;
 
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Caption property setters
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 procedure TFlowmotion.SetCaptionFont(Value: TFont);
 begin
   FCaptionFont.Assign(Value);
