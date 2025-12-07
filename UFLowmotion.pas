@@ -4739,6 +4739,7 @@ end; }
     // --- Step 2: ALWAYS perform word wrapping ---
     // This simplifies logic. If the text is short, Lines will just contain one entry.
     Lines := TStringList.Create;
+    Lines.Capacity := 2;   //limit lines to 2
     try
       CurrentLine := '';
       i := 1;
@@ -4782,8 +4783,11 @@ end; }
       // --- Step 3: Check if the resulting height is too high and truncate lines ---
       LineHeight := Canvas.TextHeight('Hg') + 2;
 
+      //max 2 lines height for background too
+      MaxCaptionHeight := LineHeight*2;
+
       // Calculate how many lines can fit into the max height.
-      MaxLinesToShow := (MaxCaptionHeight - 6) div LineHeight;
+      MaxLinesToShow := 2; // (MaxCaptionHeight - 6) div LineHeight;
       if MaxLinesToShow < 1 then
         MaxLinesToShow := 1; // Always show at least one line.
 
@@ -4870,6 +4874,7 @@ end; }
       Lines.Free;
     end;
   end;
+
 
 // --------------------------------------------------------------
 // Draw static item (no zoom, no animation)
