@@ -77,6 +77,13 @@ I am working on getting more of it done :)
       
 ### Latest changes:    
     
+**v 0.988**       
+- LoadPositionsFromFile bug fixed(wasnt working after new exe start)     
+- MoveImage bug fixed when there was duplicate picpaths     
+- New Captions with semi-transparent background     
+  CaptionOnHoverOnly, ShowCaptions, CaptionFont, CaptionColor, CaptionBackground,     
+  CaptionAlpha, CaptionOffsetY propertys     
+      
 **v 0.987**  
 - New flFreeFloat Layout added, no zoomselected to center and all pictures free draggable (like a nonstatic grid)     
 - New SavePositionsToFile() / LoadPositionsFromFile() for persisting free float layouts    
