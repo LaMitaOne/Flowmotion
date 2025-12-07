@@ -59,6 +59,11 @@ type
     Label8: TLabel;
     SpinEdit6: TSpinEdit;
     CheckBox4: TCheckBox;
+    Panel9: TPanel;
+    Panel10: TPanel;
+    Label9: TLabel;
+    Label10: TLabel;
+    Panel11: TPanel;
     procedure Button10Click(Sender: TObject);
     procedure Button11Click(Sender: TObject);
     procedure Button12Click(Sender: TObject);
@@ -93,10 +98,12 @@ type
     procedure Flowmotion1SelectedItemMouseDown(Sender: TObject; ImageItem:
         TImageItem; Index, X, Y: Integer; Button: TMouseButton; Shift: TShiftState);
     procedure FormShow(Sender: TObject);
+    procedure Panel10Click(Sender: TObject);
     procedure Panel3Click(Sender: TObject);
     procedure Panel4Click(Sender: TObject);
     procedure Panel7Click(Sender: TObject);
     procedure Panel8Click(Sender: TObject);
+    procedure Panel9Click(Sender: TObject);
     procedure SpinEdit1Change(Sender: TObject);
     procedure SpinEdit2Change(Sender: TObject);
     procedure SpinEdit3Change(Sender: TObject);
@@ -143,7 +150,7 @@ begin
    for i := 1 to 12 do begin
      IMList.add(Extractfilepath(Application.ExeName) + inttostr(i) + '.jpg');
      Pathlist.add('Folder or whatever');
-     Captionlist.add('Caption');
+     Captionlist.add('Caption of file or whatever you want tell here....blablabla test for wordwrap :D damn still not long enough, now should be enough to see it :P');
    end;
    Flowmotion1.MaxZoomSize := trunc(Clientwidth / 3);
    Flowmotion1.AddImagesAsync(IMList,Captionlist,Pathlist);
@@ -306,13 +313,13 @@ begin
    for i := 1 to 12 do begin
      IMList.add(Extractfilepath(Application.ExeName) + inttostr(i) + '.jpg');
      Pathlist.add('Folder or whatever');
-     Captionlist.add('Caption');
+     Captionlist.add('Caption of file or whatever you want tell here....blablabla test for wordwrap :D damn still not long enough, now should be enough to see it :P');
    end;
    //twwice
    for i := 1 to 12 do begin
      IMList.add(Extractfilepath(Application.ExeName) + inttostr(i) + '.jpg');
      Pathlist.add('Folder or whatever');
-     Captionlist.add('Caption');
+     Captionlist.add('Caption of file or whatever you want tell here....blablabla test for wordwrap :D damn still not long enough, now should be enough to see it :P');
    end;
    Flowmotion1.MaxZoomSize := trunc(Clientwidth / 3);
    Flowmotion1.AddImages(IMList,Captionlist,Pathlist);
@@ -429,7 +436,16 @@ end;
 
 procedure TFSampleform.FormShow(Sender: TObject);
 begin
+ // Flowmotion1.KeepAreaFreeRect := Panel11.BoundsRect;     //not working atm or not right :P
   Timer1.Enabled := True;
+end;
+
+procedure TFSampleform.Panel10Click(Sender: TObject);
+begin
+  if Colordialog1.Execute then begin
+    Flowmotion1.SelectedCaptionColor := Colordialog1.Color;
+    Panel10.Color := Colordialog1.Color;
+  end;
 end;
 
 procedure TFSampleform.Panel3Click(Sender: TObject);
@@ -461,6 +477,14 @@ begin
   if Colordialog1.Execute then begin
     Flowmotion1.CaptionBackground := Colordialog1.Color;
     Panel8.Color := Colordialog1.Color;
+  end;
+end;
+
+procedure TFSampleform.Panel9Click(Sender: TObject);
+begin
+  if Colordialog1.Execute then begin
+    Flowmotion1.SelectedCaptionBackground := Colordialog1.Color;
+    Panel9.Color := Colordialog1.Color;
   end;
 end;
 

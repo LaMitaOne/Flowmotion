@@ -3,8 +3,8 @@ object FSampleform: TFSampleform
   Top = 0
   AlphaBlendValue = 200
   Caption = 'Flowmotion Sample'
-  ClientHeight = 953
-  ClientWidth = 1434
+  ClientHeight = 960
+  ClientWidth = 1438
   Color = clBlack
   TransparentColor = True
   TransparentColorValue = clFuchsia
@@ -17,14 +17,14 @@ object FSampleform: TFSampleform
   OnCreate = FormCreate
   OnShow = FormShow
   DesignSize = (
-    1434
-    953)
+    1438
+    960)
   TextHeight = 15
   object Flowmotion1: TFlowmotion
     Left = 0
     Top = 0
-    Width = 1434
-    Height = 953
+    Width = 1438
+    Height = 960
     LoadMode = lmLazy
     FlowLayout = flSorted
     AnimationSpeed = 3
@@ -43,8 +43,8 @@ object FSampleform: TFSampleform
     ParentColor = False
     TabOrder = 0
     TabStop = True
-    ExplicitWidth = 1438
-    ExplicitHeight = 960
+    ExplicitWidth = 1442
+    ExplicitHeight = 967
   end
   object Panel1: TPanel
     Left = 0
@@ -206,10 +206,10 @@ object FSampleform: TFSampleform
     end
   end
   object Panel2: TPanel
-    Left = 1217
+    Left = 1221
     Top = 4
     Width = 217
-    Height = 669
+    Height = 917
     Anchors = [akTop, akRight]
     Color = 855309
     Font.Charset = DEFAULT_CHARSET
@@ -429,12 +429,12 @@ object FSampleform: TFSampleform
       Left = 8
       Top = 344
       Width = 185
-      Height = 289
+      Height = 481
       Caption = 'Caption'
       TabOrder = 11
       object Label6: TLabel
-        Left = 24
-        Top = 169
+        Left = 16
+        Top = 297
         Width = 46
         Height = 15
         Caption = 'Font size'
@@ -446,8 +446,8 @@ object FSampleform: TFSampleform
         ParentFont = False
       end
       object Label7: TLabel
-        Left = 24
-        Top = 209
+        Left = 16
+        Top = 337
         Width = 31
         Height = 15
         Caption = 'Alpha'
@@ -459,11 +459,37 @@ object FSampleform: TFSampleform
         ParentFont = False
       end
       object Label8: TLabel
-        Left = 24
-        Top = 253
+        Left = 16
+        Top = 381
         Width = 42
         Height = 15
         Caption = 'Y-offset'
+        Font.Charset = DEFAULT_CHARSET
+        Font.Color = clWhite
+        Font.Height = -12
+        Font.Name = 'Segoe UI'
+        Font.Style = []
+        ParentFont = False
+      end
+      object Label9: TLabel
+        Left = 88
+        Top = 202
+        Width = 70
+        Height = 15
+        Caption = 'selected item'
+        Font.Charset = DEFAULT_CHARSET
+        Font.Color = clWhite
+        Font.Height = -12
+        Font.Name = 'Segoe UI'
+        Font.Style = []
+        ParentFont = False
+      end
+      object Label10: TLabel
+        Left = 96
+        Top = 97
+        Width = 70
+        Height = 15
+        Caption = 'normal items'
         Font.Charset = DEFAULT_CHARSET
         Font.Color = clWhite
         Font.Height = -12
@@ -497,7 +523,7 @@ object FSampleform: TFSampleform
         Width = 65
         Height = 33
         Caption = 'Font color'
-        Color = clSilver
+        Color = clWhite
         ParentBackground = False
         TabOrder = 1
         OnClick = Panel7Click
@@ -508,14 +534,14 @@ object FSampleform: TFSampleform
         Width = 166
         Height = 33
         Caption = 'Caption background color'
-        Color = clSilver
+        Color = clBlack
         ParentBackground = False
         TabOrder = 2
         OnClick = Panel8Click
       end
       object SpinEdit4: TSpinEdit
-        Left = 109
-        Top = 166
+        Left = 101
+        Top = 294
         Width = 57
         Height = 24
         MaxValue = 40
@@ -525,8 +551,8 @@ object FSampleform: TFSampleform
         OnChange = SpinEdit4Change
       end
       object SpinEdit5: TSpinEdit
-        Left = 109
-        Top = 206
+        Left = 101
+        Top = 334
         Width = 57
         Height = 24
         MaxValue = 255
@@ -536,8 +562,8 @@ object FSampleform: TFSampleform
         OnChange = SpinEdit5Change
       end
       object SpinEdit6: TSpinEdit
-        Left = 109
-        Top = 249
+        Left = 101
+        Top = 377
         Width = 57
         Height = 24
         MaxValue = 200
@@ -566,6 +592,28 @@ object FSampleform: TFSampleform
         StyleElements = [seClient, seBorder]
         OnClick = CheckBox4Click
       end
+      object Panel9: TPanel
+        Left = 3
+        Top = 231
+        Width = 166
+        Height = 33
+        Caption = 'Caption background color'
+        Color = clAqua
+        ParentBackground = False
+        TabOrder = 7
+        OnClick = Panel9Click
+      end
+      object Panel10: TPanel
+        Left = 3
+        Top = 192
+        Width = 65
+        Height = 33
+        Caption = 'Font color'
+        Color = clBlack
+        ParentBackground = False
+        TabOrder = 8
+        OnClick = Panel10Click
+      end
     end
   end
   object Panel5: TPanel
@@ -583,6 +631,16 @@ object FSampleform: TFSampleform
     Height = 135
     Caption = 'ActivationZone 2 (Drag selected here)'
     TabOrder = 4
+  end
+  object Panel11: TPanel
+    Left = 832
+    Top = 752
+    Width = 353
+    Height = 175
+    Anchors = [akRight, akBottom]
+    Caption = 'Keep AreaFreeRect (not right aorking atm)'
+    TabOrder = 5
+    Visible = False
   end
   object OpenDialog1: TOpenDialog
     Left = 144
