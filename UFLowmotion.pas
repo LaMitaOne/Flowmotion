@@ -4936,7 +4936,7 @@ end; }
     if (not FHotTrackZoom) and (not Item.IsSelected) then
     begin
       DrawNormalItem(Item);
-      if not FInFallAnimation then
+      if (not FInFallAnimation) and (not FDraggingSelected) then
       if IsCurrentHot then
       begin
         R := Item.CurrentRect;
@@ -4983,7 +4983,7 @@ end; }
     OffsetRect(R, OffsetX, OffsetY);
     Canvas.StretchDraw(R, Item.Bitmap);
   // Glow / hot border
-  if not FInFallAnimation then
+  if (not FInFallAnimation) and (not FDraggingSelected) then
     if IsCurrentHot or Item.IsSelected then
     begin
       if Item.IsSelected then
