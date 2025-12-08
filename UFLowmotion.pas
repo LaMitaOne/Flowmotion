@@ -2228,7 +2228,7 @@ begin
           FoundPosition := False;
           // First try the default grid position
           NewX := 20 + ((FImages.Count - 1) mod ColCount) * (DefaultWidth + 20);
-          NewY := 20 + ((FImages.Count - 1) div ColCount) * (DefaultHeight + 20);
+          NewY := 20 + ((FImages.Count - 1) div RowCount) * (DefaultHeight + 20);
           // Check if this position is within bounds
           if (NewX + DefaultWidth <= Width - 20) and (NewY + DefaultHeight <= Height - 20) then
           begin
@@ -3833,7 +3833,6 @@ var
   BorderSize: Integer;
 begin
   P := Point(X, Y);
-  Result := nil;
 
   // ==================================================================
   // 1. SELECTED IMAGE HAS ABSOLUTE PRIORITY
@@ -4937,6 +4936,7 @@ end; }
     if (not FHotTrackZoom) and (not Item.IsSelected) then
     begin
       DrawNormalItem(Item);
+      if not FInFallAnimation then
       if IsCurrentHot then
       begin
         R := Item.CurrentRect;
@@ -4983,6 +4983,7 @@ end; }
     OffsetRect(R, OffsetX, OffsetY);
     Canvas.StretchDraw(R, Item.Bitmap);
   // Glow / hot border
+  if not FInFallAnimation then
     if IsCurrentHot or Item.IsSelected then
     begin
       if Item.IsSelected then
