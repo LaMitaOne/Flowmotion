@@ -13,6 +13,7 @@ object FSampleform: TFSampleform
   Font.Height = -12
   Font.Name = 'Segoe UI'
   Font.Style = []
+  ShowHint = True
   WindowState = wsMaximized
   OnCreate = FormCreate
   OnShow = FormShow
@@ -231,6 +232,7 @@ object FSampleform: TFSampleform
     ParentFont = False
     TabOrder = 2
     StyleElements = [seClient, seBorder]
+    ExplicitLeft = 1225
     object Label1: TLabel
       Left = 16
       Top = 11
@@ -625,6 +627,26 @@ object FSampleform: TFSampleform
         OnClick = Panel10Click
       end
     end
+    object CheckBox5: TCheckBox
+      Left = 8
+      Top = 316
+      Width = 121
+      Height = 17
+      Caption = 'show hints'
+      Checked = True
+      Color = 855309
+      Font.Charset = DEFAULT_CHARSET
+      Font.Color = clRed
+      Font.Height = -12
+      Font.Name = 'Segoe UI'
+      Font.Style = []
+      ParentColor = False
+      ParentFont = False
+      State = cbChecked
+      TabOrder = 12
+      StyleElements = [seClient, seBorder]
+      OnClick = CheckBox5Click
+    end
   end
   object Panel5: TPanel
     Left = 312
@@ -651,6 +673,8 @@ object FSampleform: TFSampleform
     Caption = 'Keep AreaFreeRect (not right working atm)'
     TabOrder = 5
     Visible = False
+    ExplicitLeft = 892
+    ExplicitTop = 815
   end
   object OpenDialog1: TOpenDialog
     Left = 144

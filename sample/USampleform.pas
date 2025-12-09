@@ -66,6 +66,7 @@ type
     Panel11: TPanel;
     Timer2: TTimer;
     Button19: TButton;
+    CheckBox5: TCheckBox;
     procedure Button10Click(Sender: TObject);
     procedure Button11Click(Sender: TObject);
     procedure Button12Click(Sender: TObject);
@@ -90,6 +91,7 @@ type
     procedure CheckBox2Click(Sender: TObject);
     procedure CheckBox3Click(Sender: TObject);
     procedure CheckBox4Click(Sender: TObject);
+    procedure CheckBox5Click(Sender: TObject);
     procedure ComboBox1Change(Sender: TObject);
     procedure Flowmotion1AllAnimationsFinished(Sender: TObject);
     procedure Flowmotion1ImageLoad(Sender: TObject; const FileName: string;
@@ -144,29 +146,33 @@ end;
 
 procedure TFSampleform.Button12Click(Sender: TObject);
 var
-  IMList,Pathlist, Captionlist: TStringList;
+  IMList,Pathlist, Captionlist, Hintlist: TStringList;
   i : Integer;
 begin
   IMList:= TStringList.create;
   Pathlist:= TStringList.create;
   Captionlist:= TStringList.create;
+  Hintlist:= TStringList.create;
  try
    for i := 1 to 12 do begin
      IMList.add(Extractfilepath(Application.ExeName) + inttostr(i) + '.jpg');
      Pathlist.add('Folder or whatever');
      Captionlist.add('Caption');
+     Hintlist.Add('Hint');
    end;
    for i := 1 to 12 do begin
      IMList.add(Extractfilepath(Application.ExeName) + inttostr(i) + '.jpg');
      Pathlist.add('Folder or whatever');
      Captionlist.add('Caption');
+     Hintlist.Add('Hint');
    end;
    Flowmotion1.MaxZoomSize := trunc(Clientwidth / 4);
-   Flowmotion1.AddImagesAsync(IMList,Captionlist,Pathlist);
+   Flowmotion1.AddImagesAsync(IMList,Captionlist,Pathlist, Hintlist);
   finally
    IMList.Free;
    Pathlist.Free;
    Captionlist.Free;
+   Hintlist.Free;
   end;
 end;
 
@@ -175,7 +181,7 @@ begin
   if Opendialog1.Execute then  begin
     Flowmotion1.ImageEntryStyle := iesFromPoint;
     Flowmotion1.EntryPoint := TPoint.Create(Button5.Left, Button5.Top);
-    Flowmotion1.AddImageAsync(Opendialog1.FileName);
+    Flowmotion1.AddImageAsync(Opendialog1.FileName, 'Caption', 'Path');
   end;
 end;
 
@@ -208,7 +214,7 @@ procedure TFSampleform.Button18Click(Sender: TObject);
 var
   Positions: TImagePositions;
   i: Integer;
-  FileList, CaptionList, PathList: TStringList;
+  FileList, CaptionList, PathList, Hintlist: TStringList;
   PositionArray: array of TRect;
 begin
   // First, clear the current images
@@ -217,17 +223,20 @@ begin
   FileList := TStringList.Create;
   CaptionList := TStringList.Create;
   PathList := TStringList.Create;
+  Hintlist := TStringList.Create;
   try
    //add ur images
    for i := 1 to 12 do begin
      FileList.add(Extractfilepath(Application.ExeName) + inttostr(i) + '.jpg');
      Pathlist.add('Folder or whatever');
      Captionlist.add('Caption');
+     Hintlist.add('Hint');
    end;
    for i := 1 to 12 do begin
      FileList.add(Extractfilepath(Application.ExeName) + inttostr(i) + '.jpg');
      Pathlist.add('Folder or whatever');
      Captionlist.add('Caption');
+     Hintlist.add('Hint');
    end;
     // Check if saved positions exist
     if FileExists('positions.dat') then
@@ -253,12 +262,13 @@ begin
     else
     begin
       // If no saved positions exist, just add images normally
-      Flowmotion1.AddImages(FileList, CaptionList, PathList);
+      Flowmotion1.AddImages(FileList, CaptionList, PathList, Hintlist);
     end;
   finally
     FileList.Free;
     CaptionList.Free;
     PathList.Free;
+    Hintlist.Free;
   end;
   ShowMessage('Positions loaded!');
 end;
@@ -316,31 +326,35 @@ end;
 
 procedure TFSampleform.Button2Click(Sender: TObject);
 var
-  IMList,Pathlist, Captionlist: TStringList;
+  IMList,Pathlist, Captionlist, Hintlist: TStringList;
   i : Integer;
 begin
   IMList:= TStringList.create;
   Pathlist:= TStringList.create;
   Captionlist:= TStringList.create;
+  Hintlist:= TStringList.create;
  try
   Flowmotion1.Clear(true);
    for i := 1 to 12 do begin
      IMList.add(Extractfilepath(Application.ExeName) + inttostr(i) + '.jpg');
      Pathlist.add('Folder or whatever');
-     Captionlist.add('Caption');
+     Captionlist.add('Caption test long enough to see edge clipping and wordwrap or...getting outside of too small pics');
+     Hintlist.add('Hint');
    end;
    //twwice
    for i := 1 to 12 do begin
      IMList.add(Extractfilepath(Application.ExeName) + inttostr(i) + '.jpg');
      Pathlist.add('Folder or whatever');
      Captionlist.add('Caption');
+     Hintlist.add('Hint');
    end;
    Flowmotion1.MaxZoomSize := trunc(Clientwidth / 4);
-   Flowmotion1.AddImages(IMList,Captionlist,Pathlist);
+   Flowmotion1.AddImages(IMList,Captionlist,Pathlist, Hintlist);
   finally
    IMList.Free;
    Pathlist.Free;
    Captionlist.Free;
+   Hintlist.Free;
   end;
 end;
 
@@ -401,6 +415,11 @@ end;
 procedure TFSampleform.CheckBox4Click(Sender: TObject);
 begin
   Flowmotion1.CaptionOnHoverOnly := CheckBox4.Checked;
+end;
+
+procedure TFSampleform.CheckBox5Click(Sender: TObject);
+begin
+  Flowmotion1.ShowHint  := CheckBox5.Checked;
 end;
 
 procedure TFSampleform.ComboBox1Change(Sender: TObject);
