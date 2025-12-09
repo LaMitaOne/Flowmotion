@@ -76,7 +76,10 @@ other functions may work, not work, or it explodes right into ur face :D nah...
 I am working on getting more of it done :)  
       
 ### Latest changes:    
-   
+    
+**v 0.990**   
+- Added hints for each Imageitem (in AddImage, Addimages...)
+      
 **v 0.989**  
 - improved caption rendering   
 - some small bugfixes   
