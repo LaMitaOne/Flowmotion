@@ -76,7 +76,11 @@ other functions may work, not work, or it explodes right into ur face :D nah...
 I am working on getting more of it done :)  
       
 ### Latest changes:    
-    
+   
+**v 0.989**  
+- improved caption rendering   
+- some small bugfixes   
+      
 **v 0.988**       
 - LoadPositionsFromFile bug fixed(wasnt working after new exe start)     
 - MoveImage bug fixed when there was duplicate picpaths     
