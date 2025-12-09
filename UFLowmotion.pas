@@ -1,7 +1,7 @@
 
 {------------------------------------------------------------------------------}
 {                                                                              }
-{ Flowmotion v0.988                                                            }
+{ Flowmotion v0.989                                                            }
 { by Lara Miriam Tamy Reschke                                                  }
 {                                                                              }
 { larate@gmx.net                                                               }
@@ -10,6 +10,9 @@
 {------------------------------------------------------------------------------}
 {
  ----Latest Changes
+  v 0.989
+    - improved caption rendering
+    - some small bugfixes
   v 0.988
     - LoadPositionsFromFile bug fixed(wasnt working after new exe start)
     - MoveImage bug fixed when there was duplicate picpaths
@@ -2228,7 +2231,7 @@ begin
           FoundPosition := False;
           // First try the default grid position
           NewX := 20 + ((FImages.Count - 1) mod ColCount) * (DefaultWidth + 20);
-          NewY := 20 + ((FImages.Count - 1) div RowCount) * (DefaultHeight + 20);
+          NewY := 20 + ((FImages.Count - 1) div ColCount) * (DefaultHeight + 20);
           // Check if this position is within bounds
           if (NewX + DefaultWidth <= Width - 20) and (NewY + DefaultHeight <= Height - 20) then
           begin
@@ -3833,6 +3836,7 @@ var
   BorderSize: Integer;
 begin
   P := Point(X, Y);
+  Result := nil;
 
   // ==================================================================
   // 1. SELECTED IMAGE HAS ABSOLUTE PRIORITY
@@ -4030,7 +4034,7 @@ var
   R: TRect;
   DraggedItem: TImageItem;
 const
-  DRAG_THRESHOLD = 30;
+  DRAG_THRESHOLD = 20;
   MIN_SCALE_WHILE_DRAGGING = 1.00;
   SCALE_DISTANCE = 380;
 begin
@@ -4073,8 +4077,7 @@ begin
       DraggedItem.TargetRect := R;
     end;
 
-    // Slight scale-down while dragging (visual feedback)
-    DraggedItem.FHotZoom := MIN_SCALE_WHILE_DRAGGING;
+    // Slight scale-down while dragging
     DraggedItem.FHotZoomTarget := MIN_SCALE_WHILE_DRAGGING;
 
     // Activation zone scaling effect
@@ -4151,34 +4154,23 @@ begin
   // ------------------------------------------------------------------
   NewHot := GetImageAtPoint(X, Y);
 
-  if not FHotTrackZoom then
+  // Set FHotItem for hover (even when HotTrackZoom is off)
+  if (NewHot <> FHotItem) and (NewHot <> nil) then
   begin
     if FHotItem <> nil then
-    begin
       FHotItem.FHotZoomTarget := 1.0;
-      FHotItem := nil;
+    FHotItem := NewHot;
+    StartAnimationThread;
+    if not inPaintCycle then
       Invalidate;
-    end;
   end
-  else
+  else if (NewHot = nil) and (FHotItem <> nil) then
   begin
-    if (NewHot = nil) and (FHotItem <> nil) then
-    begin
-      FHotItem.FHotZoomTarget := 1.0;
-      FHotItem := nil;
-      StartAnimationThread;
-      if not inPaintCycle then
-        Invalidate;
-    end
-    else if (NewHot <> FHotItem) and (NewHot <> nil) then
-    begin
-      if (FHotItem <> nil) and (FHotItem <> NewHot) then
-        FHotItem.FHotZoomTarget := 1.0;
-      FHotItem := NewHot;
-      StartAnimationThread;
-      if not inPaintCycle then
-        Invalidate;
-    end;
+    FHotItem.FHotZoomTarget := 1.0;
+    FHotItem := nil;
+    StartAnimationThread;
+    if not inPaintCycle then
+      Invalidate;
   end;
 
   // Update cursor
@@ -4709,7 +4701,6 @@ end; }
    end;
  end;          }
 
-
   // Renders caption with semi-transparent background — used by both draw methods
   procedure DrawCaption(Item: TImageItem; const DrawRect: TRect);
   var
@@ -4718,19 +4709,20 @@ end; }
     BlendFunction: TBlendFunction;
     Lines: TStringList;
     i, LineHeight: Integer;
-    MaxCaptionWidth: Integer; // Max width for word wrapping (can be full image width)
-    MaxCaptionHeight: Integer; // The hard limit: half of the image height
+    MaxCaptionWidth: Integer;
+    MaxCaptionHeight: Integer;
     CurrentLine: string;
     LineWidth: Integer;
     WordStart, WordEnd: Integer;
     Word: string;
     LineTextWidth: Integer;
     TextX: Integer;
-    MaxLinesToShow: Integer; // Number of lines to display after truncation
-    MaxLineWidth: Integer;    // Width of the widest line for a snug box
-    ActualLinesToShow: Integer; // Helper variable to fix loop bounds
-    CurrentCaptionColor: TColor;       // *** MODIFICATION: Holds the color to use for this item ***
-    CurrentCaptionBackground: TColor; // *** MODIFICATION: Holds the background to use for this item ***
+    MaxLinesToShow: Integer;
+    MaxLineWidth: Integer;
+    ActualLinesToShow: Integer;
+    CurrentCaptionColor: TColor;
+    CurrentCaptionBackground: TColor;
+    InflatedDrawRect: TRect;  // Copy of DrawRect to inflate
   begin
     if not FShowCaptions or (Item.Caption = '') then
       Exit;
@@ -4741,38 +4733,31 @@ end; }
     Canvas.Font.Color := FCaptionColor;
 
     // --- Step 1: Define constraints ---
-    // The height is hard constraint. The caption box cannot be taller than this.
-    MaxCaptionHeight := (DrawRect.Bottom - DrawRect.Top) div 2;
-    // The width is flexible. We use the full image width for wrapping to minimize height.
-    MaxCaptionWidth := (DrawRect.Right - DrawRect.Left) - 20;
+    MaxCaptionHeight := Canvas.TextHeight('Hg') * 2 + 12;
+    MaxCaptionWidth := (DrawRect.Right - DrawRect.Left) - 30;
+    if MaxCaptionWidth < 30 then MaxCaptionWidth := 40;
 
     // --- Step 2: ALWAYS perform word wrapping ---
-    // This simplifies logic. If the text is short, Lines will just contain one entry.
     Lines := TStringList.Create;
-    Lines.Capacity := 2;   //limit lines to 2
+    Lines.Capacity := 2;
     try
       CurrentLine := '';
       i := 1;
       while i <= Length(Item.Caption) do
       begin
-        // Skip leading spaces
         while (i <= Length(Item.Caption)) and (Item.Caption[i] = ' ') do
           Inc(i);
         if i > Length(Item.Caption) then
           Break;
-        // Find word boundaries
         WordStart := i;
         while (i <= Length(Item.Caption)) and (Item.Caption[i] <> ' ') do
           Inc(i);
         WordEnd := i - 1;
-        // Extract the word
         Word := Copy(Item.Caption, WordStart, WordEnd - WordStart + 1);
-        // Calculate width if we add this word
         if CurrentLine = '' then
           LineWidth := Canvas.TextWidth(Word)
         else
           LineWidth := Canvas.TextWidth(CurrentLine + ' ' + Word);
-        // If adding this word would exceed max width, start a new line
         if LineWidth > MaxCaptionWidth then
         begin
           if CurrentLine <> '' then
@@ -4792,47 +4777,44 @@ end; }
 
       // --- Step 3: Check if the resulting height is too high and truncate lines ---
       LineHeight := Canvas.TextHeight('Hg') + 2;
-
-      //max 2 lines height for background too
-      MaxCaptionHeight := LineHeight*2;
-
-      // Calculate how many lines can fit into the max height.
-      MaxLinesToShow := 2; // (MaxCaptionHeight - 6) div LineHeight;
+      MaxCaptionHeight := Max(MaxCaptionHeight, LineHeight * 2);
+      MaxLinesToShow := 2;
       if MaxLinesToShow < 1 then
-        MaxLinesToShow := 1; // Always show at least one line.
-
-      // Determine the actual number of lines we will draw.
-      // This is the crucial fix to prevent "List index out of bounds".
+        MaxLinesToShow := 1;
       ActualLinesToShow := Min(MaxLinesToShow, Lines.Count);
 
       // If we have more lines than space, truncate the list's height.
       if Lines.Count > MaxLinesToShow then
       begin
-        // The final height will be our maximum allowed height.
         CaptionH := MaxCaptionHeight;
       end
       else
       begin
-        // It fits, so the height is based on the actual number of lines.
         CaptionH := Lines.Count * LineHeight + 12;
       end;
 
       // --- Step 4: Calculate the final width of the caption box ---
-      // Find the width of the widest line that will actually be displayed.
       MaxLineWidth := 0;
-      // BUG FIX: Loop only up to the number of lines that actually exist
       for i := 0 to ActualLinesToShow - 1 do
       begin
         LineTextWidth := Canvas.TextWidth(Lines[i]);
         if LineTextWidth > MaxLineWidth then
           MaxLineWidth := LineTextWidth;
       end;
-      // Add padding to the widest line to get the final box width.
       CaptionW := MaxLineWidth + 24;
 
-      // --- Step 5: Position and draw the bottom-aligned caption box ---
-      TextRect.Left := DrawRect.Left + (DrawRect.Right - DrawRect.Left - CaptionW) div 2;
-      TextRect.Top := DrawRect.Bottom - CaptionH - FCaptionOffsetY; // Bottom-aligned
+      // --- Step 5: Inflate DrawRect if image is too small for caption ---
+      InflatedDrawRect := DrawRect;
+      // Check if image height is insufficient for caption at bottom
+      if (InflatedDrawRect.Bottom - InflatedDrawRect.Top) < CaptionH + FCaptionOffsetY then
+      begin
+        // Inflate downward to make space for caption
+        InflateRect(InflatedDrawRect, 0, CaptionH + FCaptionOffsetY - (InflatedDrawRect.Bottom - InflatedDrawRect.Top));
+      end;
+
+      // --- Step 6: Position and draw the caption box ---
+      TextRect.Left := InflatedDrawRect.Left + (InflatedDrawRect.Right - InflatedDrawRect.Left - CaptionW) div 2;
+      TextRect.Top := InflatedDrawRect.Bottom - CaptionH - FCaptionOffsetY;
       TextRect.Right := TextRect.Left + CaptionW;
       TextRect.Bottom := TextRect.Top + CaptionH;
 
@@ -4846,7 +4828,6 @@ end; }
       FTempBitmap.Width := CaptionW;
       FTempBitmap.Height := CaptionH;
 
-      // *** MODIFICATION: Choose colors based on selection state ***
       if Item.IsSelected then
       begin
         CurrentCaptionColor := FSelectedCaptionColor;
@@ -4865,15 +4846,13 @@ end; }
       FTempBitmap.Canvas.Font.Color := CurrentCaptionColor;
       FTempBitmap.Canvas.Brush.Style := bsClear;
 
-      // Draw only the lines that fit, centered in the box.
       for i := 0 to ActualLinesToShow - 1 do
       begin
         LineTextWidth := Canvas.TextWidth(Lines[i]);
-        TextX := (CaptionW - LineTextWidth) div 2; // Center each line
+        TextX := (CaptionW - LineTextWidth) div 2;
         FTempBitmap.Canvas.TextOut(TextX, 6 + i * LineHeight, Lines[i]);
       end;
 
-      // Draw with alpha
       BlendFunction.BlendOp := AC_SRC_OVER;
       BlendFunction.BlendFlags := 0;
       BlendFunction.SourceConstantAlpha := FCaptionAlpha;
@@ -4893,6 +4872,7 @@ end; }
   var
     BlendFunction: TBlendFunction;
     W, H: Integer;
+    R : TRect;
   begin
     if not Item.Visible or Item.Bitmap.Empty or (Item.Alpha <= 0) then
       Exit;
@@ -4917,7 +4897,23 @@ end; }
     end
     else //SmartStretchDraw(Canvas, Item.CurrentRect, Item.Bitmap, Item.FAlpha);//GR32Stretch(Canvas, Item.CurrentRect, Item.Bitmap);
       Canvas.StretchDraw(Item.CurrentRect, Item.Bitmap);
-    DrawCaption(Item, Item.CurrentRect);
+
+    R := Item.CurrentRect;
+
+    //Hottrack border / Glow
+    if (Item = FHotItem) or Item.IsSelected then
+    begin
+      if Item.IsSelected then
+        InflateRect(R, FGlowWidth, FGlowWidth)
+      else
+        InflateRect(R, FHotTrackWidth, FHotTrackWidth);
+      Canvas.Pen.Width := ifThen(Item.IsSelected, FGlowWidth, FHotTrackWidth);
+      Canvas.Pen.Color := ifThen(Item.IsSelected, FGlowColor, FHotTrackColor);
+      Canvas.Brush.Style := bsClear;
+      Canvas.Rectangle(R.Left, R.Top, R.Right, R.Bottom);
+    end;
+
+    DrawCaption(Item, R);
   end;
 
   // --------------------------------------------------------------
@@ -4936,16 +4932,6 @@ end; }
     if (not FHotTrackZoom) and (not Item.IsSelected) then
     begin
       DrawNormalItem(Item);
-      if (not FInFallAnimation) and (not FDraggingSelected) then
-      if IsCurrentHot then
-      begin
-        R := Item.CurrentRect;
-        InflateRect(R, FHotTrackWidth, FHotTrackWidth);
-        Canvas.Pen.Width := FHotTrackWidth;
-        Canvas.Pen.Color := FHotTrackColor;
-        Canvas.Brush.Style := bsClear;
-        Canvas.Rectangle(R.Left, R.Top, R.Right, R.Bottom);
-      end;
       Exit;
     end;
   // ===================================================================
@@ -4983,7 +4969,6 @@ end; }
     OffsetRect(R, OffsetX, OffsetY);
     Canvas.StretchDraw(R, Item.Bitmap);
   // Glow / hot border
-  if (not FInFallAnimation) and (not FDraggingSelected) then
     if IsCurrentHot or Item.IsSelected then
     begin
       if Item.IsSelected then
@@ -5024,6 +5009,7 @@ begin
     AnimatingItems := TList.Create;
     EnteringItems := TList.Create;
     try
+
       // 2. Collect animating and entering items
       for i := 0 to FImages.Count - 1 do
       begin
@@ -5034,17 +5020,21 @@ begin
 
         // A new image is "entering" if its animation progress is very low.
         // These get top priority and are added to their own special list.
-        if (ImageItem.AnimationProgress < 0.99) and (ImageItem.FHotZoom < 0.99) and (ImageItem <> FSelectedImage) then
+        if (ImageItem.AnimationProgress < 0.99) and (ImageItem.FHotZoom < 0.99)  and (ImageItem <> FSelectedImage)
+        and not (Abs(ImageItem.FHotZoom - ImageItem.FHotZoomTarget) > HOT_ZOOM_EPSILON) then
         begin
           EnteringItems.Add(ImageItem);
         end
+
         // Other animating items (like hot-zoomed ones) go into the regular list.
         // We exclude items already in the EnteringItems list.
-        else if (ImageItem <> FSelectedImage) and ((ImageItem.ZoomProgress > 0) or (Abs(ImageItem.FHotZoom - ImageItem.FHotZoomTarget) > HOT_ZOOM_EPSILON) or (ImageItem = FWasSelectedItem)) then
+        else if (ImageItem <> FSelectedImage) and ((ImageItem.ZoomProgress > 0)
+        or (Abs(ImageItem.FHotZoom - ImageItem.FHotZoomTarget) > HOT_ZOOM_EPSILON) or (ImageItem = FWasSelectedItem)) then
         begin
           AnimatingItems.Add(ImageItem);
         end;
       end;
+
       // 3. Draw completely static items
       for i := 0 to FImages.Count - 1 do
       begin
@@ -5053,6 +5043,7 @@ begin
           Continue;
         DrawNormalItem(ImageItem);
       end;
+
       // 4. Draw all other animating items (sorted by zoom)
       if AnimatingItems.Count > 0 then
       begin
@@ -5066,6 +5057,7 @@ begin
             DrawNormalItem(TImageItem(AnimatingItems[i]));
         end;
       end;
+
       // 5. Current hovered item on top (unless it's selected or entering)
       if (FHotItem <> nil) and (FHotItem <> FSelectedImage) and (EnteringItems.IndexOf(FHotItem) = -1) then
       begin
@@ -5075,6 +5067,7 @@ begin
         else
           DrawNormalItem(FHotItem);
       end;
+
       // 6. Selected item (always on top of non-entering items)
       if FSelectedImage <> nil then
       begin
@@ -5085,16 +5078,9 @@ begin
         else
         begin
           DrawNormalItem(FSelectedImage);
-          DrawRect := FSelectedImage.CurrentRect;
-          if IsRectEmpty(DrawRect) then
-            DrawRect := FSelectedImage.TargetRect;
-          InflateRect(DrawRect, FGlowWidth, FGlowWidth);
-          Canvas.Pen.Color := FGlowColor;
-          Canvas.Pen.Width := FGlowWidth;
-          Canvas.Brush.Style := bsClear;
-          Canvas.Rectangle(DrawRect.Left, DrawRect.Top, DrawRect.Right, DrawRect.Bottom);
         end;
       end;
+
       // 7. Draw entering items on the very top
       for i := 0 to EnteringItems.Count - 1 do
       begin
@@ -5554,6 +5540,7 @@ begin
     Repaint;
   end;
 end;
+
 
 procedure TFlowmotion.SetShowCaptions(Value: Boolean);
 begin
