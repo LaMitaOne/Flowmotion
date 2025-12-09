@@ -1,7 +1,7 @@
 
 {------------------------------------------------------------------------------}
 {                                                                              }
-{ Flowmotion v0.989                                                            }
+{ Flowmotion v0.990                                                            }
 { by Lara Miriam Tamy Reschke                                                  }
 {                                                                              }
 { larate@gmx.net                                                               }
@@ -10,6 +10,8 @@
 {------------------------------------------------------------------------------}
 {
  ----Latest Changes
+  v 0.990
+    - Added hints for each Imageitem (in AddImage, Addimages...)
   v 0.989
     - improved caption rendering
     - some small bugfixes
@@ -208,6 +210,7 @@ type
     FZoomProgress: Double;
     FHotZoom: Double;
     FHotZoomTarget: Double;
+    FHint: string;
   public
     constructor Create;
     destructor Destroy; override;
@@ -226,6 +229,7 @@ type
     property IsSelected: Boolean read FIsSelected write FIsSelected;
     property ZoomProgress: Double read FZoomProgress write FZoomProgress;
     property Direction: TImageEntryStyle read FDirection write FDirection;
+    property Hint: string read FHint write FHint;
   end;
 
   TOnSelectedItemMouseDown = procedure(Sender: TObject; ImageItem: TImageItem; Index, X, Y: Integer; Button: TMouseButton; Shift: TShiftState) of object;
@@ -260,13 +264,14 @@ type
     FPath: string;
     FFileName: string;
     FBitmap: TBitmap;
+    FHint: string;
     FOwner: TObject;
     FSuccess: Boolean;
     procedure SyncAddImage;
   protected
     procedure Execute; override;
   public
-    constructor Create(const AFileName, ACaption, APath: string; AOwner: TObject; TargetCoreIndex: Integer);
+    constructor Create(const AFileName, ACaption, APath, AHint: string; AOwner: TObject; TargetCoreIndex: Integer);
     destructor Destroy; override;
   end;
 
@@ -307,6 +312,7 @@ type
     FAllFiles: TStringList; // All image files (for paging)
     FAllCaptions: TStringList; // All captions
     FAllPaths: TStringList; // All paths
+    FAllHints: TStringList; // All hints
 
     // Threading
     FNextLoaderCoreIndex: Integer;
@@ -504,14 +510,14 @@ type
     procedure ResetPositions;
 
     // Image management
-    procedure AddImage(const FileName: string); overload;
-    procedure AddImage(const FileName, ACaption, APath: string); overload;
+    procedure AddImage(const FileName: string; const AHint: string = ''); overload;
+    procedure AddImage(const FileName, ACaption, APath, AHint: string); overload;
     procedure AddImage(Bitmap: TBitmap); overload;
-    procedure AddImageAsync(const FileName: string; const ACaption: string = ''; const APath: string = '');
-    procedure AddImages(const FileNames, Captions, Paths: TStringList);
-    procedure AddImagesAsync(const FileNames, Captions, Paths: TStringList);
-    procedure InsertImage(Pic: TBitmap; const XFileName, XCaption, XPath: string);
-    procedure InsertImageAsync(const FileName, Caption, Path: string);
+    procedure AddImageAsync(const FileName: string; const ACaption: string = ''; const APath: string = ''; const AHint: string = '');
+    procedure AddImages(const FileNames, Captions, Paths, Hints: TStringList);
+    procedure AddImagesAsync(const FileNames, Captions, Paths, Hints: TStringList);
+    procedure InsertImage(Pic: TBitmap; const XFileName, XCaption, XPath, XHint: string);
+    procedure InsertImageAsync(const FileName, Caption, Path, Hint: string);
     procedure SetImage(Index: Integer; Bitmap: TBitmap);
     procedure RemoveImage(Index: Integer; animated: Boolean = True); overload;
     procedure RemoveImage(Index: Integer; Animated: Boolean; FallingTargetPos: TRect; FallingStyle: TImageEntryStyle); overload;
@@ -756,7 +762,7 @@ end;
 { TImageLoadThread }
 
 { Creates a new image loading thread }
-constructor TImageLoadThread.Create(const AFileName, ACaption, APath: string; AOwner: TObject; TargetCoreIndex: Integer);
+constructor TImageLoadThread.Create(const AFileName, ACaption, APath, AHint: string; AOwner: TObject; TargetCoreIndex: Integer);
 var
   SystemInfo: TSystemInfo;
   AffinityMask: DWORD_PTR;
@@ -767,6 +773,7 @@ begin
   FCaption := ACaption;
   FPath := APath;
   FOwner := AOwner;
+  FHint := AHint;
   FBitmap := TBitmap.Create;
   FSuccess := False;
   Priority := TFlowmotion(FOwner).FThreadPriority;
@@ -833,6 +840,7 @@ begin
           NewItem.Bitmap.Assign(FBitmap);
           NewItem.Caption := FCaption;
           NewItem.Path := FPath;
+          NewItem.Hint := FHint;
           NewItem.FileName := FFileName;
           NewItem.Direction := GetEntryDirection;
           NewItem.Visible := False;
@@ -888,6 +896,7 @@ begin
   FAllFiles := TStringList.Create;
   FAllCaptions := TStringList.Create;
   FAllPaths := TStringList.Create;
+  FAllHints := TStringList.Create;
   FBackgroundpicture := TBitmap.Create;
   FBackgroundCache := TBitmap.Create;
   FTempBitmap := TBitmap.Create;
@@ -984,6 +993,7 @@ begin
     FAllFiles.Free;
     FAllCaptions.Free;
     FAllPaths.Free;
+    FAllHints.Free;
     //Gdip.Free;
   except
     // Ensure destructor completes even if errors occur
@@ -1036,6 +1046,8 @@ begin
   begin
     TImageItem(FImages[i]).FHotZoomTarget := 1.0;
   end;
+
+  Hint := '';
 
   // In free float mode, directly deselect without animation
   if FFlowLayout = flFreeFloat then
@@ -1329,7 +1341,7 @@ end;
 
 
 { Inserts a picture from TPicture with caption and path }
-procedure TFlowmotion.InsertImage(Pic: TBitmap; const XFileName, XCaption, XPath: string);
+procedure TFlowmotion.InsertImage(Pic: TBitmap; const XFileName, XCaption, XPath, XHint: string);
 begin
   if Pic = nil then
     Exit;
@@ -1341,6 +1353,7 @@ begin
         FileName := FileName;
         Caption := XCaption;
         Path := XPath;
+        Hint := XHint;
       end;
   finally
 
@@ -1388,9 +1401,6 @@ begin
     on E: Exception do
       // Re-raise with more context or handle silently if preferred
     //  raise Exception.CreateFmt('Failed to load image "%s". Error: %s', [AFileName, E.Message]);
-
-
-
 
   end;
 end;
@@ -1602,17 +1612,18 @@ begin
       if not (ImageItem.Visible and HotTrackZoom) then
         Continue;
 
-      if FDraggingSelected and (ImageItem = FSelectedImage)  then begin
+      if FDraggingSelected and (ImageItem = FSelectedImage) then
+      begin
         NeedRepaint := True;
         continue;
       end;
 
       // Breathing when selected AND hovered
-      if FBreathingEnabled and (ImageItem = FSelectedImage) and (ImageItem = FHotItem)  then
+      if FBreathingEnabled and (ImageItem = FSelectedImage) and (ImageItem = FHotItem) then
         TargetZoom := 1.0 + BREATHING_AMPLITUDE * 0.2 * (Sin(FBreathingPhase * 2 * Pi) + 1.0)
 
         // Normal hot-zoom when only hovered
-      else if (ImageItem = FHotItem) and HotTrackZoom  then
+      else if (ImageItem = FHotItem) and HotTrackZoom then
         TargetZoom := HOT_ZOOM_MAX_FACTOR
       else
         TargetZoom := 1.0;
@@ -1625,12 +1636,12 @@ begin
 
       // Smooth approach
       if not FDraggingImage then
-      ImageItem.FHotZoom := ImageItem.FHotZoom + (TargetZoom - ImageItem.FHotZoom) * Speed * DeltaTime;
+        ImageItem.FHotZoom := ImageItem.FHotZoom + (TargetZoom - ImageItem.FHotZoom) * Speed * DeltaTime;
       if not FDraggingImage then
-      if HotTrackZoom then
-        ImageItem.FHotZoomTarget := TargetZoom // for ItemFinished check
-      else
-        ImageItem.FHotZoomTarget := 1.0;
+        if HotTrackZoom then
+          ImageItem.FHotZoomTarget := TargetZoom // for ItemFinished check
+        else
+          ImageItem.FHotZoomTarget := 1.0;
 
       // Clamp non-breathing hotzoom
       if (ImageItem <> FSelectedImage) and (ImageItem.FHotZoom > HOT_ZOOM_MAX_FACTOR) then
@@ -1643,8 +1654,8 @@ begin
 
     // Advance breathing phase only when selected item is hovered
     if not FDraggingImage then
-    if FBreathingEnabled and (FHotItem <> nil) and (FHotItem = FSelectedImage) then
-      FBreathingPhase := Frac(FBreathingPhase + BREATHING_SPEED_PER_SEC * DeltaTime);
+      if FBreathingEnabled and (FHotItem <> nil) and (FHotItem = FSelectedImage) then
+        FBreathingPhase := Frac(FBreathingPhase + BREATHING_SPEED_PER_SEC * DeltaTime);
 
     // ===================================================================
     // PHASE 3: Final decision – repaint + stop condition (Delphi 7 safe)
@@ -1995,6 +2006,7 @@ begin
   Invalidate;
 end;
 
+
 { Enables or disables hot-track zoom effect }
 procedure TFlowmotion.SetHotTrackZoom(const Value: Boolean);
 var
@@ -2110,7 +2122,7 @@ var
   PageStart: Integer;
   AbsIndexFrom, AbsIndexTo: Integer;
   Item: TImageItem;
-  FileName, Caption, Path: string;
+  FileName, Caption, Path, Hint: string;
   OldSelectedIndex: Integer;
 begin
   // --- 1. Safety: never move during animation or page change ---
@@ -2147,6 +2159,10 @@ begin
   FAllPaths.Delete(AbsIndexFrom);
   FAllPaths.Insert(AbsIndexTo, Path);
 
+  Hint := FAllHints[AbsIndexFrom];
+  FAllHints.Delete(AbsIndexFrom);
+  FAllHints.Insert(AbsIndexTo, Hint);
+
   // --- 6. Fix selected index (critical!) ---
   OldSelectedIndex := FCurrentSelectedIndex;
 
@@ -2163,13 +2179,13 @@ begin
 end;
 
 { Adds an image from file (uses filename as caption and path) }
-procedure TFlowmotion.AddImage(const FileName: string);
+procedure TFlowmotion.AddImage(const FileName: string; const AHint: string = '');
 begin
-  AddImage(FileName, ExtractFileName(FileName), FileName);
+  AddImage(FileName, ExtractFileName(FileName), FileName, AHint);
 end;
 
 { Adds an image from file with caption and path }
-procedure TFlowmotion.AddImage(const FileName, ACaption, APath: string);
+procedure TFlowmotion.AddImage(const FileName, ACaption, APath, AHint: string);
 var
   Bitmap: TBitmap;
   IsLastPage: Boolean;
@@ -2189,6 +2205,7 @@ begin
   FAllFiles.Add(FileName);
   FAllCaptions.Add(ACaption);
   FAllPaths.Add(APath);
+  FAllHints.Add(AHint);
   if WasEmpty or (FLoadMode = lmLoadAll) then
   begin
     ShowPage(FCurrentPage);
@@ -2211,6 +2228,7 @@ begin
       NewItem.Bitmap.Assign(Bitmap);
       NewItem.Caption := ACaption;
       NewItem.Path := APath;
+      NewItem.Hint := AHint;
       NewItem.FileName := FileName;
       NewItem.Direction := GetEntryDirection;
       NewItem.Visible := False;
@@ -2408,7 +2426,7 @@ begin
 end;
 
 { Adds an image asynchronously using a background thread }
-procedure TFlowmotion.AddImageAsync(const FileName: string; const ACaption: string = ''; const APath: string = '');
+procedure TFlowmotion.AddImageAsync(const FileName: string; const ACaption: string = ''; const APath: string = ''; const AHint: string = '');
 var
   LoadThread: TImageLoadThread;
   SystemInfo: TSystemInfo;
@@ -2417,20 +2435,18 @@ begin
   FAllFiles.Add(FileName);
   FAllCaptions.Add(ACaption);
   FAllPaths.Add(APath);
-
+  FAllHints.Add(AHint);
   GetSystemInfo(SystemInfo);
-  // Use Round-Robin to distribute across all available cores
   CoreToUse := FNextLoaderCoreIndex mod SystemInfo.dwNumberOfProcessors;
   Inc(FNextLoaderCoreIndex);
-
-  LoadThread := TImageLoadThread.Create(FileName, ACaption, APath, Self, CoreToUse);
+  LoadThread := TImageLoadThread.Create(FileName, ACaption, APath, AHint, Self, CoreToUse);
   LoadThread.Priority := FThreadPriority;
   FLoadingThreads.Add(LoadThread);
   Inc(FLoadingCount);
 end;
 
 { Adds multiple images synchronously (waits for all to load) }
-procedure TFlowmotion.AddImages(const FileNames, Captions, Paths: TStringList);
+procedure TFlowmotion.AddImages(const FileNames, Captions, Paths, Hints: TStringList);
 var
   i: Integer;
   WasEmpty: Boolean;
@@ -2444,13 +2460,14 @@ begin
     FAllFiles.Add(FileNames[i]);
     FAllCaptions.Add(Captions[i]);
     FAllPaths.Add(Paths[i]);
+    FAllHints.Add(Hints[i]);
   end;
   if WasEmpty then
     ShowPage(FCurrentPage); //else  to do
 end;
 
 { Adds multiple images asynchronously (does not wait) }
-procedure TFlowmotion.AddImagesAsync(const FileNames, Captions, Paths: TStringList);
+procedure TFlowmotion.AddImagesAsync(const FileNames, Captions, Paths, Hints: TStringList);
 var
   i: Integer;
   Thread: TImageLoadThread;
@@ -2465,13 +2482,14 @@ begin
     FAllFiles.Add(FileNames[i]);
     FAllCaptions.Add(Captions[i]);
     FAllPaths.Add(Paths[i]);
+    FAllHints.Add(Hints[i]);
   end;
   // Start loading threads
   for i := 0 to FileNames.Count - 1 do
   begin
     CoreToUse := FNextLoaderCoreIndex mod SystemInfo.dwNumberOfProcessors;
     Inc(FNextLoaderCoreIndex);
-    Thread := TImageLoadThread.Create(FileNames[i], Captions[i], Paths[i], Self, CoreToUse);
+    Thread := TImageLoadThread.Create(FileNames[i], Captions[i], Paths[i], Hints[i], Self, CoreToUse);
     FLoadingThreads.Add(Thread);
     Inc(FLoadingCount);
   end;
@@ -3025,7 +3043,7 @@ begin
 end;
 
 { Inserts an image asynchronously using a background thread }
-procedure TFlowmotion.InsertImageAsync(const FileName, Caption, Path: string);
+procedure TFlowmotion.InsertImageAsync(const FileName, Caption, Path, Hint: string);
 var
   LoadThread: TImageLoadThread;
   SystemInfo: TSystemInfo;
@@ -3040,7 +3058,7 @@ begin
   CoreToUse := FNextLoaderCoreIndex mod SystemInfo.dwNumberOfProcessors;
   Inc(FNextLoaderCoreIndex);
 
-  LoadThread := TImageLoadThread.Create(FileName, Caption, Path, Self, CoreToUse);
+  LoadThread := TImageLoadThread.Create(FileName, Caption, Path, Hint, Self, CoreToUse);
   LoadThread.Priority := FThreadPriority;
   FLoadingThreads.Add(LoadThread);
   Inc(FLoadingCount);
@@ -4157,6 +4175,15 @@ begin
   // Set FHotItem for hover (even when HotTrackZoom is off)
   if (NewHot <> FHotItem) and (NewHot <> nil) then
   begin
+    //Hints for each imageitem
+    if ShowHint and (NewHot.Hint <> '') then
+    begin
+      Hint := NewHot.Hint; // Set component's Hint property
+    end
+    else
+    begin
+      Hint := ''; // Clear hint if no hint or disabled
+    end;
     if FHotItem <> nil then
       FHotItem.FHotZoomTarget := 1.0;
     FHotItem := NewHot;
@@ -4168,11 +4195,11 @@ begin
   begin
     FHotItem.FHotZoomTarget := 1.0;
     FHotItem := nil;
+    Hint := '';
     StartAnimationThread;
     if not inPaintCycle then
       Invalidate;
   end;
-
   // Update cursor
   if FHotItem <> nil then
     Cursor := crHandPoint
@@ -4279,15 +4306,20 @@ begin
       // 2. SORTED LAYOUT — SELECT IMAGE FIRST, THEN ENABLE DRAGGING
       if FSelectedImage <> ImageItem then
       begin
+        if FSelectedImage <> nil then
+        begin
+          FSelectedImage.IsSelected := False;
+          if FSelectedImage = FWasSelectedItem then
+            FWasSelectedItem := nil;
+        end;
         // Small tactile "dip" when clicking a hot-tracked (zoomed) image
         if not FDraggingImage then
-        if ImageItem.FHotZoom >= 1.1 then
-          ImageItem.FHotZoom := ImageItem.FHotZoom - 0.1;
+          if ImageItem.FHotZoom >= 1.1 then
+            ImageItem.FHotZoom := ImageItem.FHotZoom - 0.1;
 
         SetSelectedImage(ImageItem, Index);
       end
-      else
-      if not FDraggingImage then
+      else if not FDraggingImage then
         FBreathingPhase := FBreathingPhase - 0.4;
     end;
 
@@ -4478,8 +4510,8 @@ begin
     ImageItem.IsSelected := True;
     ImageItem.ZoomProgress := 0;
     if not FDraggingImage then
-    if ImageItem.FHotZoom < 1 then
-      ImageItem.FHotZoom := 1;
+      if ImageItem.FHotZoom < 1 then
+        ImageItem.FHotZoom := 1;
 
     // If breathing is enabled, immediately set the new image as the hot item.
     // This synchronizes the states and prevents the target from being reset to 1.0,
@@ -4728,15 +4760,13 @@ end; }
       Exit;
     if FCaptionOnHoverOnly and (Item <> FHotItem) and (Item <> FSelectedImage) then
       Exit;
-
     Canvas.Font.Assign(FCaptionFont);
     Canvas.Font.Color := FCaptionColor;
-
     // --- Step 1: Define constraints ---
     MaxCaptionHeight := Canvas.TextHeight('Hg') * 2 + 12;
     MaxCaptionWidth := (DrawRect.Right - DrawRect.Left) - 30;
-    if MaxCaptionWidth < 30 then MaxCaptionWidth := 40;
-
+    if MaxCaptionWidth < 30 then
+      MaxCaptionWidth := 40;
     // --- Step 2: ALWAYS perform word wrapping ---
     Lines := TStringList.Create;
     Lines.Capacity := 2;
@@ -4774,7 +4804,6 @@ end; }
       end;
       if CurrentLine <> '' then
         Lines.Add(CurrentLine);
-
       // --- Step 3: Check if the resulting height is too high and truncate lines ---
       LineHeight := Canvas.TextHeight('Hg') + 2;
       MaxCaptionHeight := Max(MaxCaptionHeight, LineHeight * 2);
@@ -4782,7 +4811,6 @@ end; }
       if MaxLinesToShow < 1 then
         MaxLinesToShow := 1;
       ActualLinesToShow := Min(MaxLinesToShow, Lines.Count);
-
       // If we have more lines than space, truncate the list's height.
       if Lines.Count > MaxLinesToShow then
       begin
@@ -4792,7 +4820,6 @@ end; }
       begin
         CaptionH := Lines.Count * LineHeight + 12;
       end;
-
       // --- Step 4: Calculate the final width of the caption box ---
       MaxLineWidth := 0;
       for i := 0 to ActualLinesToShow - 1 do
@@ -4802,7 +4829,6 @@ end; }
           MaxLineWidth := LineTextWidth;
       end;
       CaptionW := MaxLineWidth + 24;
-
       // --- Step 5: Inflate DrawRect if image is too small for caption ---
       InflatedDrawRect := DrawRect;
       // Check if image height is insufficient for caption at bottom
@@ -4811,23 +4837,19 @@ end; }
         // Inflate downward to make space for caption
         InflateRect(InflatedDrawRect, 0, CaptionH + FCaptionOffsetY - (InflatedDrawRect.Bottom - InflatedDrawRect.Top));
       end;
-
       // --- Step 6: Position and draw the caption box ---
       TextRect.Left := InflatedDrawRect.Left + (InflatedDrawRect.Right - InflatedDrawRect.Left - CaptionW) div 2;
       TextRect.Top := InflatedDrawRect.Bottom - CaptionH - FCaptionOffsetY;
       TextRect.Right := TextRect.Left + CaptionW;
       TextRect.Bottom := TextRect.Top + CaptionH;
-
       // Simple clipping to keep it on screen
       if TextRect.Bottom > ClientHeight then
         Dec(TextRect.Top, TextRect.Bottom - ClientHeight);
       if TextRect.Top < 0 then
         TextRect.Top := 0;
       TextRect.Bottom := TextRect.Top + CaptionH;
-
       FTempBitmap.Width := CaptionW;
       FTempBitmap.Height := CaptionH;
-
       if Item.IsSelected then
       begin
         CurrentCaptionColor := FSelectedCaptionColor;
@@ -4838,26 +4860,21 @@ end; }
         CurrentCaptionColor := FCaptionColor;
         CurrentCaptionBackground := FCaptionBackground;
       end;
-
       FTempBitmap.Canvas.Brush.Color := CurrentCaptionBackground;
       FTempBitmap.Canvas.FillRect(Rect(0, 0, CaptionW, CaptionH));
-
       FTempBitmap.Canvas.Font.Assign(FCaptionFont);
       FTempBitmap.Canvas.Font.Color := CurrentCaptionColor;
       FTempBitmap.Canvas.Brush.Style := bsClear;
-
       for i := 0 to ActualLinesToShow - 1 do
       begin
         LineTextWidth := Canvas.TextWidth(Lines[i]);
         TextX := (CaptionW - LineTextWidth) div 2;
         FTempBitmap.Canvas.TextOut(TextX, 6 + i * LineHeight, Lines[i]);
       end;
-
       BlendFunction.BlendOp := AC_SRC_OVER;
       BlendFunction.BlendFlags := 0;
       BlendFunction.SourceConstantAlpha := FCaptionAlpha;
       BlendFunction.AlphaFormat := 0;
-
       AlphaBlend(Canvas.Handle, TextRect.Left, TextRect.Top, CaptionW, CaptionH, FTempBitmap.Canvas.Handle, 0, 0, CaptionW, CaptionH, BlendFunction);
     finally
       Lines.Free;
@@ -4872,7 +4889,7 @@ end; }
   var
     BlendFunction: TBlendFunction;
     W, H: Integer;
-    R : TRect;
+    R: TRect;
   begin
     if not Item.Visible or Item.Bitmap.Empty or (Item.Alpha <= 0) then
       Exit;
@@ -5020,16 +5037,14 @@ begin
 
         // A new image is "entering" if its animation progress is very low.
         // These get top priority and are added to their own special list.
-        if (ImageItem.AnimationProgress < 0.99) and (ImageItem.FHotZoom < 0.99)  and (ImageItem <> FSelectedImage)
-        and not (Abs(ImageItem.FHotZoom - ImageItem.FHotZoomTarget) > HOT_ZOOM_EPSILON) then
+        if (ImageItem.AnimationProgress < 0.99) and (ImageItem.FHotZoom < 0.99) and (ImageItem <> FSelectedImage) and not (Abs(ImageItem.FHotZoom - ImageItem.FHotZoomTarget) > HOT_ZOOM_EPSILON) then
         begin
           EnteringItems.Add(ImageItem);
         end
 
         // Other animating items (like hot-zoomed ones) go into the regular list.
         // We exclude items already in the EnteringItems list.
-        else if (ImageItem <> FSelectedImage) and ((ImageItem.ZoomProgress > 0)
-        or (Abs(ImageItem.FHotZoom - ImageItem.FHotZoomTarget) > HOT_ZOOM_EPSILON) or (ImageItem = FWasSelectedItem)) then
+        else if (ImageItem <> FSelectedImage) and ((ImageItem.ZoomProgress > 0) or (Abs(ImageItem.FHotZoom - ImageItem.FHotZoomTarget) > HOT_ZOOM_EPSILON) or (ImageItem = FWasSelectedItem)) then
         begin
           AnimatingItems.Add(ImageItem);
         end;
@@ -5216,6 +5231,7 @@ begin
             ImageItem.Caption := FAllCaptions[i];
             ImageItem.Path := FAllPaths[i];
             ImageItem.FileName := FileName;
+            ImageItem.Hint := FAllHints[i];
             ImageItem.Direction := GetEntryDirection;
             ImageItem.Visible := False; // Initially set new items to be invisible
             FImages.Add(ImageItem);
@@ -5540,7 +5556,6 @@ begin
     Repaint;
   end;
 end;
-
 
 procedure TFlowmotion.SetShowCaptions(Value: Boolean);
 begin
