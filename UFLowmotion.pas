@@ -4972,7 +4972,8 @@ end; }
     NewH := Round(BaseH * ZoomFactor);
     R := Rect(CenterX - NewW div 2, CenterY - NewH div 2, CenterX + NewW div 2, CenterY + NewH div 2);
   // Keep inside control (glow or hottrack margin)
-    BorderWidth := Max(FGlowWidth, FHotTrackWidth);
+    if Item.IsSelected then BorderWidth := FGlowWidth
+     else BorderWidth := FHotTrackWidth;
     OffsetX := 0;
     OffsetY := 0;
     if R.Left < 0 then
@@ -4988,10 +4989,6 @@ end; }
   // Glow / hot border
     if IsCurrentHot or Item.IsSelected then
     begin
-      if Item.IsSelected then
-        InflateRect(R, FGlowWidth, FGlowWidth)
-      else
-        InflateRect(R, FHotTrackWidth, FHotTrackWidth);
       Canvas.Pen.Width := ifThen(Item.IsSelected, FGlowWidth, FHotTrackWidth);
       Canvas.Pen.Color := ifThen(Item.IsSelected, FGlowColor, FHotTrackColor);
       Canvas.Brush.Style := bsClear;
@@ -5027,90 +5024,95 @@ begin
     EnteringItems := TList.Create;
     try
 
-      // 2. Collect animating and entering items
-      for i := 0 to FImages.Count - 1 do
+    // 2. Collect animating and entering items
+    for i := 0 to FImages.Count - 1 do
+    begin
+      ImageItem := TImageItem(FImages[i]);
+
+      //check if they need to get loaded for lazy
+      EnsureBitmapLoaded(ImageItem);
+
+      // A new image is "entering" if its animation progress is very low.
+      // These get top priority and are added to their own special list.
+      if (ImageItem <> FHotItem) and (ImageItem.AnimationProgress < 0.99)
+       and (ImageItem.FHotZoom < 0.99) and (ImageItem <> FSelectedImage)
+      and (not (Abs(ImageItem.FHotZoom - ImageItem.FHotZoomTarget) > HOT_ZOOM_EPSILON)) then
       begin
-        ImageItem := TImageItem(FImages[i]);
+        EnteringItems.Add(ImageItem);
+      end
 
-        //check if they need to get loaded for lazy
-        EnsureBitmapLoaded(ImageItem);
-
-        // A new image is "entering" if its animation progress is very low.
-        // These get top priority and are added to their own special list.
-        if (ImageItem.AnimationProgress < 0.99) and (ImageItem.FHotZoom < 0.99) and (ImageItem <> FSelectedImage) and not (Abs(ImageItem.FHotZoom - ImageItem.FHotZoomTarget) > HOT_ZOOM_EPSILON) then
-        begin
-          EnteringItems.Add(ImageItem);
-        end
-
-        // Other animating items (like hot-zoomed ones) go into the regular list.
-        // We exclude items already in the EnteringItems list.
-        else if (ImageItem <> FSelectedImage) and ((ImageItem.ZoomProgress > 0) or (Abs(ImageItem.FHotZoom - ImageItem.FHotZoomTarget) > HOT_ZOOM_EPSILON) or (ImageItem = FWasSelectedItem)) then
-        begin
-          AnimatingItems.Add(ImageItem);
-        end;
-      end;
-
-      // 3. Draw completely static items
-      for i := 0 to FImages.Count - 1 do
+      // Other animating items (like hot-zoomed ones) go into the regular list.
+      // We exclude items already in the EnteringItems list AND the selected image.
+      else if (ImageItem <> FSelectedImage) and ((ImageItem.ZoomProgress > 0)
+      or (Abs(ImageItem.FHotZoom - ImageItem.FHotZoomTarget) > HOT_ZOOM_EPSILON)
+      or (ImageItem = FWasSelectedItem)) then
       begin
-        ImageItem := TImageItem(FImages[i]);
-        if (AnimatingItems.IndexOf(ImageItem) >= 0) or (EnteringItems.IndexOf(ImageItem) >= 0) then
-          Continue;
-        DrawNormalItem(ImageItem);
+        AnimatingItems.Add(ImageItem);
       end;
-
-      // 4. Draw all other animating items (sorted by zoom)
-      if AnimatingItems.Count > 0 then
-      begin
-        AnimatingItems.Sort(@CompareHotZoom);
-        for i := 0 to AnimatingItems.Count - 1 do
-        begin
-          // If HotTrackZoom is disabled, draw animating items as normal items.
-          if FHotTrackZoom then
-            DrawHotZoomedItem(TImageItem(AnimatingItems[i]), TImageItem(AnimatingItems[i]) = FHotItem)
-          else
-            DrawNormalItem(TImageItem(AnimatingItems[i]));
-        end;
-      end;
-
-      // 5. Current hovered item on top (unless it's selected or entering)
-      if (FHotItem <> nil) and (FHotItem <> FSelectedImage) and (EnteringItems.IndexOf(FHotItem) = -1) then
-      begin
-        // If HotTrackZoom is disabled, draw the hovered item as a normal item.
-        if FHotTrackZoom then
-          DrawHotZoomedItem(FHotItem, True)
-        else
-          DrawNormalItem(FHotItem);
-      end;
-
-      // 6. Selected item (always on top of non-entering items)
-      if FSelectedImage <> nil then
-      begin
-        // The selected image has its own zoom logic (e.g., ZoomSelectedtoCenter),
-        // so we always use DrawHotZoomedItem to respect that, regardless of the HotTrackZoom setting.
-        if FSelectedImage.FHotZoom > 1.0 then
-          DrawHotZoomedItem(FSelectedImage, FSelectedImage = FHotItem)
-        else
-        begin
-          DrawNormalItem(FSelectedImage);
-        end;
-      end;
-
-      // 7. Draw entering items on the very top
-      for i := 0 to EnteringItems.Count - 1 do
-      begin
-        // The pop-in animation for new images is a hot-zoom animation.
-        // It should only be drawn if the HotTrackZoom feature is enabled.
-        // If disabled, new images will just appear at their target size without the pop-in effect.
-        if FHotTrackZoom then
-          DrawHotZoomedItem(TImageItem(EnteringItems[i]), TImageItem(EnteringItems[i]) = FHotItem)
-        else
-          DrawNormalItem(TImageItem(EnteringItems[i]));
-      end;
-    finally
-      AnimatingItems.Free;
-      EnteringItems.Free;
     end;
+
+    // 3. Draw completely static items
+    for i := 0 to FImages.Count - 1 do
+    begin
+      ImageItem := TImageItem(FImages[i]);
+      if (AnimatingItems.IndexOf(ImageItem) >= 0) or (EnteringItems.IndexOf(ImageItem) >= 0)
+      or (ImageItem = FSelectedImage)or (ImageItem = FHotItem)   then
+        Continue;
+      DrawNormalItem(ImageItem);
+    end;
+
+    // 4. Draw all other animating items (sorted by zoom)
+    if AnimatingItems.Count > 0 then
+    begin
+      AnimatingItems.Sort(@CompareHotZoom);
+      for i := 0 to AnimatingItems.Count - 1 do
+      begin
+        // If HotTrackZoom is disabled, draw animating items as normal items.
+        if FHotTrackZoom then
+          DrawHotZoomedItem(TImageItem(AnimatingItems[i]), TImageItem(AnimatingItems[i]) = FHotItem)
+        else
+          DrawNormalItem(TImageItem(AnimatingItems[i]));
+      end;
+    end;
+
+    // 5. Current hovered item on top (unless it's selected or entering)
+    if (FHotItem <> nil) and (FHotItem <> FSelectedImage) and (EnteringItems.IndexOf(FHotItem) = -1) then
+    begin
+      // If HotTrackZoom is disabled, draw the hovered item as a normal item.
+      if FHotTrackZoom then
+        DrawHotZoomedItem(FHotItem, True)
+      else
+        DrawNormalItem(FHotItem);
+    end;
+
+    // 6. Selected item (always on top of non-entering items)
+    if FSelectedImage <> nil then
+    begin
+      // The selected image has its own zoom logic (e.g., ZoomSelectedtoCenter),
+      // so we always use DrawHotZoomedItem to respect that, regardless of the HotTrackZoom setting.
+      if FSelectedImage.FHotZoom > 1.0 then
+        DrawHotZoomedItem(FSelectedImage, FSelectedImage = FHotItem)
+      else
+      begin
+        DrawNormalItem(FSelectedImage);
+      end;
+    end;
+
+    // 7. Draw entering items on the very top
+    for i := 0 to EnteringItems.Count - 1 do
+    begin
+      // The pop-in animation for new images is a hot-zoom animation.
+      // It should only be drawn if the HotTrackZoom feature is enabled.
+      // If disabled, new images will just appear at their target size without the pop-in effect.
+      if FHotTrackZoom then
+        DrawHotZoomedItem(TImageItem(EnteringItems[i]), TImageItem(EnteringItems[i]) = FHotItem)
+      else
+        DrawNormalItem(TImageItem(EnteringItems[i]));
+    end;
+  finally
+    AnimatingItems.Free;
+    EnteringItems.Free;
+  end;
   finally
     Canvas.Unlock;
     inPaintCycle := False;
