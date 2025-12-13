@@ -76,7 +76,7 @@ I am working on getting more of it done :)
 ### Latest changes:     
      
 **v 0.991**     
-- more improvements for Paging, basically working now   
+- more improvements for Paging, basically working now when u load list of pics with Addimages   
       
 **v 0.990**   
 - Added hints for each Imageitem (in AddImage, Addimages...)
