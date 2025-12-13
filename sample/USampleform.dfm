@@ -38,7 +38,7 @@ object FSampleform: TFSampleform
     OnSelectedItemMouseDown = Flowmotion1SelectedItemMouseDown
     OnAllAnimationsFinished = Flowmotion1AllAnimationsFinished
     OnSelectedImageDblClick = Flowmotion1SelectedImageDblClick
-    PageSize = 100
+    PageSize = 1000
     Align = alClient
     Color = clBlack
     ParentColor = False
@@ -666,15 +666,13 @@ object FSampleform: TFSampleform
   end
   object Panel11: TPanel
     Left = 888
-    Top = 808
+    Top = 743
     Width = 297
-    Height = 113
+    Height = 184
     Anchors = [akRight, akBottom]
     Caption = 'Keep AreaFreeRect (not right working atm)'
     TabOrder = 5
     Visible = False
-    ExplicitLeft = 892
-    ExplicitTop = 815
   end
   object OpenDialog1: TOpenDialog
     Left = 144

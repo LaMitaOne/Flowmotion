@@ -282,10 +282,6 @@ procedure TFSampleform.FormCreate(Sender: TObject);
 begin
   Doublebuffered := True;
   Flowmotion1.DoubleBuffered := True;
-  Flowmotion1.SetBackgroundpicture(Extractfilepath(Application.ExeName) + 'back.jpg');
-  Flowmotion1.AddActivationZone('ActivationZone 1', Panel5.BoundsRect);
-  Flowmotion1.AddActivationZone('ActivationZone 2', Panel6.BoundsRect);
-  Flowmotion1.OnSelectedImageEnterZone := Flowmotion1SelectedImageEnterZone;
 end;
 
 procedure TFSampleform.Flowmotion1SelectedImageEnterZone(Sender: TObject; ImageItem: TImageItem; const ZoneName: string);
@@ -469,7 +465,15 @@ end;
 
 procedure TFSampleform.FormShow(Sender: TObject);
 begin
- // Flowmotion1.KeepAreaFreeRect := Panel11.BoundsRect;     //not working atm or not right :P
+  Flowmotion1.SetBackgroundpicture(Extractfilepath(Application.ExeName) + 'back.jpg');
+
+  Flowmotion1.OnSelectedImageEnterZone := Flowmotion1SelectedImageEnterZone;
+
+  Flowmotion1.AddActivationZone('ActivationZone 1', Panel5.BoundsRect);
+  Flowmotion1.AddActivationZone('ActivationZone 2', Panel6.BoundsRect);
+
+  //Flowmotion1.KeepAreaFreeRect := Panel11.BoundsRect;     //not working atm or not right :P
+
   Timer1.Enabled := True;
 end;
 
