@@ -72,9 +72,12 @@ Clear animated to direction or target, selected can go to other target, setting 
 DeselectZoomedImage, those i am using in my player already and no problems at all,   
 other functions may work, not work, or it explodes right into ur face :D nah...  
 I am working on getting more of it done :)  
+       
+### Latest changes:     
+     
+**v 0.991**     
+- more improvements for Paging, basically working now   
       
-### Latest changes:    
-    
 **v 0.990**   
 - Added hints for each Imageitem (in AddImage, Addimages...)
       
