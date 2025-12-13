@@ -1,7 +1,7 @@
 
 {------------------------------------------------------------------------------}
 {                                                                              }
-{ Flowmotion v0.990                                                            }
+{ Flowmotion v0.991                                                            }
 { by Lara Miriam Tamy Reschke                                                  }
 {                                                                              }
 { larate@gmx.net                                                               }
@@ -10,8 +10,11 @@
 {------------------------------------------------------------------------------}
 {
  ----Latest Changes
+   v 0.991
+    - more improvements for Paging, basically working now
   v 0.990
     - Added hints for each Imageitem (in AddImage, Addimages...)
+    - some small bugfixes
   v 0.989
     - improved caption rendering
     - some small bugfixes
@@ -521,7 +524,7 @@ type
     procedure SetImage(Index: Integer; Bitmap: TBitmap);
     procedure RemoveImage(Index: Integer; animated: Boolean = True); overload;
     procedure RemoveImage(Index: Integer; Animated: Boolean; FallingTargetPos: TRect; FallingStyle: TImageEntryStyle); overload;
-    procedure Clear(animated: Boolean; ZoominSelected: Boolean; SelectedTargetPos, FallingTargetPos: TRect; FallingStyle: TImageEntryStyle = iesFromBottom); overload;
+    procedure Clear(animated: Boolean; ZoominSelected: Boolean; SelectedTargetPos, FallingTargetPos: TRect; FallingStyle: TImageEntryStyle = iesFromBottom; AndFree : Boolean = true); overload;
     procedure Clear(animated: Boolean; ZoominSelected: Boolean = false); overload;
     procedure MoveImageToPos(RelIndexFrom, RelIndexTo: Integer);
 
@@ -565,7 +568,7 @@ type
     property LoadMode: TFlowmotionLoadMode read FLoadMode write SetLoadMode;
     property FlowLayout: TFlowLayout read FFlowLayout write SetFlowLayout;
     property AnimationSpeed: Integer read FAnimationSpeed write SetAnimationSpeed default DEFAULT_ANIMATION_SPEED;
-    property SelectedMovable: Boolean read FSelectedMovable write SetSelectedMovable default true;
+    property SelectedMovable: Boolean read FSelectedMovable write SetSelectedMovable default false;
     property Sorted: Boolean read FSorted write SetSorted default True;
     property KeepSpaceforZoomed: Boolean read FKeepSpaceforZoomed write SetKeepSpaceforZoomed default false;
     property Spacing: Integer read FSpacing write SetSpacing default 0;
@@ -914,7 +917,7 @@ begin
   HotTrackZoom := true;
   FMaxColumns := 0;
   FMaxRows := 0;
-  FSelectedMovable := True;
+  FSelectedMovable := False;
   FDraggingSelected := False;
   FDragOffset := Point(0, 0);
   FSorted := True;
@@ -928,7 +931,7 @@ begin
   FZoomAnimationType := zatSlide;
     // zatSlide, zatFade, zatZoom, zatBounce   not working atm
   FBackgroundCacheValid := False;
-  FPageSize := 100;
+  FPageSize := 1000;
   FCurrentPage := 0;
   FCurrentSelectedIndex := -1;
   FActive := True;
@@ -1574,7 +1577,7 @@ begin
     end;
 
     // ----- Alpha (for Fade effects) -----
-    if ImageItem.Alpha <> ImageItem.TargetAlpha then
+ {   if ImageItem.Alpha <> ImageItem.TargetAlpha then
     begin
       TempAlpha := ImageItem.Alpha;
       if ImageItem.IsSelected then
@@ -1587,7 +1590,7 @@ begin
         ImageItem.Alpha := Round(TempAlpha);
         NeedRepaint := True;
       end;
-    end;
+    end;   }
 
     // ===================================================================
     // PHASE 2.5: Hot-track zoom + Breathing animation
@@ -2275,15 +2278,7 @@ begin
               NewY := 20 + Random(Height - DefaultHeight - 40);
               NewItem.TargetRect := Rect(NewX, NewY, NewX + DefaultWidth, NewY + DefaultHeight);
 
-            // Check if the placement overlaps with the user-defined free area
-              TempRect := NewItem.TargetRect;
-              if not IsRectEmpty(FKeepAreaFreeRect) and IntersectRect(TempRect, NewItem.TargetRect, FKeepAreaFreeRect) then
-              begin
-              // Overlap found. Try a new position in the next iteration of the random loop.
-                Continue;
-              end;
-
-            // Check for overlap with existing images
+              // Check for overlap with existing images
               FoundPosition := True;
               for j := 0 to FImages.Count - 2 do
               begin
@@ -2565,7 +2560,7 @@ end;
 /// <param name="SelectedTargetPos">Target rectangle for selected image</param>
 /// <param name="FallingTargetPos">Target point for iesFromPoint style</param>
 /// <param name="FallingStyle">Fly-out direction for normal images</param>
-procedure TFlowmotion.Clear(animated: Boolean; ZoominSelected: Boolean; SelectedTargetPos, FallingTargetPos: TRect; FallingStyle: TImageEntryStyle = iesFromBottom);
+procedure TFlowmotion.Clear(animated: Boolean; ZoominSelected: Boolean; SelectedTargetPos, FallingTargetPos: TRect; FallingStyle: TImageEntryStyle = iesFromBottom; AndFree : Boolean = true);
 var
   i: Integer;
   StartTick: DWORD;
@@ -2808,7 +2803,8 @@ begin
   // ==============================================================
   // Final cleanup
   // ==============================================================
-  FreeAllImagesAndClearLists;
+  if AndFree then FreeAllImagesAndClearLists   //full clear
+   else FInFallAnimation := False;  //we only cleared for show new page
 end;
 
 /// <summary>
@@ -3628,15 +3624,15 @@ begin
   end;
 end;
 
-// Checks if an area in the grid is free for placing an image
+// Checks if a grid area is free for placement
 function TFlowmotion.IsAreaFree(const Grid: TBooleanGrid; Row, Col, SpanRows, SpanCols: Integer): Boolean;
 var
   r, c: Integer;
   CenterRow, CenterCol, ProtectedSize: Integer;
-  PotentialRect: TRect;
-  DummyRect: TRect; // *** FIX: Dummy rect for the IntersectRect out parameter ***
-  BaseCellWidth, BaseCellHeight: Integer;
   X, Y, CellW, CellH: Integer;
+  PotentialRect, Dummy: TRect;
+  ImageSize: TSize;
+  BaseCellWidth, BaseCellHeight: Integer;
 begin
   // Bounds check
   if (Row < 0) or (Col < 0) or (Row + SpanRows > Length(Grid)) or (Col + SpanCols > Length(Grid[0])) then
@@ -3644,6 +3640,15 @@ begin
     Result := False;
     Exit;
   end;
+
+  // Normal grid occupation check
+  for r := Row to Row + SpanRows - 1 do
+    for c := Col to Col + SpanCols - 1 do
+      if Grid[r, c] then
+      begin
+        Result := False;
+        Exit;
+      end;
 
   // Keep center area free for zoomed image
   if FKeepSpaceforZoomed then
@@ -3659,36 +3664,6 @@ begin
       end;
     end;
 
-  // Normal grid check: verify all cells in the area are free
-  for r := Row to Row + SpanRows - 1 do
-    for c := Col to Col + SpanCols - 1 do
-      if Grid[r, c] then
-      begin
-        Result := False;
-        Exit;
-      end;
-
-  // We calculate the potential screen rectangle for this grid area.
-  BaseCellWidth := Max(MIN_CELL_SIZE, (Width - FSpacing * (Length(Grid[0]) + 1)) div Length(Grid[0]));
-  BaseCellHeight := Max(MIN_CELL_SIZE, (Height - FSpacing * (Length(Grid) + 1)) div Length(Grid));
-
-  X := FSpacing + Col * BaseCellWidth + Col * FSpacing;
-  Y := Row * (BaseCellHeight + FSpacing);
-
-  CellW := (SpanCols * BaseCellWidth) + ((SpanCols - 1) * FSpacing);
-  CellH := (SpanRows * BaseCellHeight) + ((SpanRows - 1) * FSpacing);
-
-  PotentialRect := Rect(X, Y, X + CellW, Y + CellH);
-
-  // Now check for overlap with the user-defined free area.
-  // We use a dummy rectangle for the 'out' parameter.
-  if not IsRectEmpty(FKeepAreaFreeRect) and IntersectRect(DummyRect, PotentialRect, FKeepAreaFreeRect) then
-  begin
-    Result := False;
-    Exit;
-  end;
-
-  // If all checks passed, the area is free.
   Result := True;
 end;
 
@@ -3709,15 +3684,13 @@ var
   X, Y: Integer;
   CellWidth, CellHeight: Integer;
   ImageSize: TSize;
-  TempRect: TRect;
+  DummyRect: TRect; // Für IntersectRect
 begin
   // Calculate cell position and size
-  X := FSpacing + Col * BaseCellWidth + Col * FSpacing;
-  Y := Row * (BaseCellHeight + FSpacing);
-
-  // Available size for the image
-  CellWidth := (SpanCols * BaseCellWidth) + ((SpanCols - 1) * FSpacing);
-  CellHeight := (SpanRows * BaseCellHeight) + ((SpanRows - 1) * FSpacing);
+  X := FSpacing + Col * (BaseCellWidth + FSpacing);
+  Y := FSpacing + Row * (BaseCellHeight + FSpacing);
+  CellWidth := SpanCols * BaseCellWidth + (SpanCols - 1) * FSpacing;
+  CellHeight := SpanRows * BaseCellHeight + (SpanRows - 1) * FSpacing;
 
   // Optimal image size preserving aspect ratio
   ImageSize := GetOptimalSize(ImageItem.Bitmap.Width, ImageItem.Bitmap.Height, CellWidth, CellHeight);
@@ -3726,35 +3699,31 @@ begin
   X := X + (CellWidth - ImageSize.cx) div 2;
   Y := Y + (CellHeight - ImageSize.cy) div 2;
 
-  // Ensure the image stays within component bounds
-  if X < 0 then
-    X := 0;
-  if Y < 0 then
-    Y := 0;
-  if X + ImageSize.cx > Width then
-    X := Width - ImageSize.cx;
-  if Y + ImageSize.cy > Height then
-    Y := Height - ImageSize.cy;
+  // Bounds clamping
+  if X < 0 then X := 0;
+  if Y < 0 then Y := 0;
+  if X + ImageSize.cx > Width then X := Width - ImageSize.cx;
+  if Y + ImageSize.cy > Height then Y := Height - ImageSize.cy;
 
-  // Set the final target rectangle first.
+  // Final target rect
   ImageItem.TargetRect := Rect(X, Y, X + ImageSize.cx, Y + ImageSize.cy);
 
-  // Now check if this FINAL rectangle overlaps with the user-defined free area.
-  TempRect := ImageItem.TargetRect;
-  if not IsRectEmpty(FKeepAreaFreeRect) and IntersectRect(TempRect, ImageItem.TargetRect, FKeepAreaFreeRect) then
+  // === PIXEL-EXACT CHECK FOR KeepAreaFreeRect ===
+  if not IsRectEmpty(FKeepAreaFreeRect) then
   begin
-    // It overlaps. Signal failure.
-    Result := False;
-    Exit;
+    if IntersectRect(DummyRect, ImageItem.TargetRect, FKeepAreaFreeRect) then
+    begin
+      Result := False; // Overlap → reject this placement, layout will try next cell
+      Exit;
+    end;
   end;
 
-  // If we get here, the placement is valid.
+  // All good → place it
   ImageItem.StartRect := ImageItem.CurrentRect;
   ImageItem.AnimationProgress := 0;
   ImageItem.Animating := True;
-
   MarkAreaOccupied(Grid, Row, Col, SpanRows, SpanCols);
-  Result := True; // Signal success
+  Result := True;
 end;
 
 
@@ -5028,10 +4997,8 @@ begin
     for i := 0 to FImages.Count - 1 do
     begin
       ImageItem := TImageItem(FImages[i]);
-
       //check if they need to get loaded for lazy
       EnsureBitmapLoaded(ImageItem);
-
       // A new image is "entering" if its animation progress is very low.
       // These get top priority and are added to their own special list.
       if (ImageItem <> FHotItem) and (ImageItem.AnimationProgress < 0.99)
@@ -5040,7 +5007,6 @@ begin
       begin
         EnteringItems.Add(ImageItem);
       end
-
       // Other animating items (like hot-zoomed ones) go into the regular list.
       // We exclude items already in the EnteringItems list AND the selected image.
       else if (ImageItem <> FSelectedImage) and ((ImageItem.ZoomProgress > 0)
@@ -5050,7 +5016,6 @@ begin
         AnimatingItems.Add(ImageItem);
       end;
     end;
-
     // 3. Draw completely static items
     for i := 0 to FImages.Count - 1 do
     begin
@@ -5060,7 +5025,6 @@ begin
         Continue;
       DrawNormalItem(ImageItem);
     end;
-
     // 4. Draw all other animating items (sorted by zoom)
     if AnimatingItems.Count > 0 then
     begin
@@ -5074,7 +5038,6 @@ begin
           DrawNormalItem(TImageItem(AnimatingItems[i]));
       end;
     end;
-
     // 5. Current hovered item on top (unless it's selected or entering)
     if (FHotItem <> nil) and (FHotItem <> FSelectedImage) and (EnteringItems.IndexOf(FHotItem) = -1) then
     begin
@@ -5084,7 +5047,6 @@ begin
       else
         DrawNormalItem(FHotItem);
     end;
-
     // 6. Selected item (always on top of non-entering items)
     if FSelectedImage <> nil then
     begin
@@ -5097,7 +5059,6 @@ begin
         DrawNormalItem(FSelectedImage);
       end;
     end;
-
     // 7. Draw entering items on the very top
     for i := 0 to EnteringItems.Count - 1 do
     begin
@@ -5161,19 +5122,27 @@ var
   ImageItem: TImageItem;
   LoadedItemsMap: TStringList; // Maps filename to TImageItem for fast lookup
   NewItems: TList; // Temporary list to hold items added in this call
+  OldItems: TList;
   HasLoadedPositions: Boolean;
   FoundPosition: Boolean;
   j: Integer;
   SavedRect: TRect;
 begin
-  if not visible then
+
+  if (not visible) or (FAllFiles.Count = -1) then
     Exit;
   if FClearing or FPageChangeInProgress then
     Exit;
 
   FPageChangeInProgress := True;
   NewItems := TList.Create; // Create the temporary list for new items
+  OldItems := TList.Create;
   try
+
+    Clear(true, false, Rect(0, 0, 0, 0), Rect(0, 0, 0, 0), iesFromBottom, false);
+    OldItems.Assign(FImages);
+    FImages.Clear;
+
     // Wait for any ongoing operations before we start modifying the list
     WaitForAllLoads;
     WaitForAllAnimations;
@@ -5206,9 +5175,6 @@ begin
       begin
         FileName := FAllFiles[i];
         ItemIndex := LoadedItemsMap.IndexOf(FileName);
-
-        sleep(10);
-        CheckSynchronize(10);
 
         if ItemIndex <> -1 then
         begin
@@ -5334,6 +5300,9 @@ begin
     StartAnimationThread;
 
   finally
+    for i := 0 to OldItems.Count - 1 do
+      TObject(OldItems[i]).Free;
+    OldItems.Free;
     NewItems.Free; // Free the temporary list
     FPageChangeInProgress := False;
   end;
