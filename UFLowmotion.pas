@@ -1,7 +1,7 @@
 
 {------------------------------------------------------------------------------}
 {                                                                              }
-{ Flowmotion v0.991                                                            }
+{ Flowmotion v0.992                                                            }
 { by Lara Miriam Tamy Reschke                                                  }
 {                                                                              }
 { larate@gmx.net                                                               }
@@ -10,6 +10,11 @@
 {------------------------------------------------------------------------------}
 {
  ----Latest Changes
+   v 0.992
+    - new Paging property AutoScrollPageForNewAdded
+    - Paging now everywhere implemented
+    - Loadmodes finished: Lazy, LoadAll, LazyAndFree
+    - added new events: TImageLoadFailedEvent, FOnImageMouseLeave, FOnImageMouseEnter
    v 0.991
     - more improvements for Paging, basically working now
   v 0.990
@@ -245,6 +250,10 @@ type
 
   TOnCaptionClick = procedure(Sender: TObject; ImageItem: TImageItem; Index: Integer) of object;
 
+  TImageLoadFailedEvent = procedure(Sender: TObject; const FileName: string; const ErrorMsg: string) of object;
+
+  TImageHoverEvent = procedure(Sender: TObject; ImageItem: TImageItem; Index: Integer) of object;
+
   TBooleanGrid = array of array of Boolean;
 
   // Defines a rectangular activation zone for the selected image
@@ -392,6 +401,7 @@ type
     FCurrentPage: Integer; // 0-based page index
     FPageChangeInProgress: Boolean;
     FLoadMode: TFlowmotionLoadMode;
+    FAutoScrollPageForNewAdded: Boolean;
 
     // State
     FActive: Boolean;
@@ -404,11 +414,15 @@ type
     FOnAllAnimationsFinished: TOnAllAnimationsFinished;
     FOnSelectedImageDblClick: TOnSelectedImageDblClick;
     FOnSelectedImageEnterZone: TSelectedImageEnterZoneEvent;
+    FOnImageLoadFailed: TImageLoadFailedEvent;
+    FOnImageMouseEnter: TImageHoverEvent;
+    FOnImageMouseLeave: TImageHoverEvent;
 
     // Internal methods - Animation
     procedure WMUser1(var Message: TMessage); message WM_USER + 1;
     procedure WMUser2(var Message: TMessage);
       //yea it says never used, but it is, here: PostMessage(Handle, WM_USER + 2, 0, 0);
+
     procedure StopAnimationThread;
     procedure StartAnimationThread;
     procedure ThreadSafeFireAllAnimationsFinished;
@@ -484,6 +498,7 @@ type
     procedure SetSelectedCaptionColor(Value: TColor);
     procedure SetSelectedCaptionBackground(Value: TColor);
     procedure SetKeepAreaFreeRect(const Value: TRect);
+    procedure SetAutoScrollPageForNewAdded(Value: Boolean);
   protected
     procedure Paint; override;
     procedure Resize; override;
@@ -603,6 +618,10 @@ type
     property SelectedCaptionColor: TColor read FSelectedCaptionColor write SetSelectedCaptionColor default clYellow;
     property SelectedCaptionBackground: TColor read FSelectedCaptionBackground write SetSelectedCaptionBackground default clMaroon;
     property KeepAreaFreeRect: TRect read FKeepAreaFreeRect write SetKeepAreaFreeRect;
+    property AutoScrollPageForNewAdded: Boolean read FAutoScrollPageForNewAdded write SetAutoScrollPageForNewAdded default False;
+    property OnImageLoadFailed: TImageLoadFailedEvent read FOnImageLoadFailed write FOnImageLoadFailed;
+    property OnImageMouseEnter: TImageHoverEvent read FOnImageMouseEnter write FOnImageMouseEnter;
+    property OnImageMouseLeave: TImageHoverEvent read FOnImageMouseLeave write FOnImageMouseLeave;
 
     // Inherited properties
     property Align;
@@ -830,6 +849,8 @@ end;
 procedure TImageLoadThread.SyncAddImage;
 var
   NewItem: TImageItem;
+  AbsIndex: Integer;
+  PageStart, PageEnd: Integer;
 begin
   try
     if Assigned(FOwner) and (FOwner is TFlowmotion) then
@@ -838,27 +859,40 @@ begin
       begin
         with TFlowmotion(FOwner) do
         begin
-          // Create the image item directly
-          NewItem := TImageItem.Create;
-          NewItem.Bitmap.Assign(FBitmap);
-          NewItem.Caption := FCaption;
-          NewItem.Path := FPath;
-          NewItem.Hint := FHint;
-          NewItem.FileName := FFileName;
-          NewItem.Direction := GetEntryDirection;
-          NewItem.Visible := False;
-          FImages.Add(NewItem);
+          // --- CRITICAL PAGING CHECK ---
+          // Calculate where this image belongs
+          AbsIndex := FAllFiles.IndexOf(FFileName); // Find absolute index by filename
 
-          CheckSynchronize(10);
-          if Visible then
+          // If we can't find it, or paging is in progress, or clearing, ABORT
+          if (AbsIndex = -1) or FPageChangeInProgress or FClearing then
+            Exit;
+
+          PageStart := GetPageStartIndex;
+          PageEnd := GetPageEndIndex;
+
+          // Only add to FImages if it actually belongs to the CURRENT page
+          if (AbsIndex >= PageStart) and (AbsIndex <= PageEnd) then
           begin
-            // Calculate the layout for all images
-            CalculateLayout;
+            NewItem := TImageItem.Create;
+            NewItem.Bitmap.Assign(FBitmap);
+            NewItem.Caption := FCaption;
+            NewItem.Path := FPath;
+            NewItem.Hint := FHint;
+            NewItem.FileName := FFileName;
+            NewItem.Direction := GetEntryDirection;
+            NewItem.Visible := False;
+            FImages.Add(NewItem);
 
-            // Set up animation for the new image
-            AnimateImage(NewItem, NewItem.Direction, false, Rect(0, 0, 0, 0));
-            NewItem.Visible := True;
+            CheckSynchronize(10);
+            if Visible then
+            begin
+              CalculateLayout;
+              AnimateImage(NewItem, NewItem.Direction, false, Rect(0, 0, 0, 0));
+              NewItem.Visible := True;
+            end;
           end;
+          // Else: The image loaded, but we are no longer on that page.
+          // We discard the loaded bitmap (Thread destroys FBitmap) and rely on Master List.
         end;
       end;
       TFlowmotion(FOwner).DoImageLoad(FFileName, FSuccess);
@@ -886,6 +920,7 @@ begin
   FSelectedCaptionBackground := clAqua;
   FCaptionAlpha := 180;
   FShowCaptions := True;
+  FAutoScrollPageForNewAdded := False;
   FCaptionOnHoverOnly := True;
   FCaptionOffsetY := 8;
   FImages := TList.Create;
@@ -1167,6 +1202,15 @@ begin
   end;
 end;
 
+{ Sets autoscroll to last page on new pic added }
+procedure TFlowmotion.SetAutoScrollPageForNewAdded(Value: Boolean);
+begin
+  if FAutoScrollPageForNewAdded <> Value then
+  begin
+    FAutoScrollPageForNewAdded := Value;
+  end;
+end;
+
 { Enables or disables animations }
 procedure TFlowmotion.SetActive(Value: Boolean);
 begin
@@ -1402,9 +1446,11 @@ begin
     end;
   except
     on E: Exception do
-      // Re-raise with more context or handle silently if preferred
-    //  raise Exception.CreateFmt('Failed to load image "%s". Error: %s', [AFileName, E.Message]);
-
+    begin
+      if Assigned(FOnImageLoadFailed) then
+        FOnImageLoadFailed(Self, AFileName, E.Message);
+      // Optional: Loggen oder Default-Bild laden
+    end;
   end;
 end;
 
@@ -1577,20 +1623,23 @@ begin
     end;
 
     // ----- Alpha (for Fade effects) -----
- {   if ImageItem.Alpha <> ImageItem.TargetAlpha then
+    // We only animate Alpha if TargetAlpha differs from Alpha (indicates a zatFade operation)
+    // zatSlide, zatZoom, zatBounce usually keep Alpha at 255.
+    if ImageItem.TargetAlpha <> ImageItem.Alpha then
     begin
-      TempAlpha := ImageItem.Alpha;
-      if ImageItem.IsSelected then
-        TempAlpha := Min(255, ImageItem.Alpha + FAnimationSpeed)
-      else if ImageItem.Alpha > 0 then
-        TempAlpha := Max(0, ImageItem.Alpha - FAnimationSpeed);
+      // Smoothly interpolate current alpha towards target alpha
+      TempAlpha := ImageItem.Alpha + (ImageItem.TargetAlpha - ImageItem.Alpha) * (FAnimationSpeed / 100);
 
-      if Abs(ImageItem.Alpha - TempAlpha) > 0.5 then
+      // Clamp to valid byte range
+      if TempAlpha > 255 then TempAlpha := 255;
+      if TempAlpha < 0 then TempAlpha := 0;
+
+      if Abs(ImageItem.Alpha - Round(TempAlpha)) > 0.5 then
       begin
         ImageItem.Alpha := Round(TempAlpha);
         NeedRepaint := True;
       end;
-    end;   }
+    end;
 
     // ===================================================================
     // PHASE 2.5: Hot-track zoom + Breathing animation
@@ -2202,21 +2251,44 @@ var
   ExistingRect: TRect;
   i, j: Integer;
   TempRect: TRect;
+  TargetPage: Integer;
+  NewAbsIndex: Integer;
 begin
   WasEmpty := (FAllFiles.Count = 0);
-  // Add to master list if not already present
+
+  // 1. Always add to master lists first
   FAllFiles.Add(FileName);
   FAllCaptions.Add(ACaption);
   FAllPaths.Add(APath);
   FAllHints.Add(AHint);
+
+  // 2. Handle AutoScrollPageForNewAdded
+  NewAbsIndex := FAllFiles.Count - 1;
+  TargetPage := NewAbsIndex div FPageSize;
+
+  if FAutoScrollPageForNewAdded then
+  begin
+    // If we are not on the target page, switch to it
+    if FCurrentPage <> TargetPage then
+    begin
+      ShowPage(TargetPage);
+      Exit; // ShowPage handles the visual creation and layout
+    end;
+  end;
+
+  // 3. Standard Logic for Loading
   if WasEmpty or (FLoadMode = lmLoadAll) then
   begin
     ShowPage(FCurrentPage);
     Exit;
   end;
+
   IsLastPage := (FCurrentPage = GetPageCount - 1);
   IsSpaceOnPage := (FImages.Count < FPageSize);
-  // Only load image if on last page and there's space
+
+  // Only load image if on last page and there's space (or if AutoScroll kept us on this page)
+  // Note: If AutoScroll was false and we added past the page, IsLastPage becomes false or IsSpaceOnPage false,
+  // so we skip the visual loading (Lazy mode).
   if IsLastPage and IsSpaceOnPage then
   begin
     if not FileExists(FileName) then
@@ -2363,20 +2435,30 @@ end;
 procedure TFlowmotion.AddImage(Bitmap: TBitmap);
 var
   ImageItem: TImageItem;
+  DummyName: string;
 begin
   if (Bitmap = nil) or Bitmap.Empty then
     Exit;
+
+  // 1. Create a dummy entry in Master Lists so Paging Count works
+  // We use a special prefix so we know it's memory-only
+  DummyName := 'MemoryBitmap_' + IntToStr(GetTickCount) + '_' + IntToStr(Random(10000));
+  FAllFiles.Add(DummyName);
+  FAllCaptions.Add('');
+  FAllPaths.Add('');
+  FAllHints.Add('');
+
+  // 2. Add to visual list
   ImageItem := TImageItem.Create;
   ImageItem.Bitmap.Assign(Bitmap);
-  ImageItem.Direction := GetEntryDirection; // Set entry direction
+  ImageItem.FileName := DummyName; // Set dummy filename so lists match
+  ImageItem.Direction := GetEntryDirection;
   FImages.Add(ImageItem);
+
   if Visible then
   begin
     CalculateLayout;
-
-    // Set up the entry animation AFTER layout calculation
     AnimateImage(ImageItem, ImageItem.Direction, false, Rect(0, 0, 0, 0));
-
     ImageItem.Visible := True;
   end;
   StartAnimationThread;
@@ -2426,18 +2508,42 @@ var
   LoadThread: TImageLoadThread;
   SystemInfo: TSystemInfo;
   CoreToUse: Integer;
+  NewAbsIndex, TargetPage: Integer;
 begin
+  // 1. Always add to Master Lists
   FAllFiles.Add(FileName);
   FAllCaptions.Add(ACaption);
   FAllPaths.Add(APath);
   FAllHints.Add(AHint);
-  GetSystemInfo(SystemInfo);
-  CoreToUse := FNextLoaderCoreIndex mod SystemInfo.dwNumberOfProcessors;
-  Inc(FNextLoaderCoreIndex);
-  LoadThread := TImageLoadThread.Create(FileName, ACaption, APath, AHint, Self, CoreToUse);
-  LoadThread.Priority := FThreadPriority;
-  FLoadingThreads.Add(LoadThread);
-  Inc(FLoadingCount);
+
+  NewAbsIndex := FAllFiles.Count - 1;
+  TargetPage := NewAbsIndex div FPageSize;
+
+  // 2. Determine if we should load this image NOW
+  if FAutoScrollPageForNewAdded then
+  begin
+    // If auto-scroll is on, we switch to the new page.
+    // ShowPage will handle loading.
+    if FCurrentPage <> TargetPage then
+    begin
+      ShowPage(TargetPage);
+      Exit; // Do not spawn a thread, ShowPage handles it
+    end;
+  end;
+
+  // 3. Check if the new image belongs to the currently visible page
+  // If not, we do NOT start a thread. We rely on lazy loading (ShowPage) later.
+  if (NewAbsIndex >= GetPageStartIndex) and (NewAbsIndex <= GetPageEndIndex) then
+  begin
+    GetSystemInfo(SystemInfo);
+    CoreToUse := FNextLoaderCoreIndex mod SystemInfo.dwNumberOfProcessors;
+    Inc(FNextLoaderCoreIndex);
+    LoadThread := TImageLoadThread.Create(FileName, ACaption, APath, AHint, Self, CoreToUse);
+    LoadThread.Priority := FThreadPriority;
+    FLoadingThreads.Add(LoadThread);
+    Inc(FLoadingCount);
+  end;
+  // Else: It's off-page. We added it to Master Lists, so paging works, but we don't load it yet.
 end;
 
 { Adds multiple images synchronously (waits for all to load) }
@@ -2468,9 +2574,11 @@ var
   Thread: TImageLoadThread;
   SystemInfo: TSystemInfo;
   CoreToUse: Integer;
+  NewAbsIndex, TargetPage: Integer;
 begin
   FLoadingCount := 0;
   GetSystemInfo(SystemInfo);
+
   // Add all files to master list
   for i := 0 to FileNames.Count - 1 do
   begin
@@ -2478,15 +2586,35 @@ begin
     FAllCaptions.Add(Captions[i]);
     FAllPaths.Add(Paths[i]);
     FAllHints.Add(Hints[i]);
-  end;
-  // Start loading threads
-  for i := 0 to FileNames.Count - 1 do
-  begin
-    CoreToUse := FNextLoaderCoreIndex mod SystemInfo.dwNumberOfProcessors;
-    Inc(FNextLoaderCoreIndex);
-    Thread := TImageLoadThread.Create(FileNames[i], Captions[i], Paths[i], Hints[i], Self, CoreToUse);
-    FLoadingThreads.Add(Thread);
-    Inc(FLoadingCount);
+
+    // Calculate absolute index of the item we just added
+    NewAbsIndex := FAllFiles.Count - 1;
+    TargetPage := NewAbsIndex div FPageSize;
+
+    // 1. Handle AutoScroll: If enabled and we are not on the target page, switch.
+    // Note: ShowPage is synchronous, so we block here briefly to ensure the new page is loaded.
+    if FAutoScrollPageForNewAdded then
+    begin
+      if FCurrentPage <> TargetPage then
+      begin
+        ShowPage(TargetPage);
+        // ShowPage handles the visual creation/loading for the new page.
+        // We do NOT need a thread for this item now.
+        Continue;
+      end;
+    end;
+
+    // 2. Check if the new image belongs to the currently visible page
+    // If yes -> Spawn Thread. If no -> Skip (Lazy load later).
+    if (NewAbsIndex >= GetPageStartIndex) and (NewAbsIndex <= GetPageEndIndex) then
+    begin
+      CoreToUse := FNextLoaderCoreIndex mod SystemInfo.dwNumberOfProcessors;
+      Inc(FNextLoaderCoreIndex);
+      Thread := TImageLoadThread.Create(FileNames[i], Captions[i], Paths[i], Hints[i], Self, CoreToUse);
+      FLoadingThreads.Add(Thread);
+      Inc(FLoadingCount);
+    end;
+    // Else: It's off-page. We rely on lazy loading (ShowPage) later.
   end;
 end;
 
@@ -2853,21 +2981,27 @@ procedure TFlowmotion.RemoveImage(Index: Integer; Animated: Boolean; FallingTarg
 var
   StartTick: DWORD;
   CurCX, CurCY, TargetCX, TargetCY, MoveX, MoveY: Integer;
-  PageStart, PageEnd: Integer;
+  AbsIndex: Integer;
   ImageItem: TImageItem;
   R: TRect;
   AllOut: Boolean;
   Speed: Integer;
 begin
   try
-    PageStart := GetPageStartIndex;
-    PageEnd := GetPageEndIndex;
-    if (Index < PageStart) or (Index > PageEnd) then
+    // Index is Relative to FImages (0..Count-1)
+    if (Index < 0) or (Index >= FImages.Count) then
       Exit;
+
+    // Calculate Absolute Index for Master Lists
+    AbsIndex := GetPageStartIndex + Index;
+    if (AbsIndex < 0) or (AbsIndex >= FAllFiles.Count) then
+      Exit;
+
+    ImageItem := TImageItem(FImages[Index]);
 
     if not Animated then
     begin
-      if TImageItem(FImages[Index]) = FSelectedImage then
+      if ImageItem = FSelectedImage then
       begin
         FSelectedImage := nil;
         FCurrentSelectedIndex := -1;
@@ -2875,8 +3009,15 @@ begin
       else if Index < FCurrentSelectedIndex then
         Dec(FCurrentSelectedIndex);
 
-      TImageItem(FImages[Index]).Free;
+      ImageItem.Free;
       FImages.Delete(Index);
+
+      // Remove from Master Lists
+      FAllFiles.Delete(AbsIndex);
+      FAllCaptions.Delete(AbsIndex);
+      FAllPaths.Delete(AbsIndex);
+      FAllHints.Delete(AbsIndex);
+
       if Visible then
       begin
         CalculateLayout;
@@ -2887,7 +3028,6 @@ begin
 
     FInFallAnimation := True;
     StopAnimationThread;
-    ImageItem := TImageItem(FImages[Index]);
     ImageItem.Animating := True;
 
     repeat
@@ -3019,7 +3159,7 @@ begin
 
     until AllOut;
 
-    if TImageItem(FImages[Index]) = FSelectedImage then
+    if ImageItem = FSelectedImage then
     begin
       FSelectedImage := nil;
       FCurrentSelectedIndex := -1;
@@ -3029,6 +3169,13 @@ begin
 
     ImageItem.Free;
     FImages.Delete(Index);
+
+    // Remove from Master Lists
+    FAllFiles.Delete(AbsIndex);
+    FAllCaptions.Delete(AbsIndex);
+    FAllPaths.Delete(AbsIndex);
+    FAllHints.Delete(AbsIndex);
+
     FInFallAnimation := False;
     Invalidate;
 
@@ -3044,20 +3191,41 @@ var
   LoadThread: TImageLoadThread;
   SystemInfo: TSystemInfo;
   CoreToUse: Integer;
+  NewAbsIndex, TargetPage: Integer;
 begin
+  // 1. Always add to Master Lists
   FAllFiles.Add(FileName);
   FAllCaptions.Add(Caption);
   FAllPaths.Add(Path);
+  FAllHints.Add(Hint); // Fixed: Was missing in original code
 
   GetSystemInfo(SystemInfo);
-  // Use Round-Robin to distribute across all available cores
-  CoreToUse := FNextLoaderCoreIndex mod SystemInfo.dwNumberOfProcessors;
-  Inc(FNextLoaderCoreIndex);
 
-  LoadThread := TImageLoadThread.Create(FileName, Caption, Path, Hint, Self, CoreToUse);
-  LoadThread.Priority := FThreadPriority;
-  FLoadingThreads.Add(LoadThread);
-  Inc(FLoadingCount);
+  // 2. Calculate where this image belongs
+  NewAbsIndex := FAllFiles.Count - 1;
+  TargetPage := NewAbsIndex div FPageSize;
+
+  // 3. Handle AutoScroll
+  if FAutoScrollPageForNewAdded then
+  begin
+    if FCurrentPage <> TargetPage then
+    begin
+      ShowPage(TargetPage);
+      Exit; // ShowPage handles it, do not spawn thread
+    end;
+  end;
+
+  // 4. Check if the new image belongs to the currently visible page
+  // If yes -> Spawn Thread. If no -> Skip (Lazy load later).
+  if (NewAbsIndex >= GetPageStartIndex) and (NewAbsIndex <= GetPageEndIndex) then
+  begin
+    CoreToUse := FNextLoaderCoreIndex mod SystemInfo.dwNumberOfProcessors;
+    Inc(FNextLoaderCoreIndex);
+    LoadThread := TImageLoadThread.Create(FileName, Caption, Path, Hint, Self, CoreToUse);
+    LoadThread.Priority := FThreadPriority;
+    FLoadingThreads.Add(LoadThread);
+    Inc(FLoadingCount);
+  end;
 end;
 
 { Replaces the bitmap of an existing image }
@@ -3629,10 +3797,6 @@ function TFlowmotion.IsAreaFree(const Grid: TBooleanGrid; Row, Col, SpanRows, Sp
 var
   r, c: Integer;
   CenterRow, CenterCol, ProtectedSize: Integer;
-  X, Y, CellW, CellH: Integer;
-  PotentialRect, Dummy: TRect;
-  ImageSize: TSize;
-  BaseCellWidth, BaseCellHeight: Integer;
 begin
   // Bounds check
   if (Row < 0) or (Col < 0) or (Row + SpanRows > Length(Grid)) or (Col + SpanCols > Length(Grid[0])) then
@@ -3640,7 +3804,6 @@ begin
     Result := False;
     Exit;
   end;
-
   // Normal grid occupation check
   for r := Row to Row + SpanRows - 1 do
     for c := Col to Col + SpanCols - 1 do
@@ -3649,7 +3812,6 @@ begin
         Result := False;
         Exit;
       end;
-
   // Keep center area free for zoomed image
   if FKeepSpaceforZoomed then
     if (FSelectedImage <> nil) then
@@ -3663,7 +3825,6 @@ begin
         Exit;
       end;
     end;
-
   Result := True;
 end;
 
@@ -3691,23 +3852,18 @@ begin
   Y := FSpacing + Row * (BaseCellHeight + FSpacing);
   CellWidth := SpanCols * BaseCellWidth + (SpanCols - 1) * FSpacing;
   CellHeight := SpanRows * BaseCellHeight + (SpanRows - 1) * FSpacing;
-
   // Optimal image size preserving aspect ratio
   ImageSize := GetOptimalSize(ImageItem.Bitmap.Width, ImageItem.Bitmap.Height, CellWidth, CellHeight);
-
   // Center image in cell
   X := X + (CellWidth - ImageSize.cx) div 2;
   Y := Y + (CellHeight - ImageSize.cy) div 2;
-
   // Bounds clamping
   if X < 0 then X := 0;
   if Y < 0 then Y := 0;
   if X + ImageSize.cx > Width then X := Width - ImageSize.cx;
   if Y + ImageSize.cy > Height then Y := Height - ImageSize.cy;
-
   // Final target rect
   ImageItem.TargetRect := Rect(X, Y, X + ImageSize.cx, Y + ImageSize.cy);
-
   // === PIXEL-EXACT CHECK FOR KeepAreaFreeRect ===
   if not IsRectEmpty(FKeepAreaFreeRect) then
   begin
@@ -3717,7 +3873,6 @@ begin
       Exit;
     end;
   end;
-
   // All good → place it
   ImageItem.StartRect := ImageItem.CurrentRect;
   ImageItem.AnimationProgress := 0;
@@ -4144,6 +4299,13 @@ begin
   // Set FHotItem for hover (even when HotTrackZoom is off)
   if (NewHot <> FHotItem) and (NewHot <> nil) then
   begin
+    //Mouse enter/leave events
+    if (FHotItem <> nil) and Assigned(FOnImageMouseLeave) then
+      FOnImageMouseLeave(Self, FHotItem, FImages.IndexOf(FHotItem));
+    FHotItem := NewHot;
+    if (FHotItem <> nil) and Assigned(FOnImageMouseEnter) then
+      FOnImageMouseEnter(Self, FHotItem, FImages.IndexOf(FHotItem));
+
     //Hints for each imageitem
     if ShowHint and (NewHot.Hint <> '') then
     begin
@@ -4531,7 +4693,6 @@ procedure TFlowmotion.Paint;
 var
   i: Integer;
   ImageItem: TImageItem;
-  DrawRect: TRect;
   AnimatingItems: TList;
   EnteringItems: TList;
   // --------------------------------------------------------------
@@ -4909,6 +5070,7 @@ end; }
   var
     CenterX, CenterY, BaseW, BaseH, NewW, NewH: Integer;
     ZoomFactor: Double;
+    BlendFunction: TBlendFunction;
     R: TRect;
     OffsetX, OffsetY: Integer;
     BorderWidth: Integer;
@@ -4920,6 +5082,7 @@ end; }
       DrawNormalItem(Item);
       Exit;
     end;
+
   // ===================================================================
   // Base size and center
     if (Item.CurrentRect.Right > Item.CurrentRect.Left) and (Item.CurrentRect.Bottom > Item.CurrentRect.Top) then
@@ -4940,6 +5103,7 @@ end; }
     NewW := Round(BaseW * ZoomFactor);
     NewH := Round(BaseH * ZoomFactor);
     R := Rect(CenterX - NewW div 2, CenterY - NewH div 2, CenterX + NewW div 2, CenterY + NewH div 2);
+
   // Keep inside control (glow or hottrack margin)
     if Item.IsSelected then BorderWidth := FGlowWidth
      else BorderWidth := FHotTrackWidth;
@@ -4954,8 +5118,31 @@ end; }
     if R.Bottom > Height then
       OffsetY := Height - R.Bottom - BorderWidth;
     OffsetRect(R, OffsetX, OffsetY);
-    Canvas.StretchDraw(R, Item.Bitmap);
-  // Glow / hot border
+
+    // --- DRAWING WITH ALPHA SUPPORT ---
+    if Item.Alpha < 255 then
+    begin
+      // 1. Scale image to temp bitmap
+      FTempBitmap.Width := R.Right - R.Left;
+      FTempBitmap.Height := R.Bottom - R.Top;
+      FTempBitmap.Canvas.StretchDraw(Rect(0, 0, FTempBitmap.Width, FTempBitmap.Height), Item.Bitmap);
+
+      // 2. AlphaBlend to canvas
+      BlendFunction.BlendOp := AC_SRC_OVER;
+      BlendFunction.BlendFlags := 0;
+      BlendFunction.SourceConstantAlpha := Item.Alpha;
+      BlendFunction.AlphaFormat := 0;
+
+      AlphaBlend(Canvas.Handle, R.Left, R.Top, FTempBitmap.Width, FTempBitmap.Height,
+                 FTempBitmap.Canvas.Handle, 0, 0, FTempBitmap.Width, FTempBitmap.Height, BlendFunction);
+    end
+    else
+    begin
+      // Opaque draw (Fast path)
+      Canvas.StretchDraw(R, Item.Bitmap);
+    end;
+
+    // Glow / hot border
     if IsCurrentHot or Item.IsSelected then
     begin
       Canvas.Pen.Width := ifThen(Item.IsSelected, FGlowWidth, FHotTrackWidth);
@@ -4963,6 +5150,8 @@ end; }
       Canvas.Brush.Style := bsClear;
       Canvas.Rectangle(R.Left, R.Top, R.Right, R.Bottom);
     end;
+
+    //--
     DrawCaption(Item, R);
   end;
 
@@ -4972,6 +5161,7 @@ begin
   inPaintCycle := True;
   Canvas.Lock;
   try
+
     // 1. Background
     if not FBackgroundpicture.Empty then
     begin
@@ -4997,8 +5187,10 @@ begin
     for i := 0 to FImages.Count - 1 do
     begin
       ImageItem := TImageItem(FImages[i]);
+
       //check if they need to get loaded for lazy
       EnsureBitmapLoaded(ImageItem);
+
       // A new image is "entering" if its animation progress is very low.
       // These get top priority and are added to their own special list.
       if (ImageItem <> FHotItem) and (ImageItem.AnimationProgress < 0.99)
@@ -5007,6 +5199,7 @@ begin
       begin
         EnteringItems.Add(ImageItem);
       end
+
       // Other animating items (like hot-zoomed ones) go into the regular list.
       // We exclude items already in the EnteringItems list AND the selected image.
       else if (ImageItem <> FSelectedImage) and ((ImageItem.ZoomProgress > 0)
@@ -5016,6 +5209,7 @@ begin
         AnimatingItems.Add(ImageItem);
       end;
     end;
+
     // 3. Draw completely static items
     for i := 0 to FImages.Count - 1 do
     begin
@@ -5025,6 +5219,7 @@ begin
         Continue;
       DrawNormalItem(ImageItem);
     end;
+
     // 4. Draw all other animating items (sorted by zoom)
     if AnimatingItems.Count > 0 then
     begin
@@ -5038,6 +5233,7 @@ begin
           DrawNormalItem(TImageItem(AnimatingItems[i]));
       end;
     end;
+
     // 5. Current hovered item on top (unless it's selected or entering)
     if (FHotItem <> nil) and (FHotItem <> FSelectedImage) and (EnteringItems.IndexOf(FHotItem) = -1) then
     begin
@@ -5047,6 +5243,7 @@ begin
       else
         DrawNormalItem(FHotItem);
     end;
+
     // 6. Selected item (always on top of non-entering items)
     if FSelectedImage <> nil then
     begin
@@ -5059,6 +5256,7 @@ begin
         DrawNormalItem(FSelectedImage);
       end;
     end;
+
     // 7. Draw entering items on the very top
     for i := 0 to EnteringItems.Count - 1 do
     begin
@@ -5221,6 +5419,7 @@ begin
     end;
 
     FCurrentPage := Page;
+    FoundPosition := False;
 
     // Check if we have loaded positions
     HasLoadedPositions := (Length(FLoadedPositions) > 0);
@@ -5228,6 +5427,7 @@ begin
     if HasLoadedPositions then
     begin
       // Use loaded positions for new items
+      if ImageItem <> nil then
       for j := 0 to Length(FLoadedPositions) - 1 do
       begin
         if FLoadedPositions[j].Path = ImageItem.Path then
