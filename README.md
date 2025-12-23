@@ -72,8 +72,14 @@ DeselectZoomedImage, those i am using in my player already and no problems at al
 other functions may work, not work, or it explodes right into ur face :D nah...  
 I am working on getting more of it done :)  
        
-### Latest changes:     
-     
+### Latest changes:      
+   
+**v 0.992**    
+- new Paging property AutoScrollPageForNewAdded  
+- Paging now everywhere implemented  
+- Loadmodes finished: Lazy, LoadAll, LazyAndFree  
+- added new events: TImageLoadFailedEvent, FOnImageMouseLeave, FOnImageMouseEnter  
+    
 **v 0.991**     
 - more improvements for Paging, basically working now when u load list of pics with Addimages   
       
