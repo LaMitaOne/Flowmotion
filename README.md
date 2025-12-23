@@ -60,7 +60,6 @@ Not finished completely yet, but already in use in **MEDIA Revolution X** (freew
 https://lamita.jimdosite.com/
    
 At first I just wanted a little picture gallery for my player… but it grew a bit :D  
-Not bad for my first component ever think :D  
 So I thought maybe some of you will like it too :)  
     
 Some things are not perfect yet, some not fully implemented,   
