@@ -1625,7 +1625,8 @@ begin
     // ----- Alpha (for Fade effects) -----
     // We only animate Alpha if TargetAlpha differs from Alpha (indicates a zatFade operation)
     // zatSlide, zatZoom, zatBounce usually keep Alpha at 255.
-    if ImageItem.TargetAlpha <> ImageItem.Alpha then
+    ImageItem.Alpha := 255;
+  {  if ImageItem.TargetAlpha <> ImageItem.Alpha then
     begin
       // Smoothly interpolate current alpha towards target alpha
       TempAlpha := ImageItem.Alpha + (ImageItem.TargetAlpha - ImageItem.Alpha) * (FAnimationSpeed / 100);
@@ -1639,7 +1640,7 @@ begin
         ImageItem.Alpha := Round(TempAlpha);
         NeedRepaint := True;
       end;
-    end;
+    end;          }
 
     // ===================================================================
     // PHASE 2.5: Hot-track zoom + Breathing animation
@@ -2250,7 +2251,6 @@ var
   FoundPosition: Boolean;
   ExistingRect: TRect;
   i, j: Integer;
-  TempRect: TRect;
   TargetPage: Integer;
   NewAbsIndex: Integer;
 begin
@@ -3869,11 +3869,11 @@ begin
   begin
     if IntersectRect(DummyRect, ImageItem.TargetRect, FKeepAreaFreeRect) then
     begin
-      Result := False; // Overlap → reject this placement, layout will try next cell
+      Result := False; // Overlap ? reject this placement, layout will try next cell
       Exit;
     end;
   end;
-  // All good → place it
+  // All good ? place it
   ImageItem.StartRect := ImageItem.CurrentRect;
   ImageItem.AnimationProgress := 0;
   ImageItem.Animating := True;
@@ -5807,3 +5807,4 @@ begin
 end;
 
 end.
+
