@@ -200,7 +200,7 @@ object FSampleform: TFSampleform
       Top = 743
       Width = 75
       Height = 50
-      Caption = 'Drag selected on'
+      Caption = 'Drag selected off'
       TabOrder = 14
       WordWrap = True
       OnClick = Button16Click
@@ -673,6 +673,8 @@ object FSampleform: TFSampleform
     Caption = 'Keep AreaFreeRect (not right working atm)'
     TabOrder = 5
     Visible = False
+    ExplicitLeft = 892
+    ExplicitTop = 750
   end
   object OpenDialog1: TOpenDialog
     Left = 144
