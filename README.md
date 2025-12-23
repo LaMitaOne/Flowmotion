@@ -3,13 +3,6 @@
 Delphi Gallery Component – Lightweight Animated Coverflow / Masonry Viewer (Alpha)  
 
        
-                    
- <img width="2560" height="1440" alt="Unbenannt" src="https://github.com/user-attachments/assets/a1930022-e8a9-4bb5-9eb9-ba1dbd2108e0" />     
-That was around 830 pictures...2560x1440 screen resolution...no problem... 7% cpu usage(ryzen 7 5800x)...       
-Not bad for "old delphi" and only canvas and a thread :D       
-
-   
-  
       
 If you want to tip me a coffee.. :)   
 
@@ -55,6 +48,14 @@ On my Asus Zenbook ux305ca (dual-core toy):
 - ImageEn: 1/4 screen, 30 pics → 50 % CPU and almost unusable (even on big pc ^^)  
 - Flowmotion: Fullscreen, 80 pics → 25 % CPU usage(on big pc around 3-5%), even at > 1000 pics still perfectly smooth :)  
    (since threading of animation its smooth like its running in some 3d engine)   
+
+                    
+ <img width="2560" height="1440" alt="Unbenannt" src="https://github.com/user-attachments/assets/a1930022-e8a9-4bb5-9eb9-ba1dbd2108e0" />     
+That was around 830 pictures...2560x1440 screen resolution...no problem... 7% cpu usage(ryzen 7 5800x)...       
+Not bad for "old delphi" and only canvas and a thread :D       
+
+   
+  
    
 Not finished completely yet, but already in use in **MEDIA Revolution X** (freeware):  
 https://lamita.jimdosite.com/
@@ -65,13 +66,9 @@ So I thought maybe some of you will like it too :)
 Some things are not perfect yet, some not fully implemented,   
 but it’s already basically stable and looks really nice in my player!   
   
-!!! --- NOT FINISHED - Partly stable, parts not working so far.  
-Stable atm: Addimages, SelectNextImage, SelectPreviousImage, ActivationZones, SelectedMovable, Animations, hotzoom, breathing at all stable,   
-Clear animated to direction or target, selected can go to other target, setting Background color/pic, Glow and all that,   
-DeselectZoomedImage, those i am using in my player already and no problems at all,   
-other functions may work, not work, or it explodes right into ur face :D nah...  
-I am working on getting more of it done :)  
-       
+!!! --- NOT FINISHED - Alpha fade missing still, but else most should work now...getting beta slowly, testing to find more possible problems  
+
+          
 ### Latest changes:      
    
 **v 0.992**    
