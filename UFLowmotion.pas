@@ -862,14 +862,11 @@ begin
           // --- CRITICAL PAGING CHECK ---
           // Calculate where this image belongs
           AbsIndex := FAllFiles.IndexOf(FFileName); // Find absolute index by filename
-
           // If we can't find it, or paging is in progress, or clearing, ABORT
           if (AbsIndex = -1) or FPageChangeInProgress or FClearing then
             Exit;
-
           PageStart := GetPageStartIndex;
           PageEnd := GetPageEndIndex;
-
           // Only add to FImages if it actually belongs to the CURRENT page
           if (AbsIndex >= PageStart) and (AbsIndex <= PageEnd) then
           begin
@@ -882,7 +879,6 @@ begin
             NewItem.Direction := GetEntryDirection;
             NewItem.Visible := False;
             FImages.Add(NewItem);
-
             CheckSynchronize(10);
             if Visible then
             begin
@@ -1562,11 +1558,11 @@ begin
 
         // ----- Alpha (currently always 255, but kept for consistency) -----
         TempAlpha := 255;
-        if Abs(ImageItem.Alpha - TempAlpha) > 0.5 then
+       { if Abs(ImageItem.Alpha - TempAlpha) > 0.5 then
         begin
           ImageItem.Alpha := Round(TempAlpha);
           NeedRepaint := True;
-        end;
+        end;        }
 
         // ----- Main position/scale animation progress -----
         if ImageItem.AnimationProgress < 1.0 then
@@ -1630,11 +1626,9 @@ begin
     begin
       // Smoothly interpolate current alpha towards target alpha
       TempAlpha := ImageItem.Alpha + (ImageItem.TargetAlpha - ImageItem.Alpha) * (FAnimationSpeed / 100);
-
       // Clamp to valid byte range
       if TempAlpha > 255 then TempAlpha := 255;
       if TempAlpha < 0 then TempAlpha := 0;
-
       if Abs(ImageItem.Alpha - Round(TempAlpha)) > 0.5 then
       begin
         ImageItem.Alpha := Round(TempAlpha);
@@ -2255,17 +2249,14 @@ var
   NewAbsIndex: Integer;
 begin
   WasEmpty := (FAllFiles.Count = 0);
-
   // 1. Always add to master lists first
   FAllFiles.Add(FileName);
   FAllCaptions.Add(ACaption);
   FAllPaths.Add(APath);
   FAllHints.Add(AHint);
-
   // 2. Handle AutoScrollPageForNewAdded
   NewAbsIndex := FAllFiles.Count - 1;
   TargetPage := NewAbsIndex div FPageSize;
-
   if FAutoScrollPageForNewAdded then
   begin
     // If we are not on the target page, switch to it
@@ -2275,17 +2266,14 @@ begin
       Exit; // ShowPage handles the visual creation and layout
     end;
   end;
-
   // 3. Standard Logic for Loading
   if WasEmpty or (FLoadMode = lmLoadAll) then
   begin
     ShowPage(FCurrentPage);
     Exit;
   end;
-
   IsLastPage := (FCurrentPage = GetPageCount - 1);
   IsSpaceOnPage := (FImages.Count < FPageSize);
-
   // Only load image if on last page and there's space (or if AutoScroll kept us on this page)
   // Note: If AutoScroll was false and we added past the page, IsLastPage becomes false or IsSpaceOnPage false,
   // so we skip the visual loading (Lazy mode).
@@ -2349,7 +2337,6 @@ begin
               NewX := 20 + Random(Width - DefaultWidth - 40);
               NewY := 20 + Random(Height - DefaultHeight - 40);
               NewItem.TargetRect := Rect(NewX, NewY, NewX + DefaultWidth, NewY + DefaultHeight);
-
               // Check for overlap with existing images
               FoundPosition := True;
               for j := 0 to FImages.Count - 2 do
@@ -2361,21 +2348,17 @@ begin
                   Break;
                 end;
               end;
-
               if FoundPosition then
                 Break; // Found a valid position, exit the random attempt loop
             // If we still couldn't find a good position, just place it at a random position
             end;
-
             if not FoundPosition then
             begin
               NewX := 20 + Random(Width - DefaultWidth - 40);
               NewY := 20 + Random(Height - DefaultHeight - 40);
               NewItem.TargetRect := Rect(NewX, NewY, NewX + DefaultWidth, NewY + DefaultHeight);
             end;
-
           end;
-
           // Animation for new pic
           AnimateImage(NewItem, NewItem.Direction, false, Rect(0, 0, 0, 0));
         end
@@ -2439,7 +2422,6 @@ var
 begin
   if (Bitmap = nil) or Bitmap.Empty then
     Exit;
-
   // 1. Create a dummy entry in Master Lists so Paging Count works
   // We use a special prefix so we know it's memory-only
   DummyName := 'MemoryBitmap_' + IntToStr(GetTickCount) + '_' + IntToStr(Random(10000));
@@ -2447,14 +2429,12 @@ begin
   FAllCaptions.Add('');
   FAllPaths.Add('');
   FAllHints.Add('');
-
   // 2. Add to visual list
   ImageItem := TImageItem.Create;
   ImageItem.Bitmap.Assign(Bitmap);
   ImageItem.FileName := DummyName; // Set dummy filename so lists match
   ImageItem.Direction := GetEntryDirection;
   FImages.Add(ImageItem);
-
   if Visible then
   begin
     CalculateLayout;
@@ -2515,10 +2495,8 @@ begin
   FAllCaptions.Add(ACaption);
   FAllPaths.Add(APath);
   FAllHints.Add(AHint);
-
   NewAbsIndex := FAllFiles.Count - 1;
   TargetPage := NewAbsIndex div FPageSize;
-
   // 2. Determine if we should load this image NOW
   if FAutoScrollPageForNewAdded then
   begin
@@ -2530,7 +2508,6 @@ begin
       Exit; // Do not spawn a thread, ShowPage handles it
     end;
   end;
-
   // 3. Check if the new image belongs to the currently visible page
   // If not, we do NOT start a thread. We rely on lazy loading (ShowPage) later.
   if (NewAbsIndex >= GetPageStartIndex) and (NewAbsIndex <= GetPageEndIndex) then
@@ -2578,7 +2555,6 @@ var
 begin
   FLoadingCount := 0;
   GetSystemInfo(SystemInfo);
-
   // Add all files to master list
   for i := 0 to FileNames.Count - 1 do
   begin
@@ -2586,11 +2562,9 @@ begin
     FAllCaptions.Add(Captions[i]);
     FAllPaths.Add(Paths[i]);
     FAllHints.Add(Hints[i]);
-
     // Calculate absolute index of the item we just added
     NewAbsIndex := FAllFiles.Count - 1;
     TargetPage := NewAbsIndex div FPageSize;
-
     // 1. Handle AutoScroll: If enabled and we are not on the target page, switch.
     // Note: ShowPage is synchronous, so we block here briefly to ensure the new page is loaded.
     if FAutoScrollPageForNewAdded then
@@ -2603,7 +2577,6 @@ begin
         Continue;
       end;
     end;
-
     // 2. Check if the new image belongs to the currently visible page
     // If yes -> Spawn Thread. If no -> Skip (Lazy load later).
     if (NewAbsIndex >= GetPageStartIndex) and (NewAbsIndex <= GetPageEndIndex) then
@@ -2991,14 +2964,11 @@ begin
     // Index is Relative to FImages (0..Count-1)
     if (Index < 0) or (Index >= FImages.Count) then
       Exit;
-
     // Calculate Absolute Index for Master Lists
     AbsIndex := GetPageStartIndex + Index;
     if (AbsIndex < 0) or (AbsIndex >= FAllFiles.Count) then
       Exit;
-
     ImageItem := TImageItem(FImages[Index]);
-
     if not Animated then
     begin
       if ImageItem = FSelectedImage then
@@ -3008,16 +2978,13 @@ begin
       end
       else if Index < FCurrentSelectedIndex then
         Dec(FCurrentSelectedIndex);
-
       ImageItem.Free;
       FImages.Delete(Index);
-
       // Remove from Master Lists
       FAllFiles.Delete(AbsIndex);
       FAllCaptions.Delete(AbsIndex);
       FAllPaths.Delete(AbsIndex);
       FAllHints.Delete(AbsIndex);
-
       if Visible then
       begin
         CalculateLayout;
@@ -3025,18 +2992,13 @@ begin
       end;
       Exit;
     end;
-
     FInFallAnimation := True;
     StopAnimationThread;
     ImageItem.Animating := True;
-
     repeat
       AllOut := True;
-
       Speed := Max(1, FAnimationSpeed * 2 - 8);
-
       R := ImageItem.CurrentRect;
-
       // direction like on addimage
       case FallingStyle of
         iesFromTop:
@@ -3055,7 +3017,6 @@ begin
           OffsetRect(R, -Trunc(FAnimationSpeed * Speed), Trunc(FAnimationSpeed * Speed));
         iesFromBottomRight:
           OffsetRect(R, Trunc(FAnimationSpeed * Speed), Trunc(FAnimationSpeed * Speed));
-
         iesRandom:
           case Random(8) of
             0:
@@ -3075,7 +3036,6 @@ begin
             7:
               OffsetRect(R, Trunc(FAnimationSpeed * Speed), Trunc(FAnimationSpeed * Speed));
           end;
-
         iesFromCenter:
           begin
             CurCX := Width div 2;
@@ -3084,7 +3044,6 @@ begin
             MoveY := Trunc((CurCY - (R.Top + R.Bottom) div 2) * 0.18);
             OffsetRect(R, MoveX, MoveY);
           end;
-
         iesFromPoint:
           if not IsRectEmpty(FallingTargetPos) then
           begin
@@ -3105,9 +3064,7 @@ begin
             OffsetRect(R, 0, Trunc(FAnimationSpeed * Speed));
           end;
       end;
-
       ImageItem.CurrentRect := R;
-
       // Hide image when it's outside the window or has reached the target
       if (FallingStyle in [iesFromTop, iesFromBottom, iesFromLeft, iesFromRight, iesFromTopLeft, iesFromTopRight, iesFromBottomLeft, iesFromBottomRight, iesRandom]) then
       begin
@@ -3136,7 +3093,6 @@ begin
           TargetCY := (FallingTargetPos.Top + FallingTargetPos.Bottom) div 2;
           CurCX := (R.Left + R.Right) div 2;
           CurCY := (R.Top + R.Bottom) div 2;
-
           if (Abs(CurCX - TargetCX) < 200) and (Abs(CurCY - TargetCY) < 200) then
             ImageItem.Visible := False
           else
@@ -3148,17 +3104,13 @@ begin
         else
           AllOut := False;
       end;
-
       //to be safe if i calculate something wrong :P
       if (GetTickCount - StartTick) > THREAD_CLEANUP_TIMEOUT then
         AllOut := True;
-
       Invalidate;
       Application.ProcessMessages;
       Sleep(FAnimationSpeed);
-
     until AllOut;
-
     if ImageItem = FSelectedImage then
     begin
       FSelectedImage := nil;
@@ -3166,19 +3118,15 @@ begin
     end
     else if Index < FCurrentSelectedIndex then
       Dec(FCurrentSelectedIndex);
-
     ImageItem.Free;
     FImages.Delete(Index);
-
     // Remove from Master Lists
     FAllFiles.Delete(AbsIndex);
     FAllCaptions.Delete(AbsIndex);
     FAllPaths.Delete(AbsIndex);
     FAllHints.Delete(AbsIndex);
-
     FInFallAnimation := False;
     Invalidate;
-
     if (FImages.Count = 0) and (FCurrentPage > 0) then
       PrevPage;
   except
@@ -3198,13 +3146,10 @@ begin
   FAllCaptions.Add(Caption);
   FAllPaths.Add(Path);
   FAllHints.Add(Hint); // Fixed: Was missing in original code
-
   GetSystemInfo(SystemInfo);
-
   // 2. Calculate where this image belongs
   NewAbsIndex := FAllFiles.Count - 1;
   TargetPage := NewAbsIndex div FPageSize;
-
   // 3. Handle AutoScroll
   if FAutoScrollPageForNewAdded then
   begin
@@ -3214,7 +3159,6 @@ begin
       Exit; // ShowPage handles it, do not spawn thread
     end;
   end;
-
   // 4. Check if the new image belongs to the currently visible page
   // If yes -> Spawn Thread. If no -> Skip (Lazy load later).
   if (NewAbsIndex >= GetPageStartIndex) and (NewAbsIndex <= GetPageEndIndex) then
@@ -4555,13 +4499,13 @@ begin
         if ZoomIn then
         begin
           ImageItem.StartRect := ImageItem.CurrentRect;
-          ImageItem.Alpha := 0;
+          ImageItem.Alpha := 255;// 0;
           ImageItem.TargetAlpha := 255;
         end
         else
         begin
           ImageItem.Alpha := 255;
-          ImageItem.TargetAlpha := 0;
+          ImageItem.TargetAlpha := 255;// 0;
         end;
       end;
     zatZoom:
@@ -5126,13 +5070,11 @@ end; }
       FTempBitmap.Width := R.Right - R.Left;
       FTempBitmap.Height := R.Bottom - R.Top;
       FTempBitmap.Canvas.StretchDraw(Rect(0, 0, FTempBitmap.Width, FTempBitmap.Height), Item.Bitmap);
-
       // 2. AlphaBlend to canvas
       BlendFunction.BlendOp := AC_SRC_OVER;
       BlendFunction.BlendFlags := 0;
       BlendFunction.SourceConstantAlpha := Item.Alpha;
       BlendFunction.AlphaFormat := 0;
-
       AlphaBlend(Canvas.Handle, R.Left, R.Top, FTempBitmap.Width, FTempBitmap.Height,
                  FTempBitmap.Canvas.Handle, 0, 0, FTempBitmap.Width, FTempBitmap.Height, BlendFunction);
     end
@@ -5807,4 +5749,3 @@ begin
 end;
 
 end.
-
