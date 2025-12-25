@@ -2315,7 +2315,7 @@ begin
           FoundPosition := False;
           // First try the default grid position
           NewX := 20 + ((FImages.Count - 1) mod ColCount) * (DefaultWidth + 20);
-          NewY := 20 + ((FImages.Count - 1) div ColCount) * (DefaultHeight + 20);
+          NewY := 20 + ((FImages.Count - 1) div RowCount) * (DefaultHeight + 20);
           // Check if this position is within bounds
           if (NewX + DefaultWidth <= Width - 20) and (NewY + DefaultHeight <= Height - 20) then
           begin
