@@ -67,6 +67,8 @@ type
     Timer2: TTimer;
     Button19: TButton;
     CheckBox5: TCheckBox;
+    Label11: TLabel;
+    SpinEdit7: TSpinEdit;
     procedure Button10Click(Sender: TObject);
     procedure Button11Click(Sender: TObject);
     procedure Button12Click(Sender: TObject);
@@ -115,6 +117,7 @@ type
     procedure SpinEdit4Change(Sender: TObject);
     procedure SpinEdit5Change(Sender: TObject);
     procedure SpinEdit6Change(Sender: TObject);
+    procedure SpinEdit7Change(Sender: TObject);
     procedure Timer1Timer(Sender: TObject);
     procedure Timer2Timer(Sender: TObject);
   private
@@ -553,6 +556,11 @@ end;
 procedure TFSampleform.SpinEdit6Change(Sender: TObject);
 begin
   Flowmotion1.CaptionOffsetY := SpinEdit6.Value;
+end;
+
+procedure TFSampleform.SpinEdit7Change(Sender: TObject);
+begin
+  Flowmotion1.PageSize := SpinEdit7.Value;
 end;
 
 procedure TFSampleform.Timer1Timer(Sender: TObject);

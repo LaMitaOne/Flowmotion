@@ -38,7 +38,7 @@ object FSampleform: TFSampleform
     OnSelectedItemMouseDown = Flowmotion1SelectedItemMouseDown
     OnAllAnimationsFinished = Flowmotion1AllAnimationsFinished
     OnSelectedImageDblClick = Flowmotion1SelectedImageDblClick
-    PageSize = 1000
+    PageSize = 10
     Align = alClient
     Color = clBlack
     ParentColor = False
@@ -220,7 +220,7 @@ object FSampleform: TFSampleform
     Left = 1221
     Top = 4
     Width = 217
-    Height = 773
+    Height = 829
     Anchors = [akTop, akRight]
     Color = 855309
     Font.Charset = DEFAULT_CHARSET
@@ -232,7 +232,6 @@ object FSampleform: TFSampleform
     ParentFont = False
     TabOrder = 2
     StyleElements = [seClient, seBorder]
-    ExplicitLeft = 1225
     object Label1: TLabel
       Left = 16
       Top = 11
@@ -298,6 +297,19 @@ object FSampleform: TFSampleform
       Font.Style = []
       ParentFont = False
       WordWrap = True
+    end
+    object Label11: TLabel
+      Left = 16
+      Top = 786
+      Width = 45
+      Height = 15
+      Caption = 'pagesize'
+      Font.Charset = DEFAULT_CHARSET
+      Font.Color = clWhite
+      Font.Height = -12
+      Font.Name = 'Segoe UI'
+      Font.Style = []
+      ParentFont = False
     end
     object Panel3: TPanel
       Left = 8
@@ -646,6 +658,17 @@ object FSampleform: TFSampleform
       TabOrder = 12
       StyleElements = [seClient, seBorder]
       OnClick = CheckBox5Click
+    end
+    object SpinEdit7: TSpinEdit
+      Left = 109
+      Top = 783
+      Width = 57
+      Height = 24
+      MaxValue = 5000
+      MinValue = 1
+      TabOrder = 13
+      Value = 10
+      OnChange = SpinEdit7Change
     end
   end
   object Panel5: TPanel
