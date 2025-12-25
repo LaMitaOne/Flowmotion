@@ -279,11 +279,12 @@ type
     FHint: string;
     FOwner: TObject;
     FSuccess: Boolean;
+    FIndex: Integer;
     procedure SyncAddImage;
   protected
     procedure Execute; override;
   public
-    constructor Create(const AFileName, ACaption, APath, AHint: string; AOwner: TObject; TargetCoreIndex: Integer);
+    constructor Create(const AFileName, ACaption, APath, AHint: string; AOwner: TObject; AIndex: Integer; TargetCoreIndex: Integer);
     destructor Destroy; override;
   end;
 
@@ -784,7 +785,7 @@ end;
 { TImageLoadThread }
 
 { Creates a new image loading thread }
-constructor TImageLoadThread.Create(const AFileName, ACaption, APath, AHint: string; AOwner: TObject; TargetCoreIndex: Integer);
+constructor TImageLoadThread.Create(const AFileName, ACaption, APath, AHint: string; AOwner: TObject; AIndex: Integer; TargetCoreIndex: Integer);
 var
   SystemInfo: TSystemInfo;
   AffinityMask: DWORD_PTR;
@@ -796,6 +797,7 @@ begin
   FPath := APath;
   FOwner := AOwner;
   FHint := AHint;
+  FIndex := AIndex;
   FBitmap := TBitmap.Create;
   FSuccess := False;
   Priority := TFlowmotion(FOwner).FThreadPriority;
@@ -860,13 +862,16 @@ begin
         with TFlowmotion(FOwner) do
         begin
           // --- CRITICAL PAGING CHECK ---
-          // Calculate where this image belongs
-          AbsIndex := FAllFiles.IndexOf(FFileName); // Find absolute index by filename
-          // If we can't find it, or paging is in progress, or clearing, ABORT
-          if (AbsIndex = -1) or FPageChangeInProgress or FClearing then
+          // Use the passed FIndex directly
+          AbsIndex := FIndex;
+
+          // If paging is in progress or clearing, ABORT
+          if FPageChangeInProgress or FClearing then
             Exit;
+
           PageStart := GetPageStartIndex;
           PageEnd := GetPageEndIndex;
+
           // Only add to FImages if it actually belongs to the CURRENT page
           if (AbsIndex >= PageStart) and (AbsIndex <= PageEnd) then
           begin
@@ -887,14 +892,12 @@ begin
               NewItem.Visible := True;
             end;
           end;
-          // Else: The image loaded, but we are no longer on that page.
-          // We discard the loaded bitmap (Thread destroys FBitmap) and rely on Master List.
         end;
       end;
       TFlowmotion(FOwner).DoImageLoad(FFileName, FSuccess);
     end;
   finally
-    TFlowmotion(FOwner).ThreadFinished(Self);
+    // Do NOT call ThreadFinished here, let Execute handle it (from your previous fix)
     TFlowmotion(FOwner).StartAnimationThread;
   end;
 end;
@@ -2515,7 +2518,7 @@ begin
     GetSystemInfo(SystemInfo);
     CoreToUse := FNextLoaderCoreIndex mod SystemInfo.dwNumberOfProcessors;
     Inc(FNextLoaderCoreIndex);
-    LoadThread := TImageLoadThread.Create(FileName, ACaption, APath, AHint, Self, CoreToUse);
+    LoadThread := TImageLoadThread.Create(FileName, ACaption, APath, AHint, Self, NewAbsIndex, CoreToUse);
     LoadThread.Priority := FThreadPriority;
     FLoadingThreads.Add(LoadThread);
     Inc(FLoadingCount);
@@ -2583,7 +2586,7 @@ begin
     begin
       CoreToUse := FNextLoaderCoreIndex mod SystemInfo.dwNumberOfProcessors;
       Inc(FNextLoaderCoreIndex);
-      Thread := TImageLoadThread.Create(FileNames[i], Captions[i], Paths[i], Hints[i], Self, CoreToUse);
+      Thread := TImageLoadThread.Create(FileNames[i], Captions[i], Paths[i], Hints[i], Self, NewAbsIndex, CoreToUse);
       FLoadingThreads.Add(Thread);
       Inc(FLoadingCount);
     end;
@@ -3165,7 +3168,7 @@ begin
   begin
     CoreToUse := FNextLoaderCoreIndex mod SystemInfo.dwNumberOfProcessors;
     Inc(FNextLoaderCoreIndex);
-    LoadThread := TImageLoadThread.Create(FileName, Caption, Path, Hint, Self, CoreToUse);
+    LoadThread := TImageLoadThread.Create(FileName, Caption, Path, Hint, Self, NewAbsIndex, CoreToUse);
     LoadThread.Priority := FThreadPriority;
     FLoadingThreads.Add(LoadThread);
     Inc(FLoadingCount);
@@ -5449,8 +5452,6 @@ begin
     FPageChangeInProgress := False;
   end;
 end;
-
-
 
 
 { Navigates to the next page }
