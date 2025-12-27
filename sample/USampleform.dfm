@@ -26,9 +26,7 @@ object FSampleform: TFSampleform
     Top = 0
     Width = 1438
     Height = 960
-    LoadMode = lmLazy
     FlowLayout = flSorted
-    AnimationSpeed = 3
     Spacing = 4
     MaxColumns = 24
     MaxRows = 24
@@ -39,6 +37,13 @@ object FSampleform: TFSampleform
     OnAllAnimationsFinished = Flowmotion1AllAnimationsFinished
     OnSelectedImageDblClick = Flowmotion1SelectedImageDblClick
     PageSize = 10
+    CaptionFont.Charset = DEFAULT_CHARSET
+    CaptionFont.Color = clWindowText
+    CaptionFont.Height = -13
+    CaptionFont.Name = 'Segoe UI'
+    CaptionFont.Style = [fsBold]
+    SelectedCaptionColor = clBlack
+    SelectedCaptionBackground = clAqua
     Align = alClient
     Color = clBlack
     ParentColor = False
@@ -232,6 +237,7 @@ object FSampleform: TFSampleform
     ParentFont = False
     TabOrder = 2
     StyleElements = [seClient, seBorder]
+    ExplicitLeft = 1225
     object Label1: TLabel
       Left = 16
       Top = 11
@@ -390,7 +396,7 @@ object FSampleform: TFSampleform
       MaxValue = 20
       MinValue = 0
       TabOrder = 5
-      Value = 3
+      Value = 4
       OnChange = SpinEdit1Change
     end
     object SpinEdit2: TSpinEdit
