@@ -122,7 +122,7 @@ const
   // Animation constants
   TARGET_FPS = 30;
   MIN_FRAME_TIME = 1000 div TARGET_FPS;
-  DEFAULT_ANIMATION_SPEED = 4;
+  DEFAULT_ANIMATION_SPEED = 5;
   DEFAULT_ALPHA = 255;
   START_SCALE = 0.05;
 
@@ -157,8 +157,6 @@ type
   TImageLoadEvent = procedure(Sender: TObject; const FileName: string; Success: Boolean) of object;
 
   TZoomAnimationType = (zatSlide, zatFade, zatZoom, zatBounce);
-
-  TFlowmotionLoadMode = (lmLoadAll, lmLazy, lmLazyAndFree);
 
   TImagePosition = record
     FileName: string;
@@ -400,7 +398,6 @@ type
     FPageSize: Integer; // Images per page
     FCurrentPage: Integer; // 0-based page index
     FPageChangeInProgress: Boolean;
-    FLoadMode: TFlowmotionLoadMode;
     FAutoScrollPageForNewAdded: Boolean;
 
     // State
@@ -458,7 +455,6 @@ type
     // Internal methods - Threading
     procedure ThreadFinished(Thread: TImageLoadThread);
     procedure EnsureBitmapLoaded(Item: TImageItem);
-    procedure FreeInvisibleBitmaps;
 
     // Internal methods - Utilities
     function GetImageItem(Index: Integer): TImageItem;
@@ -469,7 +465,6 @@ type
     function GetCaptionRect(Item: TImageItem; const DrawRect: TRect): TRect;
 
     // Property setters
-    procedure SetLoadMode(Value: TFlowmotionLoadMode);
     procedure SetActive(Value: Boolean);
     procedure SetSelectedMovable(Value: Boolean);
     procedure SetSorted(Value: Boolean);
@@ -580,7 +575,6 @@ type
     property Images[Index: Integer]: TImageItem read GetImageItem;
 
   published
-    property LoadMode: TFlowmotionLoadMode read FLoadMode write SetLoadMode;
     property FlowLayout: TFlowLayout read FFlowLayout write SetFlowLayout;
     property AnimationSpeed: Integer read FAnimationSpeed write SetAnimationSpeed default DEFAULT_ANIMATION_SPEED;
     property SelectedMovable: Boolean read FSelectedMovable write SetSelectedMovable default false;
@@ -941,7 +935,6 @@ begin
   FEntryPoint := Point(-1000, -1000);
   FFlowLayout := flSorted; //flSorted  flFreeFloat
   FKeepSpaceforZoomed := False;
-  FLoadMode := lmLazy;
   FAnimationSpeed := DEFAULT_ANIMATION_SPEED;
   FSpacing := 0;
   FKeepAspectRatio := True;
@@ -1050,7 +1043,7 @@ end;
 
 procedure TFlowmotion.EnsureBitmapLoaded(Item: TImageItem);
 begin
-  if (FLoadMode = lmLazyAndFree) and (Item.FBitmap = nil) and (Item.FFileName <> '') and FileExists(Item.FFileName) then
+  if (Item.FBitmap = nil) and (Item.FFileName <> '') and FileExists(Item.FFileName) then
   begin
     Item.FBitmap := TBitmap.Create;
     try
@@ -1111,15 +1104,6 @@ begin
     Result := 1;
 end;
 
-{ Sets the image loading mode and refreshes the display }
-procedure TFlowmotion.SetLoadMode(Value: TFlowmotionLoadMode);
-begin
-  if FLoadMode <> Value then
-  begin
-    FLoadMode := Value;
-    ShowPage(0);
-  end;
-end;
 
 { SetFlowLayout - Sets the flow layout algorithm and recalculates layout }
 procedure TFlowmotion.SetFlowLayout(Value: TFlowLayout);
@@ -1821,40 +1805,6 @@ begin
 end;
 
 
-// ---------------------------------------------------------------------
-// FREE BITMAPS OF NON-VISIBLE IMAGES (only in LazyAndFree mode)
-// Called from ShowPage after old images are removed from FImages
-// ---------------------------------------------------------------------
-procedure TFlowmotion.FreeInvisibleBitmaps;
-var
-  i: Integer;
-  Item: TImageItem;
-  AbsIndex: Integer;
-  PageStart, PageEnd: Integer;
-begin
-  if FLoadMode <> lmLazyAndFree then
-    Exit;
-
-  PageStart := GetPageStartIndex;
-  PageEnd := PageStart + FPageSize - 1;
-
-  // Scan ALL loaded images (they may still exist in the old page cache)
-  for i := 0 to FImages.Count - 1 do
-  begin
-    Item := TImageItem(FImages[i]);
-    AbsIndex := PageStart + i;
-
-    // If this image is NOT on the current page ? free its bitmap
-    if (AbsIndex < PageStart) or (AbsIndex > PageEnd) then
-    begin
-      if Assigned(Item.FBitmap) then
-      begin
-        Item.FBitmap.Free;
-        Item.FBitmap := nil;  // Mark as unloaded
-      end;
-    end;
-  end;
-end;
 
 { Fires the OnImageLoad event }
 procedure TFlowmotion.DoImageLoad(const FileName: string; Success: Boolean);
@@ -2269,7 +2219,7 @@ begin
     end;
   end;
   // 3. Standard Logic for Loading
-  if WasEmpty or (FLoadMode = lmLoadAll) then
+  if WasEmpty then
   begin
     ShowPage(FCurrentPage);
     Exit;
@@ -5436,9 +5386,6 @@ begin
       TImageItem(NewItems[i]).Visible := True;
     end;
 
-    if FLoadMode = lmLazyAndFree then
-      FreeInvisibleBitmaps;
-
     // Request a repaint. The Paint method will now see items with valid TargetRect and CurrentRect.
     Invalidate;
     StartAnimationThread;
@@ -5749,4 +5696,3 @@ begin
 end;
 
 end.
-
