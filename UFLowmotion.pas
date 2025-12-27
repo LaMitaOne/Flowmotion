@@ -13,7 +13,6 @@
    v 0.992
     - new Paging property AutoScrollPageForNewAdded
     - Paging now everywhere implemented
-    - Loadmodes finished: Lazy, LoadAll, LazyAndFree
     - added new events: TImageLoadFailedEvent, FOnImageMouseLeave, FOnImageMouseEnter
    v 0.991
     - more improvements for Paging, basically working now
@@ -5750,3 +5749,4 @@ begin
 end;
 
 end.
+
