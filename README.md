@@ -32,11 +32,12 @@ Low CPU usage, easy to integrate, and smooth visual effects even with large imag
 ### Features:  
 - Pinterest-like masonry layout
 - freefloat Layout with save/load positions
-- Animated appearance (slide-in, “falling” effect on clear/page change)  
+- Animated appearance (slide-in, “falling” effects, breathing)  
 - Select / move or zoom it into a target rect   
 - HotTrack & HotZoom hover effects   
 - Dragging selected or all free floating   
 - Threaded Animation
+- Paging with falling animation  
 - ActivationZone -> move selected to defined areas and trigger event   
 - Smooth transitions, similar in spirit to TMS GUIMotions but much lighter  
 - Works on Delphi 7 and Delphi 11.3 here, so probably on any Delphi    
