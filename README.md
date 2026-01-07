@@ -1,6 +1,6 @@
 # Flowmotion
   
-Delphi Gallery Component – Lightweight Animated Coverflow / Masonry Viewer (Alpha)  
+Delphi Gallery Component – Lightweight Animated Coverflow / Masonry Viewer (Beta)  
 
        
       
@@ -54,8 +54,6 @@ On my Asus Zenbook ux305ca (dual-core toy):
  <img width="2560" height="1440" alt="Unbenannt" src="https://github.com/user-attachments/assets/a1930022-e8a9-4bb5-9eb9-ba1dbd2108e0" />     
 That was around 830 pictures...2560x1440 screen resolution...no problem... 7% cpu usage(ryzen 7 5800x)...       
 Not bad for "old delphi" and only canvas and a thread :D       
-
-   
   
    
 Not finished completely yet, but already in use in **MEDIA Revolution X** (freeware):  
@@ -67,7 +65,7 @@ So I thought maybe some of you will like it too :)
 Some things are not perfect yet, some not fully implemented,   
 but it’s already basically stable and looks really nice in my player!   
   
-!!! --- NOT FINISHED - Alpha fade missing still, but else most should work now...getting beta slowly, testing to find more possible problems  
+!!! --- NOT FINISHED - Alpha fade missing still, but else most should work now...getting beta, testing to find more possible problems  
 
           
 ### Latest changes:      
