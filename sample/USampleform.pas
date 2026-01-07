@@ -5,7 +5,7 @@ interface
 uses
   Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, Vcl.Graphics,
   Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, UFLowmotion, Vcl.ExtCtrls,
-  Vcl.ComCtrls, Vcl.Samples.Spin, Math;
+  Vcl.ComCtrls, Vcl.Samples.Spin, Math, System.ImageList, Vcl.ImgList;
 
 type
   TFSampleform = class(TForm)
@@ -69,6 +69,8 @@ type
     CheckBox5: TCheckBox;
     Label11: TLabel;
     SpinEdit7: TSpinEdit;
+    ImageList1: TImageList;
+    CheckBox6: TCheckBox;
     procedure Button10Click(Sender: TObject);
     procedure Button11Click(Sender: TObject);
     procedure Button12Click(Sender: TObject);
@@ -94,6 +96,7 @@ type
     procedure CheckBox3Click(Sender: TObject);
     procedure CheckBox4Click(Sender: TObject);
     procedure CheckBox5Click(Sender: TObject);
+    procedure CheckBox6Click(Sender: TObject);
     procedure ComboBox1Change(Sender: TObject);
     procedure Flowmotion1AllAnimationsFinished(Sender: TObject);
     procedure Flowmotion1ImageLoad(Sender: TObject; const FileName: string;
@@ -149,33 +152,42 @@ end;
 
 procedure TFSampleform.Button12Click(Sender: TObject);
 var
-  IMList,Pathlist, Captionlist, Hintlist: TStringList;
-  i : Integer;
+  IMList, Pathlist, Captionlist, Hintlist: TStringList;
+  smallimgindex: TList;
+  i: Integer;
 begin
-  IMList:= TStringList.create;
-  Pathlist:= TStringList.create;
-  Captionlist:= TStringList.create;
-  Hintlist:= TStringList.create;
- try
-   for i := 1 to 12 do begin
-     IMList.add(Extractfilepath(Application.ExeName) + inttostr(i) + '.jpg');
-     Pathlist.add('Folder or whatever');
-     Captionlist.add('Caption');
-     Hintlist.Add('Hint');
-   end;
-   for i := 1 to 12 do begin
-     IMList.add(Extractfilepath(Application.ExeName) + inttostr(i) + '.jpg');
-     Pathlist.add('Folder or whatever');
-     Captionlist.add('Caption');
-     Hintlist.Add('Hint');
-   end;
-   Flowmotion1.MaxZoomSize := trunc(Clientwidth / 4);
-   Flowmotion1.AddImagesAsync(IMList,Captionlist,Pathlist, Hintlist);
+  IMList := TStringList.Create;
+  Pathlist := TStringList.Create;
+  Captionlist := TStringList.Create;
+  Hintlist := TStringList.Create;
+  smallimgindex := TList.Create;
+
+  try
+    for i := 1 to 12 do begin
+      IMList.add(Extractfilepath(Application.ExeName) + inttostr(i) + '.jpg');
+      Pathlist.add('Folder or whatever');
+      Captionlist.add('Caption');
+      Hintlist.Add('Hint');
+      smallimgindex.Add(Pointer(random(5)));
+    end;
+
+    for i := 1 to 12 do begin
+      IMList.add(Extractfilepath(Application.ExeName) + inttostr(i) + '.jpg');
+      Pathlist.add('Folder or whatever');
+      Captionlist.add('Caption');
+      Hintlist.Add('Hint');
+      smallimgindex.Add(Pointer(random(5)));
+    end;
+
+    Flowmotion1.MaxZoomSize := trunc(Clientwidth / 4);
+    Flowmotion1.AddImagesAsync(IMList, Captionlist, Pathlist, Hintlist, smallimgindex);
+
   finally
-   IMList.Free;
-   Pathlist.Free;
-   Captionlist.Free;
-   Hintlist.Free;
+    IMList.Free;
+    Pathlist.Free;
+    Captionlist.Free;
+    Hintlist.Free;
+    smallimgindex.Free;
   end;
 end;
 
@@ -285,6 +297,7 @@ procedure TFSampleform.FormCreate(Sender: TObject);
 begin
   Doublebuffered := True;
   Flowmotion1.DoubleBuffered := True;
+  Flowmotion1.SmallPicImageList := ImageList1;
 end;
 
 procedure TFSampleform.Flowmotion1SelectedImageEnterZone(Sender: TObject; ImageItem: TImageItem; const ZoneName: string);
@@ -325,35 +338,47 @@ end;
 
 procedure TFSampleform.Button2Click(Sender: TObject);
 var
-  IMList,Pathlist, Captionlist, Hintlist: TStringList;
+  IMList, Pathlist, Captionlist, Hintlist: TStringList;
   i : Integer;
+  smallimgindex : TList;
 begin
-  IMList:= TStringList.create;
-  Pathlist:= TStringList.create;
-  Captionlist:= TStringList.create;
-  Hintlist:= TStringList.create;
- try
-  Flowmotion1.Clear(true);
-   for i := 1 to 12 do begin
-     IMList.add(Extractfilepath(Application.ExeName) + inttostr(i) + '.jpg');
-     Pathlist.add('Folder or whatever');
-     Captionlist.add('Caption test long enough to see edge clipping and wordwrap or...getting outside of too small pics');
-     Hintlist.add('Hint');
-   end;
-   //twwice
-   for i := 1 to 12 do begin
-     IMList.add(Extractfilepath(Application.ExeName) + inttostr(i) + '.jpg');
-     Pathlist.add('Folder or whatever');
-     Captionlist.add('Caption');
-     Hintlist.add('Hint');
-   end;
-   Flowmotion1.MaxZoomSize := trunc(Clientwidth / 4);
-   Flowmotion1.AddImages(IMList,Captionlist,Pathlist, Hintlist);
+  IMList := TStringList.Create;
+  Pathlist := TStringList.Create;
+  Captionlist := TStringList.Create;
+  Hintlist := TStringList.Create;
+  smallimgindex := TList.Create;
+
+  try
+    Flowmotion1.Clear(true);
+
+    // --- First Batch (1 to 12) ---
+    for i := 1 to 12 do begin
+      IMList.Add(Extractfilepath(Application.ExeName) + inttostr(i) + '.jpg');
+      Pathlist.Add('Folder or whatever');
+      Captionlist.Add('Caption test long enough to see edge clipping and wordwrap or...getting outside of too small pics');
+      Hintlist.Add('Hint');
+      smallimgindex.Add(Pointer(random(5)));
+    end;
+
+    // --- Second Batch ("twice" 1 to 12) ---
+    for i := 1 to 12 do begin
+      IMList.Add(Extractfilepath(Application.ExeName) + inttostr(i) + '.jpg');
+      Pathlist.Add('Folder or whatever');
+      Captionlist.Add('Caption');
+      Hintlist.Add('Hint');
+      smallimgindex.Add(Pointer(random(5)));
+    end;
+
+    Flowmotion1.MaxZoomSize := trunc(Clientwidth / 4);
+
+    Flowmotion1.AddImages(IMList, Captionlist, Pathlist, Hintlist, smallimgindex);
+
   finally
-   IMList.Free;
-   Pathlist.Free;
-   Captionlist.Free;
-   Hintlist.Free;
+    IMList.Free;
+    Pathlist.Free;
+    Captionlist.Free;
+    Hintlist.Free;
+    smallimgindex.Free;
   end;
 end;
 
@@ -419,6 +444,11 @@ end;
 procedure TFSampleform.CheckBox5Click(Sender: TObject);
 begin
   Flowmotion1.ShowHint  := CheckBox5.Checked;
+end;
+
+procedure TFSampleform.CheckBox6Click(Sender: TObject);
+begin
+   Flowmotion1.SmallPicVisible  := CheckBox6.Checked;
 end;
 
 procedure TFSampleform.ComboBox1Change(Sender: TObject);
