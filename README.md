@@ -72,6 +72,18 @@ but it’s already basically stable and looks really nice in my player!
           
 ### Latest changes:      
    
+**v 0.993**  
+- NEW: Added SmallPic / Image Overlay support.   
+- NEW: Added 'SmallPicImageList' property (TImageList) for efficient icon management.   
+- NEW: Added 'SmallPicIndex' to TImageItem to assign icons from the ImageList.   
+- NEW: Added 'SmallPicPosition' (TopLeft, TopRight, BottomLeft, BottomRight) to TImageItem.   
+- NEW: Added 'SmallPicVisible' global property to toggle overlays on/off.  
+- FIX: Added master list 'FAllSmallPicIndices' to persist icon assignments during Paging.   
+- IMPROVED: All loading methods (AddImage, AddImages, Async, etc.) now accept SmallPicIndex parameters.   
+- NEW: Added 'AllImageItems' property for global access to items (Caption, Hint, SmallPicIndex).   
+  Syntax: Flowmotion1.AllImageItems[5].Caption := '...';   
+  Works across all pages (updates master lists and visible screen instantly).   
+     
 **v 0.992**    
 - new Paging property AutoScrollPageForNewAdded  
 - Paging now everywhere implemented  
