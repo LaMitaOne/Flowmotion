@@ -697,6 +697,26 @@ object FSampleform: TFSampleform
       StyleElements = [seClient, seBorder]
       OnClick = CheckBox6Click
     end
+    object CheckBox7: TCheckBox
+      Left = 32
+      Top = 861
+      Width = 121
+      Height = 17
+      Caption = 'only on hover'
+      Checked = True
+      Color = 855309
+      Font.Charset = DEFAULT_CHARSET
+      Font.Color = clRed
+      Font.Height = -12
+      Font.Name = 'Segoe UI'
+      Font.Style = []
+      ParentColor = False
+      ParentFont = False
+      State = cbChecked
+      TabOrder = 15
+      StyleElements = [seClient, seBorder]
+      OnClick = CheckBox7Click
+    end
   end
   object Panel5: TPanel
     Left = 312

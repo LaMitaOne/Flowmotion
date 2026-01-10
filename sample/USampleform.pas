@@ -71,6 +71,7 @@ type
     SpinEdit7: TSpinEdit;
     ImageList1: TImageList;
     CheckBox6: TCheckBox;
+    CheckBox7: TCheckBox;
     procedure Button10Click(Sender: TObject);
     procedure Button11Click(Sender: TObject);
     procedure Button12Click(Sender: TObject);
@@ -97,6 +98,7 @@ type
     procedure CheckBox4Click(Sender: TObject);
     procedure CheckBox5Click(Sender: TObject);
     procedure CheckBox6Click(Sender: TObject);
+    procedure CheckBox7Click(Sender: TObject);
     procedure ComboBox1Change(Sender: TObject);
     procedure Flowmotion1AllAnimationsFinished(Sender: TObject);
     procedure Flowmotion1ImageLoad(Sender: TObject; const FileName: string;
@@ -439,6 +441,11 @@ end;
 procedure TFSampleform.CheckBox6Click(Sender: TObject);
 begin
    Flowmotion1.SmallPicVisible  := CheckBox6.Checked;
+end;
+
+procedure TFSampleform.CheckBox7Click(Sender: TObject);
+begin
+  Flowmotion1.ShowSmallPicOnlyOnHover := CheckBox7.Checked;
 end;
 
 procedure TFSampleform.ComboBox1Change(Sender: TObject);
