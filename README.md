@@ -72,7 +72,8 @@ but it’s already basically stable and looks really nice in my player!
 ### Latest changes:    
   
 **v 0.994**   
-- only some small bugfixes i found while porting it to skia4delphi   
+- some small bugfixes i found while porting it to skia4delphi   
+- added property ShowSmallPicOnlyOnHover    
      
 **v 0.993**  
 - NEW: Added SmallPic / Image Overlay support.   
