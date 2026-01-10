@@ -161,7 +161,6 @@ begin
   Captionlist := TStringList.Create;
   Hintlist := TStringList.Create;
   smallimgindex := TList.Create;
-
   try
     for i := 1 to 12 do begin
       IMList.add(Extractfilepath(Application.ExeName) + inttostr(i) + '.jpg');
@@ -170,7 +169,6 @@ begin
       Hintlist.Add('Hint');
       smallimgindex.Add(Pointer(random(5)));
     end;
-
     for i := 1 to 12 do begin
       IMList.add(Extractfilepath(Application.ExeName) + inttostr(i) + '.jpg');
       Pathlist.add('Folder or whatever');
@@ -178,10 +176,8 @@ begin
       Hintlist.Add('Hint');
       smallimgindex.Add(Pointer(random(5)));
     end;
-
     Flowmotion1.MaxZoomSize := trunc(Clientwidth / 4);
     Flowmotion1.AddImagesAsync(IMList, Captionlist, Pathlist, Hintlist, smallimgindex);
-
   finally
     IMList.Free;
     Pathlist.Free;
@@ -347,10 +343,8 @@ begin
   Captionlist := TStringList.Create;
   Hintlist := TStringList.Create;
   smallimgindex := TList.Create;
-
   try
     Flowmotion1.Clear(true);
-
     // --- First Batch (1 to 12) ---
     for i := 1 to 12 do begin
       IMList.Add(Extractfilepath(Application.ExeName) + inttostr(i) + '.jpg');
@@ -359,7 +353,6 @@ begin
       Hintlist.Add('Hint');
       smallimgindex.Add(Pointer(random(5)));
     end;
-
     // --- Second Batch ("twice" 1 to 12) ---
     for i := 1 to 12 do begin
       IMList.Add(Extractfilepath(Application.ExeName) + inttostr(i) + '.jpg');
@@ -368,11 +361,8 @@ begin
       Hintlist.Add('Hint');
       smallimgindex.Add(Pointer(random(5)));
     end;
-
     Flowmotion1.MaxZoomSize := trunc(Clientwidth / 4);
-
     Flowmotion1.AddImages(IMList, Captionlist, Pathlist, Hintlist, smallimgindex);
-
   finally
     IMList.Free;
     Pathlist.Free;
