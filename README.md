@@ -1,6 +1,6 @@
 # Flowmotion
   
-Delphi Gallery Component – Lightweight Animated Coverflow / Masonry Viewer (Beta)  
+Delphi Gallery Component – Lightweight Animated Coverflow / Masonry Viewer (Beta) v0.994   
     
 Skia alpha Version here: https://github.com/LaMitaOne/skia-flowmotion    
        
@@ -66,11 +66,14 @@ So I thought maybe some of you will like it too :)
 Some things are not perfect yet, some not fully implemented,   
 but it’s already basically stable and looks really nice in my player!   
   
-!!! --- NOT FINISHED - Alpha fade missing still, but else most should work now...getting beta, testing to find more possible problems  
-
+!!! --- NOT FINISHED - parts not fully finished, but most should work now...getting beta, testing to find more possible problems  
+  
           
-### Latest changes:      
-   
+### Latest changes:    
+  
+**v 0.994**   
+- only some small bugfixes i found while porting it to skia4delphi   
+     
 **v 0.993**  
 - NEW: Added SmallPic / Image Overlay support.   
 - NEW: Added 'SmallPicImageList' property (TImageList) for efficient icon management.   
