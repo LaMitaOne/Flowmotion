@@ -12,7 +12,8 @@
 {
  ----Latest Changes
    v 0.994
-    - only some small bugfixes i found while porting it to skia4delphi
+    - some small bugfixes i found while porting it to skia4delphi
+    - added property ShowSmallPicOnlyOnHover
    v 0.993
     - NEW: Added SmallPic / Image Overlay support.
     - NEW: Added 'SmallPicImageList' property (TImageList) for efficient icon management.
@@ -420,6 +421,7 @@ type
     FCaptionOffsetY: Integer;
     FShowCaptions: Boolean;
     FCaptionOnHoverOnly: Boolean;
+    FShowSmallPicOnlyOnHover: Boolean;
     FKeepAreaFreeRect: TRect;
     FSmallPicImageList: TImageList;
     FSmallPicPosition: TSmallPicPosition;
@@ -538,6 +540,7 @@ type
     procedure SetCaptionOffsetY(Value: Integer);
     procedure SetShowCaptions(Value: Boolean);
     procedure SetCaptionOnHoverOnly(Value: Boolean);
+    procedure SetShowSmallPicOnlyOnHover(const Value: Boolean);
     procedure SetSelectedCaptionColor(Value: TColor);
     procedure SetSelectedCaptionBackground(Value: TColor);
     procedure SetKeepAreaFreeRect(const Value: TRect);
@@ -614,6 +617,7 @@ type
     property GlowColor: TColor read FGlowColor write SetGlowColor;
     property GlowWidth: Integer read FGlowWidth write SetGlowWidth;
     property HotTrackWidth: Integer read FHotTrackWidth write SetHotTrackWidth;
+    property ShowSmallPicOnlyOnHover: Boolean read FShowSmallPicOnlyOnHover write SetShowSmallPicOnlyOnHover default True;
     property CaptionOnHoverOnly: Boolean read FCaptionOnHoverOnly write SetCaptionOnHoverOnly default True;
     property PageCount: Integer read GetPageCount;
     property CurrentSelectedIndex: Integer read FCurrentSelectedIndex;
@@ -1056,6 +1060,7 @@ begin
   FSmallPicPosition := spTopLeft;
   FAutoScrollPageForNewAdded := False;
   FCaptionOnHoverOnly := True;
+  FShowSmallPicOnlyOnHover := True;
   FCaptionOffsetY := 8;
   FSmallPicVisible := True;
   FImages := TList.Create;
@@ -1306,6 +1311,7 @@ begin
     // no Invalidate needed – only affects newly added images
   end;
 end;
+
 
 { Sets the color for hot-track border }
 procedure TFlowmotion.SetHotTrackColor(Value: TColor);
@@ -4791,9 +4797,17 @@ begin
     // This synchronizes the states and prevents the target from being reset to 1.0,
     // which would cause a flicker when breathing kicks in.
     if FBreathingEnabled then
-      FHotItem := ImageItem
+    begin
+      FBreathingPhase := 0;
+      // Force target to 1.0 to ensure smooth Zoom In animation starts correctly.
+      ImageItem.FHotZoomTarget := 1.0;
+      FHotItem := ImageItem;
+    end
     else
-      ImageItem.FHotZoomTarget := 1.0; // Only reset if breathing is OFF
+    begin
+      ImageItem.FHotZoomTarget := 1.0;
+      FHotItem := nil;
+    end;
 
     FCurrentSelectedIndex := Index;
     ImageItem.AnimationProgress := 0;
@@ -5814,6 +5828,15 @@ begin
   begin
     FShowCaptions := Value;
     Invalidate;
+    Repaint;
+  end;
+end;
+
+procedure TFlowmotion.SetShowSmallPicOnlyOnHover(const Value: Boolean);
+begin
+  if FShowSmallPicOnlyOnHover <> Value then
+  begin
+    FShowSmallPicOnlyOnHover := Value;
     Repaint;
   end;
 end;
