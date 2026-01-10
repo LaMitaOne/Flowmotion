@@ -1,7 +1,7 @@
 
 {------------------------------------------------------------------------------}
 {                                                                              }
-{ Flowmotion v0.993                                                            }
+{ Flowmotion v0.994                                                            }
 { by Lara Miriam Tamy Reschke                                                  }
 {                                                                              }
 { larate@gmx.net                                                               }
@@ -11,6 +11,8 @@
 
 {
  ----Latest Changes
+   v 0.994
+    - only some small bugfixes i found while porting it to skia4delphi
    v 0.993
     - NEW: Added SmallPic / Image Overlay support.
     - NEW: Added 'SmallPicImageList' property (TImageList) for efficient icon management.
@@ -810,12 +812,10 @@ begin
   FOwner := AOwner;
   FIndex := -1;
 end;
-
 function TFlowMasterItem.GetCaption: string;
 begin
   Result := (FOwner as TFlowmotion).FAllCaptions[FIndex];
 end;
-
 procedure TFlowMasterItem.SetCaption(const Value: string);
 var
   RelIndex: Integer;
@@ -823,7 +823,6 @@ var
 begin
   // 1. Update Master List
   (FOwner as TFlowmotion).FAllCaptions[FIndex] := Value;
-
   // 2. Update Visible Item (Instant Feedback)
   if (FIndex >= (FOwner as TFlowmotion).GetPageStartIndex) and (FIndex <= (FOwner as TFlowmotion).GetPageEndIndex) then
   begin
@@ -836,19 +835,16 @@ begin
     end;
   end;
 end;
-
 function TFlowMasterItem.GetHint: string;
 begin
   Result := (FOwner as TFlowmotion).FAllHints[FIndex];
 end;
-
 procedure TFlowMasterItem.SetHint(const Value: string);
 var
   RelIndex: Integer;
   Item: TImageItem;
 begin
   (FOwner as TFlowmotion).FAllHints[FIndex] := Value;
-
   if (FIndex >= (FOwner as TFlowmotion).GetPageStartIndex) and (FIndex <= (FOwner as TFlowmotion).GetPageEndIndex) then
   begin
     RelIndex := FIndex - (FOwner as TFlowmotion).GetPageStartIndex;
@@ -860,19 +856,16 @@ begin
     end;
   end;
 end;
-
 function TFlowMasterItem.GetSmallPicIndex: Integer;
 begin
   Result := Integer((FOwner as TFlowmotion).FAllSmallPicIndices[FIndex]);
 end;
-
 procedure TFlowMasterItem.SetSmallPicIndex(const Value: Integer);
 var
   RelIndex: Integer;
   Item: TImageItem;
 begin
   (FOwner as TFlowmotion).FAllSmallPicIndices[FIndex] := Pointer(Value);
-
   if (FIndex >= (FOwner as TFlowmotion).GetPageStartIndex) and (FIndex <= (FOwner as TFlowmotion).GetPageEndIndex) then
   begin
     RelIndex := FIndex - (FOwner as TFlowmotion).GetPageStartIndex;
@@ -1842,7 +1835,7 @@ begin
 
       // Breathing when selected AND hovered
       if FBreathingEnabled and (ImageItem = FSelectedImage) and (ImageItem = FHotItem) then
-        TargetZoom := 1.0 + BREATHING_AMPLITUDE * 0.2 * (Sin(FBreathingPhase * 2 * Pi) + 1.0)
+        TargetZoom := 1.02 + BREATHING_AMPLITUDE * 0.2 * (Sin(FBreathingPhase * 2 * Pi) + 1.0)
 
         // Normal hot-zoom when only hovered
       else if (ImageItem = FHotItem) and HotTrackZoom then
@@ -4567,13 +4560,19 @@ begin
           if FSelectedImage = FWasSelectedItem then
             FWasSelectedItem := nil;
         end;
+        // Small tactile "dip" when clicking a hot-tracked (zoomed) image
+        if not FDraggingImage then
+          if ImageItem.FHotZoom >= 1.1 then
+            ImageItem.FHotZoom := ImageItem.FHotZoom - 0.1;
         FSelectedImage := ImageItem;
         FCurrentSelectedIndex := Index;
         ImageItem.IsSelected := True;
         FHotItem := ImageItem;
         if Assigned(FOnItemSelected) then
           FOnItemSelected(Self, ImageItem, Index);
-      end;
+      end
+      else
+        FBreathingPhase := FBreathingPhase - 0.4;
       Exit;
     end
     else
@@ -4891,7 +4890,6 @@ var
   begin
     //show smallpic disabled then exit
     if not FSmallPicVisible then Exit;
-
     // Check: Valid index? ImageList assigned?
     if (Item.SmallPicIndex < 0) or (FSmallPicImageList = nil) then
       Exit;
