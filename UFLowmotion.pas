@@ -1,4 +1,3 @@
-﻿
 {------------------------------------------------------------------------------}
 {                                                                              }
 { Flowmotion v0.995                                                            }
@@ -517,7 +516,7 @@ type
     function GetImageItem(Index: Integer): TImageItem;
     function GetImageCount: Integer;
     function GetLoadingCount: Integer;
-    procedure UpdateGridSnapshot(ImageItem: TImageItem; const TargetSize: TSize);
+    procedure UpdateGridSnapshot(ImageItem: TImageItem; const SWidth, SHeight: Integer);
     procedure SetSelectedImage(ImageItem: TImageItem; Index: Integer);
     procedure LoadImageFromFile(const AFileName: string; ABitmap: TBitmap);
     function GetCaptionRect(Item: TImageItem; const DrawRect: TRect): TRect;
@@ -1637,7 +1636,7 @@ end;
 
 procedure TFlowmotion.PerformAnimationUpdate(DeltaMS: Cardinal);
 var
-  i, OffsetX, OffsetY: Integer;
+  i: Integer;
   DeltaTime: Double;
   ImageItem: TImageItem;
   Progress, Eased, Speed: Double;
@@ -4758,19 +4757,19 @@ begin
   end;
 end;
 
-procedure TFlowmotion.UpdateGridSnapshot(ImageItem: TImageItem; const TargetSize: TSize);
+procedure TFlowmotion.UpdateGridSnapshot(ImageItem: TImageItem; const SWidth, SHeight: Integer);
 begin
   // 1. Check ImageItem and Bitmap validity
   if not Assigned(ImageItem) or not Assigned(ImageItem.FBitmap) then
     Exit;
 
-  if (TargetSize.cx <= 0) or (TargetSize.cy <= 0) then
+  if (SWidth <= 0) or (SHeight <= 0) then
     Exit;
 
   // 2. Check if update is needed (match existing size)
   if (ImageItem.FBitmapSnapshot <> nil) and
-     (ImageItem.FGridSnapshotSize.cx = TargetSize.cx) and
-     (ImageItem.FGridSnapshotSize.cy = TargetSize.cy) then
+     (ImageItem.FGridSnapshotSize.cx = SWidth) and
+     (ImageItem.FGridSnapshotSize.cy = SHeight) then
     Exit;
 
   // 3. Create Snapshot
@@ -4784,18 +4783,19 @@ begin
 
     // Important: Set pixel format before setting size to ensure best quality
     ImageItem.FBitmapSnapshot.PixelFormat := pf24bit;
-    ImageItem.FBitmapSnapshot.SetSize(TargetSize.cx, TargetSize.cy);
+    ImageItem.FBitmapSnapshot.Width := SWidth;
+    ImageItem.FBitmapSnapshot.Height :=  SHeight;
 
     // Use StretchDraw with HALFTONE for high quality resizing
     SetStretchBltMode(ImageItem.FBitmapSnapshot.Canvas.Handle, HALFTONE);
     ImageItem.FBitmapSnapshot.Canvas.StretchDraw(
-      Rect(0, 0, TargetSize.cx, TargetSize.cy),
+      Rect(0, 0, SWidth, SHeight),
       ImageItem.FBitmap
     );
 
     // Store the size we just generated
-    ImageItem.FGridSnapshotSize := TargetSize;
-
+    ImageItem.FGridSnapshotSize.cx := SWidth;
+    ImageItem.FGridSnapshotSize.cy := SHeight;
   except
     // If resizing fails (e.g., out of memory), cleanup to avoid crashes
     if Assigned(ImageItem.FBitmapSnapshot) then
@@ -5661,8 +5661,8 @@ begin
            (ImageItem.TargetRect.Bottom - ImageItem.TargetRect.Top > 0) then
         begin
           UpdateGridSnapshot(ImageItem,
-            Size.Create(ImageItem.TargetRect.Right - ImageItem.TargetRect.Left,
-                 ImageItem.TargetRect.Bottom - ImageItem.TargetRect.Top));
+            ImageItem.TargetRect.Right - ImageItem.TargetRect.Left,
+                 ImageItem.TargetRect.Bottom - ImageItem.TargetRect.Top);
       end;
       end;
     end;
@@ -5995,4 +5995,5 @@ begin
 end;
 
 end.
+
 
