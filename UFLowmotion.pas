@@ -1,7 +1,7 @@
-
+﻿
 {------------------------------------------------------------------------------}
 {                                                                              }
-{ Flowmotion v0.994                                                            }
+{ Flowmotion v0.995                                                            }
 { by Lara Miriam Tamy Reschke                                                  }
 {                                                                              }
 { larate@gmx.net                                                               }
@@ -11,6 +11,12 @@
 
 {
  ----Latest Changes
+   v 0.995
+    - NEW: Implemented a cache mechanism (FBitmapSnapshot) for TImageItem.
+      Images are now resized to their grid target size during page load (ShowPage)
+      and stored. The Paint method uses these cached thumbnails for static items,
+      significantly reducing CPU load and memory bandwidth when rendering large grids.
+      - Only original bitmaps are used during HotTrack/Zoom animations to maintain quality.
    v 0.994
     - some small bugfixes i found while porting it to skia4delphi
     - added property ShowSmallPicOnlyOnHover
@@ -233,6 +239,8 @@ type
     DriftRangeX: Single;
     DriftRangeY: Single;
     OriginalTargetRect: TRect;
+    FBitmapSnapshot: TBitmap;
+    FGridSnapshotSize: TSize;
   public
     constructor Create;
     destructor Destroy; override;
@@ -509,6 +517,7 @@ type
     function GetImageItem(Index: Integer): TImageItem;
     function GetImageCount: Integer;
     function GetLoadingCount: Integer;
+    procedure UpdateGridSnapshot(ImageItem: TImageItem; const TargetSize: TSize);
     procedure SetSelectedImage(ImageItem: TImageItem; Index: Integer);
     procedure LoadImageFromFile(const AFileName: string; ABitmap: TBitmap);
     function GetCaptionRect(Item: TImageItem; const DrawRect: TRect): TRect;
@@ -906,6 +915,8 @@ end;
 { Frees the bitmap and destroys the image item }
 destructor TImageItem.Destroy;
 begin
+  if assigned(FBitmapSnapshot) then
+    FBitmapSnapshot.Free;
   if assigned(FBitmap) then
     FBitmap.Free;
   inherited Destroy;
@@ -4747,6 +4758,53 @@ begin
   end;
 end;
 
+procedure TFlowmotion.UpdateGridSnapshot(ImageItem: TImageItem; const TargetSize: TSize);
+begin
+  // 1. Check ImageItem and Bitmap validity
+  if not Assigned(ImageItem) or not Assigned(ImageItem.FBitmap) then
+    Exit;
+
+  if (TargetSize.cx <= 0) or (TargetSize.cy <= 0) then
+    Exit;
+
+  // 2. Check if update is needed (match existing size)
+  if (ImageItem.FBitmapSnapshot <> nil) and
+     (ImageItem.FGridSnapshotSize.cx = TargetSize.cx) and
+     (ImageItem.FGridSnapshotSize.cy = TargetSize.cy) then
+    Exit;
+
+  // 3. Create Snapshot
+  try
+    // Release old snapshot
+    if Assigned(ImageItem.FBitmapSnapshot) then
+      FreeAndNil(ImageItem.FBitmapSnapshot);
+
+    // Create new small bitmap
+    ImageItem.FBitmapSnapshot := TBitmap.Create;
+
+    // Important: Set pixel format before setting size to ensure best quality
+    ImageItem.FBitmapSnapshot.PixelFormat := pf24bit;
+    ImageItem.FBitmapSnapshot.SetSize(TargetSize.cx, TargetSize.cy);
+
+    // Use StretchDraw with HALFTONE for high quality resizing
+    SetStretchBltMode(ImageItem.FBitmapSnapshot.Canvas.Handle, HALFTONE);
+    ImageItem.FBitmapSnapshot.Canvas.StretchDraw(
+      Rect(0, 0, TargetSize.cx, TargetSize.cy),
+      ImageItem.FBitmap
+    );
+
+    // Store the size we just generated
+    ImageItem.FGridSnapshotSize := TargetSize;
+
+  except
+    // If resizing fails (e.g., out of memory), cleanup to avoid crashes
+    if Assigned(ImageItem.FBitmapSnapshot) then
+      FreeAndNil(ImageItem.FBitmapSnapshot);
+    ImageItem.FGridSnapshotSize.cx := 0;
+    ImageItem.FGridSnapshotSize.cy := 0;
+  end;
+end;
+
 { SetSelectedImage - Sets the selected image and starts zoom animations }
 procedure TFlowmotion.SetSelectedImage(ImageItem: TImageItem; Index: Integer);
 var
@@ -5098,6 +5156,7 @@ var
     BlendFunction: TBlendFunction;
     W, H: Integer;
     R: TRect;
+    SourceBitmap: TBitmap;
   begin
     if not Item.Visible or Item.Bitmap.Empty or (Item.Alpha <= 0) then
       Exit;
@@ -5105,12 +5164,27 @@ var
     W := Item.CurrentRect.Right - Item.CurrentRect.Left;
     H := Item.CurrentRect.Bottom - Item.CurrentRect.Top;
 
+    // --- OPTIMIZATION: Use Cache if available and not zooming ---
+    // If HotTrackZoom is off, and we have a valid snapshot, use it.
+    // (Snapshot is only valid if size matches)
+    if (not FHotTrackZoom) and Assigned(Item.FBitmapSnapshot) and
+       (Item.FGridSnapshotSize.cx = W) and (Item.FGridSnapshotSize.cy = H) then
+    begin
+      SourceBitmap := Item.FBitmapSnapshot;
+    end
+    else
+    begin
+      // Fallback to original full-size bitmap
+      SourceBitmap := Item.Bitmap;
+    end;
+
+
     if Item.Alpha < 255 then
     begin
       FTempBitmap.Width := W;
       FTempBitmap.Height := H;
       //GR32Stretch(FTempBitmap.Canvas, Rect(0,0,W,H), Item.Bitmap);
-      FTempBitmap.Canvas.StretchDraw(Rect(0, 0, W, H), Item.Bitmap);
+      FTempBitmap.Canvas.StretchDraw(Rect(0, 0, W, H), SourceBitmap);
       //SmartStretchDraw(FTempBitmap.Canvas, Rect(0,0,W,H), Item.Bitmap, Item.FAlpha);
 
       BlendFunction.BlendOp := AC_SRC_OVER;
@@ -5121,7 +5195,7 @@ var
       AlphaBlend(Canvas.Handle, Item.CurrentRect.Left, Item.CurrentRect.Top, W, H, FTempBitmap.Canvas.Handle, 0, 0, W, H, BlendFunction);
     end
     else //SmartStretchDraw(Canvas, Item.CurrentRect, Item.Bitmap, Item.FAlpha);//GR32Stretch(Canvas, Item.CurrentRect, Item.Bitmap);
-      Canvas.StretchDraw(Item.CurrentRect, Item.Bitmap);
+      Canvas.StretchDraw(Item.CurrentRect, SourceBitmap);
 
     R := Item.CurrentRect;
 
@@ -5582,6 +5656,14 @@ begin
         ImageItem := TImageItem(NewItems[i]);
         if Visible then
           AnimateImage(ImageItem, ImageItem.Direction, False, Rect(0, 0, 0, 0)); // Default animation
+        // Update the cache snapshot with the target size immediately
+        if (ImageItem.TargetRect.Right - ImageItem.TargetRect.Left > 0) and
+           (ImageItem.TargetRect.Bottom - ImageItem.TargetRect.Top > 0) then
+        begin
+          UpdateGridSnapshot(ImageItem,
+            Size.Create(ImageItem.TargetRect.Right - ImageItem.TargetRect.Left,
+                 ImageItem.TargetRect.Bottom - ImageItem.TargetRect.Top));
+      end;
       end;
     end;
 
@@ -5913,3 +5995,4 @@ begin
 end;
 
 end.
+
