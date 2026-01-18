@@ -1,6 +1,6 @@
 # Flowmotion
   
-Delphi Gallery Component – Lightweight Animated Coverflow / Masonry Viewer (Beta) v0.994   
+Delphi Gallery Component – Lightweight Animated Coverflow / Masonry Viewer (Beta) v0.995   
     
 Skia alpha Version here: https://github.com/LaMitaOne/skia-flowmotion    
        
@@ -70,7 +70,14 @@ but it’s already basically stable and looks really nice in my player!
   
           
 ### Latest changes:    
-  
+   
+**v 0.995**   
+- NEW: Implemented a cache mechanism (FBitmapSnapshot) for TImageItem.   
+  Images are now resized to their grid target size during page load (ShowPage)   
+  and stored. The Paint method uses these cached thumbnails for static items,   
+  significantly reducing CPU load and memory bandwidth when rendering large grids.   
+- Only original bitmaps are used during HotTrack/Zoom animations to maintain quality.   
+   
 **v 0.994**   
 - some small bugfixes i found while porting it to skia4delphi   
 - added property ShowSmallPicOnlyOnHover    
