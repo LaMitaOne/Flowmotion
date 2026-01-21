@@ -1192,8 +1192,6 @@ begin
     FAllCaptions.Free;
     FAllPaths.Free;
     FAllHints.Free;
-    if Assigned(FAllHints) then
-      FAllHints.Free;
   except
     // Ensure destructor completes even if errors occur
   end;
@@ -4762,37 +4760,30 @@ begin
   // 1. Check ImageItem and Bitmap validity
   if not Assigned(ImageItem) or not Assigned(ImageItem.FBitmap) then
     Exit;
-
   if (SWidth <= 0) or (SHeight <= 0) then
     Exit;
-
   // 2. Check if update is needed (match existing size)
   if (ImageItem.FBitmapSnapshot <> nil) and
      (ImageItem.FGridSnapshotSize.cx = SWidth) and
      (ImageItem.FGridSnapshotSize.cy = SHeight) then
     Exit;
-
   // 3. Create Snapshot
   try
     // Release old snapshot
     if Assigned(ImageItem.FBitmapSnapshot) then
       FreeAndNil(ImageItem.FBitmapSnapshot);
-
     // Create new small bitmap
     ImageItem.FBitmapSnapshot := TBitmap.Create;
-
     // Important: Set pixel format before setting size to ensure best quality
     ImageItem.FBitmapSnapshot.PixelFormat := pf24bit;
     ImageItem.FBitmapSnapshot.Width := SWidth;
     ImageItem.FBitmapSnapshot.Height :=  SHeight;
-
     // Use StretchDraw with HALFTONE for high quality resizing
     SetStretchBltMode(ImageItem.FBitmapSnapshot.Canvas.Handle, HALFTONE);
     ImageItem.FBitmapSnapshot.Canvas.StretchDraw(
       Rect(0, 0, SWidth, SHeight),
       ImageItem.FBitmap
     );
-
     // Store the size we just generated
     ImageItem.FGridSnapshotSize.cx := SWidth;
     ImageItem.FGridSnapshotSize.cy := SHeight;
