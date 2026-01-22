@@ -13,11 +13,7 @@ If you want to tip me a coffee.. :)
   </a>
 </p>
     
-   
-Homepage https://lamita.jimdosite.com/  
-   
-
-  
+    
   
 ![screenshot](https://github.com/user-attachments/assets/6e44182f-b24e-4280-b871-e20cfe994212)  
     
@@ -58,17 +54,12 @@ Not bad for "old delphi" and only canvas and a thread :D
 Now around 1500 still ok since caching of sized imgs...   
   
    
-Not finished completely yet, but already in use in **MEDIA Revolution X** (freeware):  
-https://lamita.jimdosite.com/
-   
-At first I just wanted a little picture gallery for my player… but it grew a bit :D  
+At first I just wanted a little picture gallery… but it grew a bit :D  
 So I thought maybe some of you will like it too :)  
     
 Some things are not perfect yet, some not fully implemented,   
-but it’s already basically stable and looks really nice in my player!   
-  
-!!! --- NOT FINISHED - parts not fully finished, but most should work now...getting beta, testing to find more possible problems  
-  
+but it’s already basically stable and looks really nice!   
+    
           
 ### Latest changes:    
    
