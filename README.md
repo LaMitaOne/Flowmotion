@@ -1,6 +1,8 @@
 # Flowmotion
   
 Delphi Gallery Component – Lightweight Animated Coverflow / Masonry Viewer (Beta) v0.995   
+   
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/LaMitaOne/Flowmotion) 
     
 Skia alpha Version here: https://github.com/LaMitaOne/skia-flowmotion    
        
