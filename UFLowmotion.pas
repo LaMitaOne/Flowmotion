@@ -12,7 +12,7 @@
  ----Latest Changes
    v 1.0
     - After a year using it in my player ill put it to 1.0. maybe some special 
-      functions here and there can have some left bugs, like in tms or something often seen :D 
+      functions here and there can have some left bugs, like even in commercial products often seen :D 
       but the base is rocksolid and whats left we get done when we see problems anywhere
    v 0.995
     - NEW: Implemented a cache mechanism (FBitmapSnapshot) for TImageItem.
