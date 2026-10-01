@@ -1,12 +1,11 @@
 # Flowmotion
   
-Delphi Gallery Component – Lightweight Animated Coverflow / Masonry Viewer (Beta) v0.995   
+Delphi Gallery Component – Lightweight Animated Coverflow / Masonry Viewer v1.0   
    
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/LaMitaOne/Flowmotion) 
     
-Skia alpha Version here: https://github.com/LaMitaOne/skia-flowmotion    
-       
-      
+Skia beta Version here: https://github.com/LaMitaOne/skia-flowmotion    
+             
 If you want to tip me a coffee.. :)   
 
 <p align="center">
@@ -15,15 +14,12 @@ If you want to tip me a coffee.. :)
   </a>
 </p>
     
-    
-  
+      
 ![screenshot](https://github.com/user-attachments/assets/6e44182f-b24e-4280-b871-e20cfe994212)  
     
 [https://www.youtube.com/watch?v=38Dcwo1VNqQ](https://youtu.be/D5KmriyDTWk?si=yKdP_7NnGoMoiCrJ)  
     
-
-
-
+   
 A fast, lightweight, Coverflow-style gallery component for Delphi — fully animated without any 3D engine or dlls needed.   
 Pure Delphi 7 compatible code, no special components.    
 Low CPU usage, easy to integrate, and smooth visual effects even with large image sets.   
@@ -63,7 +59,12 @@ but it’s already basically stable and looks really nice!
     
           
 ### Latest changes:    
-   
+      
+**v 1.0**      
+- After a year using it in my player ill put it to 1.0. maybe some special     
+  functions here and there can have some left bugs, like even in commercial products often seen :D     
+  but the base is rocksolid and whats left we get done when we see problems anywhere    
+       
 **v 0.995**   
 - NEW: Implemented a cache mechanism (FBitmapSnapshot) for TImageItem.   
   Images are now resized to their grid target size during page load (ShowPage)   
